@@ -1,0 +1,15 @@
+{
+  "about": "What any SDK must get from `snapshot-dir/`: load it, rebuild the tree from leaves.jsonl, and arrive at this root; then issue this proof and these openings.",
+  "exchange_id": "KR-EX-0a1b2c",
+  "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "root": "0a869e853c04cbebcbdca7ca16477c691ace16830b1c950a1c38d9f0de4324aa",
+  "totals": {
+    "BTC": "2463358024",
+    "ETH": "114050000000000000001",
+    "USDT": "255810750000"
+  },
+  "leaf_count": 12,
+  "commitment": "4245836fda6114c01d9fd50a9b9e5f84f41cb62f6d727abcb8c97bb6f41a6712",
+  "proof_file": "snapshot-dir.proof-U-100008.json",
+  "openings_file": "snapshot-dir.openings-0-3-7.json"
+}

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StoneHash Attest · Sandbox Console</title>
+<meta name="description" content="Sign in to the StoneHash Attest sandbox. Get an API key instantly, anchor a digest, and export a proof bundle.">
+<meta name="robots" content="noindex">
+<!--
+  Where the API lives. Empty means same origin, which is how the single-host
+  test deployment works; production sets it to the api host, because the console
+  is served from `app-sandbox.` while the API answers on `api-sandbox.`.
+-->
+<meta name="attest-api" content="">
+<!--
+  Sibling surfaces. Same reasoning as the API host: one box here, separate
+  hostnames in production. A link with no configured target is removed rather
+  than left pointing at a 404.
+-->
+<meta name="attest-docs" content="../docs/">
+<link rel="icon" href="./favicon.png">
+<link rel="stylesheet" href="./console.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <a class="brand" href="./">StoneHash <b>Attest</b></a>
+    <span class="sect" data-en="Sandbox">샌드박스</span>
+    <!--
+      Everything that hangs off the right edge, in one group so the bar has a
+      single thing pushed right rather than several competing auto margins.
+    -->
+    <div class="topend">
+      <!--
+        Identity first. The network chip sits outside the account menu on
+        purpose: which chain this is gets to be a caveat only if it is
+        visible, and a caveat folded into a dropdown is one the reader has to
+        go looking for.
+      -->
+      <div class="topright" id="topright" hidden></div>
+      <!--
+        Language last, at the far edge, as on the marketing site — of
+        everything in this bar it is the control nobody arrives wanting.
+
+        One toggle for both the gate and the dashboard: rendering a second
+        one from the signed-in nav put two on screen. This slot is filled
+        once at boot and never re-rendered, so switching language works
+        before sign-in as well as after.
+      -->
+      <span class="langs" id="langs"></span>
+    </div>
+  </div>
+</header>
+
+<!--
+  Two shells, because signing in and working are different shapes.
+
+  The gate is a centred page: there is nothing to navigate yet. Once there is
+  an account, the console becomes a sidebar and a work area, which is the
+  layout every operations tool settles on for the same reason — the
+  destinations stay visible while the content changes, so a reader always
+  knows what else is here and where they are in it.
+-->
+<main class="wrap main" id="gate-main">
+  <!-- Sign-in gate. Rendered by app.ts so one code path builds both forms. -->
+  <section id="gate" class="gate" hidden>
+    <div class="gatecard" id="gate-form"></div>
+    <aside class="gateside">
+      <h2 data-en="What you get, immediately">가입 즉시 쓸 수 있는 것</h2>
+      <ul>
+        <li data-en="An <code>sk_test_</code> API key, issued on the spot"><code>sk_test_</code> API 키 — 바로 발급됩니다</li>
+        <li data-en="Two routes onto Bitcoin — a digest that never leaves your browser, or the document itself">비트코인에 기록하는 두 가지 경로 — 브라우저를 떠나지 않는 해시, 또는 문서 자체</li>
+        <li data-en="One anchor already in the ledger, so your first bundle export has something to export">앵커 기록 한 건이 이미 들어 있어, 첫 번들 내보내기에 내보낼 것이 있습니다</li>
+        <li data-en="The same API as production — sandbox and live differ only in which database, which chain, and which key prefix">운영과 같은 API — 샌드박스와 운영의 차이는 어느 DB를 열고, 어느 체인에
+            앵커링하며, 어떤 키 접두사로 인증하는지뿐입니다</li>
+      </ul>
+      <p class="hint" data-en="<b>Synthetic data, test chain only.</b> This deployment anchors to a private test chain, so nothing made here is a publicly verifiable proof. Every screen says so, and each bundle records its own network."><b>합성 데이터, 테스트 체인 전용입니다.</b> 이 배포는 비공개 테스트
+      체인에 앵커링하므로, 여기서 만들어진 것은 공개적으로 검증 가능한 증명이 아닙니다
+      (not a publicly verifiable proof). 모든 화면이 그렇게 밝히며, 번들도 자신의
+      네트워크를 스스로 적습니다.</p>
+    </aside>
+  </section>
+
+  <!--
+    Four sections rather than one scroll.
+
+    Evaluating the product and administering an account are different errands,
+    and stacking "is this what it claims" on top of "rotate my key" made the
+    page read as a settings screen that happened to contain a demo. The nav is
+    rendered here rather than by the script so it exists before the first
+    paint, and the route lives in the hash so a section can be linked to.
+  -->
+</main>
+
+<div class="shell" id="shell" hidden>
+  <aside class="side">
+    <nav id="sections" class="sections" aria-label="샌드박스 메뉴" data-en-label="Sandbox menu"></nav>
+  </aside>
+  <main class="work">
+    <section id="dashboard" class="dash"></section>
+  </main>
+</div>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

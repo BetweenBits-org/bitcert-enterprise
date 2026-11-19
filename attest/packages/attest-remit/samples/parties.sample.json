@@ -1,0 +1,13 @@
+{
+  "_comment": "Sample only. An extract of the bank's customer master, keyed by the debtor's account as it appears in the message. A value given here is used instead of the message's (a customer record is firmer than a free-text line), so list only what the messages lack or state too loosely — here, the registration number a free-format MT103 has no field for.",
+  "VN-ACC-000777": {
+    "debtor": {
+      "registration_number": "0312345678"
+    }
+  },
+  "VN-ACC-000812": {
+    "debtor": {
+      "registration_number": "0309876543"
+    }
+  }
+}

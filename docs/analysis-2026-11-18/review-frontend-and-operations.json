@@ -1,0 +1,167 @@
+{
+ "lens": "Frontend and operations: D7 (console stack), D8 (infrastructure), D9 (keys and signer), and the infrastructure parts of D10",
+ "summary": "The direction of D7, D8 and D9 holds up, but none of the three can be adopted as written. D7's React + Vite single-page app beats both alternatives I tested. Next.js cannot keep the product's strict self-only CSP on pages served from a CDN: it needs per-request nonces, which force dynamic rendering, or an experimental hash mode, and its server runtime had a CVSS 10 remote-code-execution flaw in December 2025. A CSS-in-JS component kit breaks style-src 'self'. What has to change in D7 is scope and timing. Port the existing 6.5k-line console into one console that serves both environments, after the D12 correctness work and after launch (about 4-7 engineer-weeks). Keep its 49 property tests as the acceptance suite and keep the verifier as its own auditable chunk. D8's choice of AWS Seoul and a managed container service holds against a Korean financial cloud (AWS has passed the financial security institute's assessment, and Korean banks run on it) and against Kubernetes-first (there is not even a Dockerfile yet). Two parts of D8 would break the code as built. Putting static frontends on their own hostnames breaks the console's cookie session, its connect-src 'self' policy and its routes, which have no CORS; one origin per surface with CDN path routing avoids that. A default rolling deploy would run two workers at once, which the code cannot tolerate yet. D9's separate signer is right in principle, but it should cover the three keys that exist. It must not call KMS for every event signature: 22 signatures per payment against KMS's default shared limit of 1,000 ECC operations per second caps the rail near 45 payments per second. KMS cannot produce the Schnorr signatures that taproot inscriptions need. And MPC custody should wait until the company decides whether it holds the stablecoin leg at all. The largest operational gap the memo misses is that the product code is not under version control. Git with CI, backups with tested restores, alarms on business invariants, a named on-call and RPO/RTO targets must all be in place before production money moves.",
+ "verdicts": [
+  {
+   "decision_id": "D7",
+   "verdict": "modify",
+   "strongest_objection": "Keep the framework-free console. It exists and works: 6,501 non-vendor lines, 8 screens, strict CSP already satisfied, zero runtime dependencies (a small supply-chain surface that bank reviewers like), and 49 property tests that encode the owner's screen rules. The owner keeps shrinking the screens, and a port costs 4-7 engineer-weeks without reducing any of the top risks (ledger, durable pipeline). This argument wins on timing but not on direction. app.ts is one 3,913-line file with 60 innerHTML sinks guarded by 336 hand-placed esc() calls. The production console has to add invite-only users, roles, MFA, approvals and paged tables, which is work where a component model with default escaping and a mainstream hiring pool pay back.",
+   "confidence": "medium",
+   "evidence": [
+    "attest/apps/console/src/app.ts: 3,913 lines, 60 innerHTML assignments, 336 esc() calls (grep counts); por.ts: 1,038 lines, 6 innerHTML, 92 esc()",
+    "attest/apps/console/package.json: no runtime dependencies (devDependencies only: typescript, @types/node, attest-rules)",
+    "attest/apps/console/test/dist.test.ts: 49 tests in 811 lines. :365-372 requires dist/vendor/attest-verify/bundle.js to ship, so a bundler breaks the mechanism; :465-476 forbids inline style attributes under style-src 'self'",
+    "attest/apps/core/src/http/static.ts:151-153 CSP \"default-src 'none'; script-src 'self'; style-src 'self'; ... connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\". Comment: 'saying so is part of the product's claim'",
+    "layers/frontend.json FE-10: console routes refuse unless STONEHASH_ENV=test (core/src/http/console.ts:148-153). The production gate is server-side, so the current client can serve production while the port happens",
+    "scratchpad/notes/research-frontend-saas-platform.md:23: Shopify Admin moved to React Router 'SPA mode (perfect for Admin's single-page application architecture)'"
+   ],
+   "proposed_change": "1) One console, not two. The React console replaces the sandbox console screen by screen and serves both environments; the server and the account decide what differs. Do not build a separate production app beside the plain-TS one. 2) Sequence it after D12 and after launch. Launch production on the current client, with the server-side env=test gates replaced by production auth. 3) Keep the CSP byte-for-byte: Vite production build only, no runtime CSS-in-JS, a lint ban on dangerouslySetInnerHTML and on inline style attributes, computed styles via CSSOM only. 4) Keep 'verify without us': ship attest-verify as its own unminified, content-hashed chunk, and change dist.test.ts:365-372 into a test that the shipped chunk equals the published package build. Playground and Hub stay plain TS, as the memo says. 5) Port the 49 dist tests as the acceptance suite before old screens are deleted. Reuse api.ts, i18n.ts, copy.ts, console.css and the vendored libraries unchanged. 6) Write down a runtime dependency budget (react, react-dom, router, query library, headless primitives), pin it and publish an SBOM.",
+   "what_would_flip_it": "Keep plain TS permanently if the production console stays at about today's 8 screens, gains no roles, approvals or data-grid workflows, and no frontend hire is planned. Bring the port forward to before launch only if a launch customer requires production-console features that the current client cannot carry."
+  },
+  {
+   "decision_id": "D7 (no Next.js)",
+   "verdict": "uphold",
+   "strongest_objection": "Next.js is the mainstream React framework (Wise builds its web apps on it). It bundles routing, code splitting and a backend-for-frontend, and could later host public pages. The case fails here. The console is a logged-in tool with no SEO need. Keeping today's strict CSP would need nonces, which Next.js applies only under dynamic rendering (no static output, no CDN caching), or its experimental SRI mode; its documented no-nonce policy uses 'unsafe-inline'. The RSC server runtime is also extra attack surface: CVE-2025-55182 (CVSS 10, December 2025) hit default App Router deployments, while client-only React was outside the blast radius.",
+   "confidence": "high",
+   "evidence": [
+    "https://nextjs.org/docs/app/guides/content-security-policy: nonces 'must use dynamic rendering'; 'Static optimization and ISR are disabled'; 'Pages cannot be cached by CDNs without additional configuration'; the no-nonce example uses script-src 'self' 'unsafe-inline'; SRI is 'Experimental'",
+    "https://vercel.com/changelog/cve-2025-55182 (search result): unauthenticated RCE in React Server Components Flight decoding; Next.js 15.x/16.x App Router exposed; client-only React not affected",
+    "attest/apps/core/src/http/static.ts:151-153: the strict CSP is a stated product claim"
+   ],
+   "what_would_flip_it": "The console needs server-rendered pages for unauthenticated, search-indexed visitors, or the team decides to run a Node backend-for-frontend anyway and accepts per-request nonces and keeping RSC patched."
+  },
+  {
+   "decision_id": "D7 (component set vs component library)",
+   "verdict": "modify",
+   "strongest_objection": "A full kit (MUI, or Ant Design, which is common for admin consoles in Asia) would deliver tables, date pickers, dialogs and form validation faster, with accessibility already tested. It fails on the CSP: MUI's default Emotion engine and Ant Design v5's CSS-in-JS inject <style> elements at runtime. style-src 'self' blocks those unless every response carries a nonce, which a static CDN page cannot do, or unless styles are extracted at build time with extra tooling. A kit would also replace the house style that the four surfaces share. But the memo's 'home-made components' alone underestimates the accessibility work (focus traps, menus, comboboxes, keyboard tables).",
+   "confidence": "medium",
+   "evidence": [
+    "attest/apps/core/src/http/static.ts:151-153 style-src 'self' (no 'unsafe-inline')",
+    "attest/apps/console/test/dist.test.ts:465-476: inline styles are silently dropped under this policy, as already happened (a quota bar never filled)",
+    "https://nextjs.org/docs/app/guides/content-security-policy, Common CSP Violations: 'Inline styles: Use CSS-in-JS libraries that support nonces or move styles to external files'",
+    "attest/apps/console/public/console.css: 1,168 lines of house styles to reuse"
+   ],
+   "proposed_change": "Use the house CSS as the visual layer, built on headless accessible primitives (Radix UI or React Aria) and a headless table (TanStack Table). Rule: no runtime CSS-in-JS dependency, and any primitive that injects a <style> tag must be configurable without it.",
+   "what_would_flip_it": "A component kit with build-time, zero-runtime CSS that can match the house style, or a decision to accept style-src 'unsafe-inline' (which would weaken a stated product claim)."
+  },
+  {
+   "decision_id": "D8",
+   "verdict": "modify",
+   "strongest_objection": "Separate hostnames per surface are what the memo and the design docs describe (app-* and api-* hosts), and a CDN makes that easy. The tests even send credentials 'include' so the cookie survives the host split. It fails as built. The console authenticates with a SameSite=Lax session cookie, the CSP pins connect-src 'self', and no console route answers CORS preflights. A console on its own hostname therefore cannot call the API without new CORS, cookie-domain and CSRF work. Playground's PoR page also fetches /v1/public/por/... from its own origin. Separately, the default ECS rolling deploy starts the new task before stopping the old one, but the code allows only one worker (no leader lock), so every worker deploy would briefly run two.",
+   "confidence": "high",
+   "evidence": [
+    "layers/frontend.json FE-06: static.ts:152-154 connect-src 'self'; CORS only on /v1/public/anchors*; no OPTIONS route for console paths",
+    "attest/apps/core/src/account.ts:59 14-day session TTL; :230/:241 SameSite=Lax",
+    "attest/apps/console/test/dist.test.ts:169 'credentials are included so the cookie survives the host split': the intent exists, the CORS and CSP support does not",
+    "layers/frontend.json FE-11: apps/console/build.mjs:108 deletes the live dist while core serves it",
+    "layers/chain-and-infra.json CH-15: only one worker may run, with no leader lock and a per-process overlap guard. CH-10: broadcast happens before the record, and shutdown does not drain the tick",
+    "layers/chain-and-infra.json CH-17: anvil runs in memory with autorestart (deploy/ecosystem.config.cjs:58-63). CH-18: the Bitcoin regtest node belongs to another project's docker stack",
+    "find over /home/ubuntu/bitcert-attest: no Dockerfile; attest/deploy holds only a pm2 ecosystem file and shell scripts",
+    "MEMORY.md index: 'Retention rule — owner 11-13: org records never expire (sandbox = production)'"
+   ],
+   "proposed_change": "Keep AWS Seoul, ECS/Fargate first, separate accounts (add a log-archive and backup account), ALB with TLS and WAF, Multi-AZ, and infrastructure as code. Change: 1) Serve each surface and the API paths it calls from one hostname per environment, with CloudFront path routing (/v1/* to the ALB, everything else to S3). This needs no app code change and keeps connect-src 'self' and the cookie working. 2) Re-create today's headers (static.ts:151-155: CSP, nosniff, no-referrer) in a CloudFront response-headers policy, plus a synthetic check that fails when any page lacks them. S3 adds no headers, so moving the pages off core silently drops them. 3) Make static deploys atomic: upload content-hashed assets with long caching first, switch a no-cache index.html last, and keep the previous version for rollback. This replaces build.mjs's rm -rf of the live folder and keeps the 'no stale verifier' intent in static.ts:147-148. 4) Deploy the worker service stop-then-start (minimumHealthyPercent 0, maximumPercent 100), or have it take a MySQL GET_LOCK leader lock, until D6/D12 make job steps claimable and idempotent. Set stopTimeout above the longest worker tick. 5) Run the sandbox account as a production service for durability, because org records never expire: same backups and monitoring, and chains that persist instead of another project's regtest node and an in-memory anvil. 6) Make the operational minimum (see missed decisions) a launch gate.",
+   "what_would_flip_it": "Separate hostnames become right once the console moves to token auth with an explicit CORS and CSRF design, or once a third-party origin must call cookie-authenticated routes. Stop-then-start for the worker can end once job claiming uses SKIP LOCKED with idempotent steps."
+  },
+  {
+   "decision_id": "D8 (AWS vs a Korean financial cloud)",
+   "verdict": "uphold",
+   "strongest_objection": "Korean bank procurement and the outsourcing rules favour providers with financial-sector zones (for example NHN, KT, Naver Cloud). A domestic provider could ease due diligence and keep any DR copy inside Korea. The case fails because AWS completed the South Korea CSP safety assessment run with the financial security institute (2023 programme), and a major Korean financial group finished that validation on AWS in 2020 (109 basic plus 32 financial-sector controls). Korean banks therefore already run on AWS. Like the other global clouds, AWS also has regions in the South-East Asian markets the company targets (Singapore, Jakarta, Malaysia, Thailand, from general knowledge); the Korean financial clouds do not.",
+   "confidence": "medium",
+   "evidence": [
+    "https://aws.amazon.com/ko/blogs/korea/aws-completes-the-2023-south-korea-csp-safety-assessment-program (search result title and summary)",
+    "https://byline.network/2020/05/25684309 (search result): a Korean financial group completed the safety validation on AWS, 109 basic plus 32 financial-sector controls",
+    "scratchpad/notes/research-korea.md: the 2025 EFSR overhaul is principle-based; core-business RTO 3 h, annual DR switchover drill, 24 h incident report"
+   ],
+   "what_would_flip_it": "A target bank or the regulator requires a financial-sector-dedicated zone for this service. Or the company becomes a licensed financial business whose critical systems must sit in one. Or Korean residency rules make a domestic second provider the only acceptable DR target."
+  },
+  {
+   "decision_id": "D8 (managed containers first vs Kubernetes from the start)",
+   "verdict": "uphold",
+   "strongest_objection": "Kubernetes from day one avoids a second migration. It is the packaging that banks' internal platforms accept for on-prem installs, Toss and Monzo run on it, and the box already runs k3s. That fails for this team now. The deployment is two process roles plus a signer, with static files on a CDN, and there is not yet a Dockerfile. EKS adds a paid control plane per cluster, at least yearly version and add-on upgrades, and ingress, certificate and IAM plumbing, which a small team pays for every month. The platform's footprint inside a bank is the SDK and SWIFT adapter (D3), not the platform itself. Later, moving the same OCI images from ECS to EKS is a packaging change.",
+   "confidence": "high",
+   "evidence": [
+    "find over /home/ubuntu/bitcert-attest: no Dockerfile exists",
+    "layers/chain-and-infra.json CH-15: API and worker already split by configuration (WORKER_TICK_MS=0)",
+    "scratchpad/notes/research-frontend-saas-platform.md:41: Monzo built a bespoke deployment tool on top of Kubernetes, the kind of in-house work a small team should not take on yet",
+    "scratchpad/notes/research-korea.md: Toss moved to Kubernetes and Istio in 2019, at more than 100 services"
+   ],
+   "what_would_flip_it": "A signed contract to run the platform itself inside a customer's data centre, roughly 8-10 independently deployed services, or a need for per-tenant isolated deployments."
+  },
+  {
+   "decision_id": "D9",
+   "verdict": "modify",
+   "strongest_objection": "For a small pre-launch team, a separate signer is one more highly available service to build, deploy and be paged for, and it adds a network hop and a new failure mode to every payment step. The existing seam would let the team wrap the event key with KMS envelope encryption inside the worker and move it later. That argument holds for when to buy an HSM, but not for isolation. A code-execution or dependency compromise in the internet-facing API process would expose the key that makes every event count as evidence. And the inscription path already holds signing keys in core memory and can strand funds.",
+   "confidence": "high",
+   "evidence": [
+    "attest/apps/core/src/remit/sign.ts:194-214 loadOrCreatePlatformKey: P-256 key generated on first boot, PEM written to the data directory, loaded into the core process. Comment: 'production custody is an HSM, and nothing above this function would change'",
+    "layers/remit-rail.json per_txn_costs: 'Whole happy-path payment ... 22 platform ES256 signatures'",
+    "https://docs.aws.amazon.com/kms/latest/developerguide/requests-per-second.html: 'Cryptographic operations (ECC and SM2) request rate ... 1,000 (shared)' per account and Region, adjustable; the custom-key-store row lists no Sign operation",
+    "layers/chain-and-infra.json CH-11: core/src/anchor/inscribe.ts:99 ephemeral secret never persisted, commit broadcast before reveal",
+    "layers/chain-and-infra.json CH-13: deploy/regtest-node.sh:47 createwallet without a passphrase; no encryptwallet/psbt/getbalance anywhere in core/src",
+    "layers/chain-and-infra.json components: the live bitcoind RPC is published on 0.0.0.0 by another project's stack, while deploy/regtest-node.sh:34-35 binds 127.0.0.1",
+    "attest/issuer.key.json: a customer-side issuer private key (privateKeyPkcs8Base64) in the repo root, referenced by packages/attest-sign/src/cli.ts and apps/console/src/app.ts",
+    "layers/chain-and-infra.json components: on the EVM settlement chain, core only reads; writes go through unlocked dev accounts in demo-partners"
+   ],
+   "proposed_change": "Keep 'core holds no long-lived private key' and a separate signer with its own IAM role. It has to be its own ECS service, because containers in one ECS task share the task role. Scope it to the keys that exist. (a) The platform P-256 event-signing key. Do not make one KMS Sign call per event: hold the key in the signer's memory, decrypted through KMS at start, or use CloudHSM directly when a customer requires a single-tenant HSM. (b) The Bitcoin fee wallet: a watch-only wallet in the node, PSBTs signed by the signer with a KMS ECC_SECG_P256K1 key (ECDSA, low-S normalised), a small hot float with days-of-float alerts and manual top-up from cold storage, and the node's RPC restricted to the private network. (c) Taproot inscription keys: KMS offers no BIP340 Schnorr, so the signer generates them and persists them KMS-encrypted before the commit is broadcast. Sign once, store the signature with the event in the same transaction, then send. A retry resends the stored bytes and never re-signs, because ECDSA signatures are randomised. Run two signer tasks across AZs and treat 'signer unavailable' as a retryable job state. Apply the approval policy (four-eyes) to value movement and key lifecycle: fee-wallet withdrawals, rotation, partner key registration. Automated event signing gets an allow-list of message types, rate limits and a signature audit log instead. Do not adopt an MPC custody provider until the company decides whether it holds the stablecoin leg; today that wallet sits on the partner side and core only reads the chain.",
+   "what_would_flip_it": "If launch volume stays far below about 40 payments per second for a long time, per-event KMS signing is acceptable and simpler. If the company decides to hold and move stablecoins itself, an MPC or custody provider with transaction policy becomes mandatory rather than optional, and that decision likely brings virtual-asset-service-provider obligations in Korea."
+  },
+  {
+   "decision_id": "D10 (infrastructure triggers)",
+   "verdict": "modify",
+   "strongest_objection": "The triggers are sensible: deferring Kubernetes and multi-region until a need appears is what a small team should do. The weakness is that multi-region active-active is the only regional step listed, so nothing protects against losing the Seoul region or the AWS account before that trigger fires. For Korean bank data, a second AWS region means data leaving Korea (to my knowledge AWS has one Korean region), which bank contracts and personal-information rules may forbid. The trigger therefore cannot be 'regulation or contract' alone; residency decides where any copy may live.",
+   "confidence": "medium",
+   "evidence": [
+    "scratchpad/notes/research-korea.md: 2025 EFSR overhaul, core-business RTO 3 h, annual real DR switchover drill, DR site a set distance from the main centre, incident report within 24 h",
+    "layers/chain-and-infra.json CH-12: MySQL on the same host with no backup tooling; CH-18: the docs set no SLA, availability or recovery targets",
+    "layers/remit-rail.json: the remittance flow carries travel-rule (IVMS101) personal data that core encrypts to the partner, so personal data is in scope"
+   ],
+   "proposed_change": "Split the regional step into three. (1) Now: immutable backup copies in a separate AWS account (AWS Backup with vault lock), with the copy's location set by data residency (Seoul if Korean personal data must stay in Korea; another region only for data cleared to leave). (2) A warm standby, or a tested restore at a second provider, when a bank contract states an RTO for regional failure, or when the company itself falls under the EFSR (3-hour RTO and an annual real switchover drill). (3) Active-active only on a measured need. Sharpen the Kubernetes trigger to 'a signed contract to run the platform itself, not only the SDK or SWIFT adapter, inside a customer's data centre, or about 8-10 independently deployed services'. Require OCI images and 12-factor configuration now so that move stays a packaging change.",
+   "what_would_flip_it": "A bank contract or regulator that explicitly accepts backup copies outside Korea removes the residency constraint. A regional outage in Seoul, or a contractual regional RTO, pulls the warm standby forward."
+  }
+ ],
+ "estimates": [
+  {
+   "what": "Port the sandbox console to React + Vite as one console for both environments",
+   "estimate": "4-7 engineer-weeks for one engineer fluent in React",
+   "basis": "app.ts 3,913 + por.ts 1,038 = 4,951 lines of view code across 8 screens, plus 49 property tests (811 lines) to rewrite for a bundled build. Reused as-is: api.ts 665, i18n/copy 176, console.css 1,168, about 4,100 lines of vendored verifier and PoR code. Assumes 150-250 ported lines per day including tests."
+  },
+  {
+   "what": "Event-signing throughput if every platform signature is a KMS Sign call",
+   "estimate": "about 45 payments per second per AWS account and region at the default quota",
+   "basis": "1,000 shared ECC crypto operations per second (AWS KMS quotas page) divided by 22 platform ES256 signatures per happy-path payment (remit-rail layer), against a measured intake of about 410 requests per second per process"
+  },
+  {
+   "what": "Same-origin CDN setup for the static surfaces (CloudFront + S3 + ALB path routing, headers policy, atomic deploy)",
+   "estimate": "3-5 engineer-days; the separate-hostname alternative is 1-2 engineer-weeks and weaker security",
+   "basis": "The pages already use same-origin paths (connect-src 'self'), so no app code changes; the work is IaC, a response-headers policy copying static.ts:151-155, and a deploy script. Separate hostnames would add CORS and preflight routes for console paths, cookie-domain changes, a CSRF review and per-environment CSP."
+  },
+  {
+   "what": "Minimum signer service (event key, Bitcoin fee wallet, inscription keys)",
+   "estimate": "3-4 engineer-weeks (low confidence)",
+   "basis": "One existing seam for the event key (sign.ts:194-214), about 1 week including IAM and HA. Bitcoin watch-only wallet plus PSBT signing with KMS secp256k1 and low-S, about 1.5-2 weeks: today bitcoind selects coins and signs (core/src/anchor/bitcoind.ts). Inscription key persistence, about 2-3 days (CH-11)."
+  },
+  {
+   "what": "Operational minimum before production money (git + CI, containers, accounts, IaC, Aurora with PITR and cross-account backup, alarms, runbooks, first restore drill)",
+   "estimate": "4-6 engineer-weeks (low-medium confidence)",
+   "basis": "None of it exists today: no git for attest/, no Dockerfile, no IaC, no backups, no metrics or alerting (CH-12). The API/worker split already works through configuration (CH-15), which saves work."
+  },
+  {
+   "what": "Later move from ECS to EKS if a Kubernetes trigger fires",
+   "estimate": "1-3 engineer-weeks for 3-4 services",
+   "basis": "Same OCI images; task definitions become Helm charts, plus ingress, certificate and IAM wiring. From general experience, not measured here."
+  }
+ ],
+ "missed_decisions": [
+  "Version control and CI/CD. /home/ubuntu/bitcert-attest and attest/ are not git repositories (git rev-parse fails; only homepage/ has .git), and several sessions edit the code directly on the server. Before any production money: put the code in git with a protected main branch and mandatory review. CI should run the full test suite and the cross-language conformance vectors, build one immutable image per commit and promote it from sandbox to production, with no edits on servers. Without this, rollback, reproducible builds and the change-management evidence banks ask for are impossible.",
+  "The operational minimum as a launch gate, with numbers. (1) TLS everywhere, with Secure cookies and TRUST_PROXY set. (2) Aurora/RDS point-in-time recovery (RPO of 5 minutes or less) plus daily immutable copies in a separate account. (3) A restore drill before launch, then quarterly: check row counts and ledger balance, recompute Merkle roots against the anchored txids, and re-verify sample bundles with the independent verifier. The chain holds only roots, so a lost database means lost proofs for every customer. (4) RTO targets: for example 1 hour in-region, and 3 hours or less for settlement, matching what banks owe under the EFSR. (5) Alarms on business invariants: sealed-but-unanchored batches, oldest unanchored record, unconfirmed anchors past N blocks, payments stuck past a step deadline, job/outbox age, webhook failure rate, reconciliation mismatch, fee-wallet days of float, KMS throttling, signer errors, certificate expiry. Add external synthetic checks, including one for the CSP header. (6) A named primary and secondary on call, with paging and runbooks for the top alerts. (7) Incident notice to affected banks within 24 hours. (8) Deployments that are immutable, health-checked and reversible in minutes, with expand/contract migrations and a snapshot before each.",
+  "Who custodies the stablecoin leg, the company or a licensed partner. This sets D9's scope (MPC/custody provider or not), the licensing path (in Korea, transferring virtual assets for others likely brings virtual-asset-service-provider obligations, including ISMS) and insurance.",
+  "Data residency and DR location for Korean and South-East Asian tenants' personal data (remittance carries names and account numbers). This decides where backups and any second region may live, and whether SEA tenants need in-country deployment.",
+  "Service levels promised to banks: availability, RPO and RTO, support hours (24/7 for P1 only, or business hours) and maintenance windows. The design docs set none (CH-18).",
+  "Sandbox chains that persist. Org records never expire, but the sandbox anchors to a regtest node owned by another project's docker stack and settles on an in-memory anvil that resets on restart. Choose persistent test chains: Bitcoin signet or testnet4, or a self-run regtest with backups; a persisted EVM devnet or a public testnet.",
+  "Chain-node operations for production. For Bitcoin: run your own nodes (pruned, two AZs) or use a provider. For EVM reads: your own node, or at least two independent RPC providers cross-checked, because a single provider's wrong answer would mark a settlement as done.",
+  "Production console authentication: invite-only accounts provisioned per contract, roles, MFA and SSO (SAML/OIDC) for bank users, an idle session far shorter than today's 14 days (account.ts:59), IP allow-lists, four-eyes approval for money-moving and key actions, and audit export.",
+  "Secrets management: Secrets Manager or Parameter Store for database, RPC, webhook and partner credentials, with no PEM or .env files on disk or in images. attest/issuer.key.json and similar key files must be excluded from images and repositories.",
+  "A certifications roadmap for bank due diligence: ISMS(-P) in Korea, ISO 27001 or SOC 2 for SEA banks. Its timeline decides which logging, access-review and change-management controls get built now.",
+  "Where the marketing homepage and the demo/partner-simulator sites run. They should not be in the production account. The homepage trusts X-Forwarded-For without a proxy, has an admin/admin fallback (FE-18) and serves 73 MB of video from Node (FE-17); it should sit behind the CDN in its own account."
+ ]
+}

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+#
+# Runs the Go SDK's example program, building it first when it is missing or
+# older than its sources.
+#
+# Everything the build produces stays under ./.build of this directory: the
+# program itself and, unless GOCACHE is already set, Go's build cache. Nothing
+# is installed anywhere and nothing is fetched: the module has no dependency
+# outside the standard library, and GOPROXY=off with GOTOOLCHAIN=local makes
+# sure the toolchain does not go looking for one. CGO_ENABLED=0 keeps the
+# build from needing a C compiler.
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+build="$root/.build"
+program="$build/por-example"
+
+stale() {
+  [ ! -x "$program" ] && return 0
+  [ -n "$(find "$root" -path "$build" -prune -o \( -name '*.go' -o -name go.mod \) -newer "$program" -print -quit)" ]
+}
+
+if stale; then
+  command -v go >/dev/null || { echo "por-example: Go 1.21 or later is needed to build the example (https://go.dev/dl)" >&2; exit 1; }
+  mkdir -p "$build"
+  # Built beside its final name and moved into place, so that two runs
+  # started together never execute a half-written file.
+  (
+    cd "$root"
+    GOCACHE="${GOCACHE:-$build/gocache}" GOPROXY=off GOTOOLCHAIN=local CGO_ENABLED=0 \
+      go build -o "$program.$$" ./examples/por-example
+  ) >&2
+  mv -f "$program.$$" "$program"
+fi
+
+exec "$program" "$@"

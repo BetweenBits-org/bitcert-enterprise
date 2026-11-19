@@ -1,0 +1,492 @@
+/*
+ * Playground styling.
+ *
+ * Shares the homepage's palette and type so the two read as one product —
+ * Red Hat Display, #00A8BA primary, #F7F9FA section ground, 10px button radius.
+ * The homepage redesign is content-only, so the Playground must not introduce a
+ * second visual language beside it.
+ *
+ * Verification state colours are derived from that same palette rather than
+ * invented: primary teal for verified, the existing red for failed, and grey —
+ * deliberately colourless — for "not checked". A neutral unchecked state is a
+ * product requirement, not a style choice: green for a check that never ran is
+ * how a verification UI tells its first lie.
+ */
+:root {
+  --brand: #00A8BA;
+  --brand-2: #0074E8;
+  --ink: #020D0F;
+  --ink-2: #424F51;
+  --ink-3: #808687;
+  --rule: #E6E7E7;
+  --rule-2: #D0D2D2;
+  --ground: #ffffff;
+  --ground-2: #F7F9FA;
+  --fail: #C0272D;
+  --fail-bg: #fdf0f0;
+  --pass-bg: #e6f6f8;
+  --inert: #B5B7B7;
+  --inert-bg: #EDEEEE;
+  /* The marketing site's caution values, soft rule included — see the
+     console's stylesheet for why the border carried the loudness. */
+  --warn: #9a4b1c;
+  --warn-bg: #fff3e9;
+  --warn-rule: #f0d6bf;
+  --radius: 8px;
+  --radius-tag: 3px;
+  /* Same code panel as the marketing site and the docs host. */
+  --panel: #173236;
+  --panel-ink: #e1ebec;
+  --panel-rule: #2c474b;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: "Red Hat Display", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+          "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--ground); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.7;
+  word-break: keep-all; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+.mono { font-family: var(--mono); }
+
+/* masthead */
+.masthead {
+  border-bottom: 1px solid var(--rule); position: sticky; top: 0;
+  background: rgba(255,255,255,.96); backdrop-filter: blur(6px); z-index: 10;
+}
+.masthead .wrap { display: flex; align-items: center; gap: 24px; height: 64px; flex-wrap: wrap; }
+.brand { font-weight: 500; font-size: 17px; letter-spacing: -.01em; color: var(--ink); text-decoration: none; }
+.brand b { font-weight: 900; }
+.tabs { display: flex; gap: 4px; margin-left: auto; }
+.tabs button {
+  font: inherit; font-size: 14.5px; font-weight: 500; color: var(--ink-3);
+  background: none; border: 0; padding: 7px 14px; border-radius: var(--radius); cursor: pointer;
+}
+.tabs button:hover { color: var(--ink); background: var(--ground-2); }
+.tabs button[aria-selected="true"] { color: var(--ground); background: var(--ink); }
+.tabs button:focus-visible, .btn:focus-visible, .drop:focus-within {
+  outline: 2px solid var(--brand); outline-offset: 2px;
+}
+.netbadge {
+  font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  padding: 4px 9px; border-radius: 4px; border: 1px solid;
+}
+.netbadge.regtest { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-rule); }
+.netbadge.mainnet { color: var(--brand); background: var(--pass-bg); border-color: var(--brand); }
+
+.main { padding: 44px 24px 80px; }
+h1 { font-size: clamp(22px, 3.2vw, 31px); line-height: 1.3; font-weight: 900;
+     letter-spacing: -.02em; margin: 0 0 12px; text-wrap: balance; }
+.lede { max-width: 64ch; color: var(--ink-2); margin: 0 0 28px; font-size: 16px; }
+.lede b { color: var(--ink); font-weight: 700; }
+
+/* drop targets */
+.drops { display: grid; gap: 12px; margin: 0 0 18px; }
+@media (min-width: 720px) { .drops { grid-template-columns: 1fr 1fr; } }
+.drop {
+  display: block; border: 1.5px dashed var(--rule-2); border-radius: var(--radius);
+  padding: 20px; cursor: pointer; background: var(--ground-2); transition: border-color .12s, background .12s;
+}
+.drop:hover, .drop.over { border-color: var(--brand); background: var(--pass-bg); }
+.drop.set { border-style: solid; border-color: var(--brand); background: var(--ground); }
+.dk { display: block; font-size: 12px; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--ink-3); margin-bottom: 5px; }
+.dk em { font-style: normal; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.dv { display: block; font-size: 14px; color: var(--ink-2); word-break: break-all; }
+.drop.set .dv { color: var(--ink); font-weight: 500; }
+
+.row { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 28px; }
+.btn {
+  font: inherit; font-size: 15px; font-weight: 700; padding: 11px 22px;
+  border-radius: var(--radius); border: 1.5px solid var(--ink); background: var(--ink);
+  color: var(--ground); cursor: pointer;
+}
+.btn:hover:not(:disabled) { background: var(--brand); border-color: var(--brand); }
+.btn:disabled { opacity: .35; cursor: not-allowed; }
+.btn.ghost { background: none; color: var(--ink); border-color: var(--rule-2); }
+.btn.ghost:hover { border-color: var(--ink); background: var(--ground-2); color: var(--ink); }
+
+/* verdict */
+.verdict { border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; margin: 0 0 22px; }
+.verdict > .top { padding: 18px 22px; display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
+.verdict.ok > .top { background: var(--pass-bg); border-bottom: 1px solid var(--brand); }
+.verdict.no > .top { background: var(--fail-bg); border-bottom: 1px solid var(--fail); }
+.verdict .hl { font-size: 18px; font-weight: 900; letter-spacing: -.01em; }
+.verdict.ok .hl { color: var(--brand); }
+.verdict.no .hl { color: var(--fail); }
+.verdict .sub { font-size: 13.5px; color: var(--ink-2); }
+
+/* links grid — the honest-reporting surface */
+.links { display: grid; gap: 1px; background: var(--rule); }
+@media (min-width: 760px) { .links { grid-template-columns: repeat(4, 1fr); } }
+.link { background: var(--ground); padding: 15px 18px; }
+.link .lid { font-family: var(--mono); font-size: 11px; font-weight: 700;
+             letter-spacing: .1em; color: var(--ink-3); }
+.link .lt { font-size: 13.5px; color: var(--ink-2); margin: 3px 0 9px; line-height: 1.45; }
+.state {
+  display: inline-block; font-family: var(--mono); font-size: 11px; font-weight: 700;
+  letter-spacing: .07em; padding: 3px 9px; border-radius: 4px; border: 1px solid;
+}
+.state.pass { color: var(--brand); background: var(--pass-bg); border-color: var(--brand); }
+.state.fail { color: var(--fail); background: var(--fail-bg); border-color: var(--fail); }
+.state.skip { color: var(--ink-3); background: var(--inert-bg); border-color: var(--rule-2); }
+.state.warn { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-rule); }
+/*
+ * A demonstration key that verified.
+ *
+ * Deliberately not `.pass`. The arithmetic held, so this is not a failure and
+ * grey would understate it — but the signer is unestablished, so the brand
+ * green would say something the evidence does not support. The amber it shares
+ * with `.warn` is the honest middle: checked, and not to be relied on.
+ */
+.state.demo {
+  color: var(--warn); background: var(--warn-bg); border-color: var(--rule-2);
+  border-style: dashed;
+}
+
+/* checks */
+.checks { border-top: 2px solid var(--ink); margin: 0 0 22px; }
+.check { border-bottom: 1px solid var(--rule); padding: 13px 0; display: grid;
+         grid-template-columns: 74px 1fr; gap: 4px 14px; align-items: start; }
+.check .cl { font-size: 14.5px; font-weight: 500; }
+.check .cd { grid-column: 2; font-family: var(--mono); font-size: 12px; color: var(--ink-3);
+             line-height: 1.65; word-break: break-all; }
+.check .cd b { color: var(--ink-2); font-weight: 400; }
+.check .nong { font-family: var(--mono); font-size: 10px; color: var(--ink-3);
+               letter-spacing: .06em; margin-left: 7px; }
+
+.note {
+  background: var(--ground-2); border-left: 3px solid var(--brand);
+  padding: 15px 18px; margin: 0 0 22px; font-size: 14px; color: var(--ink-2);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.note.warn { border-left-color: var(--warn); background: var(--warn-bg); }
+.note b { color: var(--ink); }
+.note p { margin: 0; }
+.note p + p { margin-top: 8px; }
+
+/* explore editor */
+.editor { border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; margin: 0 0 16px; }
+.editor textarea {
+  display: block; width: 100%; border: 0; padding: 18px; font: inherit; font-size: 15px;
+  line-height: 1.7; resize: vertical; color: var(--ink); background: var(--ground);
+}
+.editor textarea:focus { outline: 2px solid var(--brand); outline-offset: -2px; }
+.hashline { display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+            padding: 12px 18px; background: var(--ground-2); border-top: 1px solid var(--rule); }
+.hashline .k { font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+               letter-spacing: .12em; color: var(--ink-3); }
+.hashline code { font-size: 12px; color: var(--ink-2); word-break: break-all; }
+.pill { font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 3px 9px;
+        border-radius: 4px; border: 1px solid var(--rule-2); color: var(--ink-3); background: var(--ground); }
+.pill.match { color: var(--brand); background: var(--pass-bg); border-color: var(--brand); }
+.pill.differ { color: var(--fail); background: var(--fail-bg); border-color: var(--fail); }
+
+/* evidence */
+.ev { border-top: 2px solid var(--ink); margin: 0 0 26px; }
+.ev h2 { font-size: 15px; font-weight: 700; margin: 22px 0 10px; }
+.kv { display: grid; grid-template-columns: 152px 1fr; gap: 6px 16px;
+      border-bottom: 1px solid var(--rule); padding: 11px 0; align-items: baseline; }
+.kv .k { font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: .1em;
+         text-transform: uppercase; color: var(--ink-3); }
+.kv .v { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); word-break: break-all; }
+.kv .v b { color: var(--ink); font-weight: 700; }
+.fold { margin: 0; padding: 16px 18px; background: var(--ground-2); border-radius: var(--radius);
+        font-family: var(--mono); font-size: 12px; line-height: 1.8; overflow-x: auto; color: var(--ink-2); }
+.fold b { color: var(--ink); }
+.fold .op { color: var(--brand); }
+
+.foot { border-top: 1px solid var(--rule); padding: 20px 0; margin-top: 40px; }
+.foot .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+              font-size: 12.5px; color: var(--ink-3); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ─── Bank Review ────────────────────────────────────────────────────────
+ * The settlement workflow. Reuses the verdict vocabulary from the Verify tab —
+ * the same `.state` chips, the same rule that an unperformed check renders grey
+ * — because the six matching axes and the four proof links are the same kind of
+ * claim and should not look like different products.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/* Synthetic-data notice. Prominent by design: showing fabricated bank evidence
+ * without saying so at the top would be the single most misleading thing this
+ * page could do. */
+.banner {
+  border: 1px solid var(--warn-rule);
+  border-left-width: 3px;
+  background: var(--warn-bg);
+  color: var(--ink-2);
+  padding: 16px 20px;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  margin: 0 0 24px;
+  font-size: 14px;
+  line-height: 1.65;
+  max-width: 74ch;
+}
+.banner b { color: var(--ink); }
+
+/* Scenario picker */
+.scn { display: grid; gap: 10px; margin: 0 0 22px; }
+@media (min-width: 900px) { .scn { grid-template-columns: repeat(5, 1fr); } }
+.scn button {
+  font: inherit; text-align: left; cursor: pointer; padding: 14px 16px;
+  border: 1.5px solid var(--rule-2); border-radius: var(--radius);
+  background: var(--ground); color: var(--ink-2); display: block;
+}
+.scn button:hover { border-color: var(--brand); background: var(--pass-bg); }
+.scn button[aria-pressed="true"] {
+  border-color: var(--ink); background: var(--ink); color: var(--ground);
+}
+.scn .sid {
+  display: block; font-family: var(--mono); font-size: 11px; font-weight: 700;
+  letter-spacing: .12em; color: var(--brand); margin-bottom: 5px;
+}
+.scn button[aria-pressed="true"] .sid { color: var(--ground); }
+.scn .st { display: block; font-size: 14px; font-weight: 500; line-height: 1.35; }
+
+/* What a scenario is meant to demonstrate. */
+.teaches {
+  background: var(--ground-2); border-left: 3px solid var(--brand);
+  padding: 15px 18px; margin: 0 0 22px; font-size: 14px; color: var(--ink-2);
+  border-radius: 0 var(--radius) var(--radius) 0; max-width: 78ch; line-height: 1.65;
+}
+
+/* Six axes */
+.axes { display: grid; gap: 1px; background: var(--rule); margin: 0 0 22px; }
+@media (min-width: 700px) { .axes { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1000px) { .axes { grid-template-columns: repeat(6, 1fr); } }
+.axis { background: var(--ground); padding: 14px 16px; }
+.axis .an {
+  font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3); display: block; margin-bottom: 8px;
+}
+
+/* Findings. `expected / actual / tolerance` is the whole point — "amounts do
+ * not match" is not actionable, so the numbers are given their own row. */
+.finds { border-top: 2px solid var(--ink); margin: 0 0 22px; }
+.find { border-bottom: 1px solid var(--rule); padding: 13px 0; }
+.find .fh { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.find .fc {
+  font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .05em;
+  padding: 2px 7px; border-radius: 4px; border: 1px solid;
+}
+.find.blocking .fc { color: var(--fail); border-color: var(--fail); background: var(--fail-bg); }
+.find.warning  .fc { color: var(--warn); border-color: var(--warn-rule); background: var(--warn-bg); }
+.find.info     .fc { color: var(--ink-3); border-color: var(--rule-2); background: var(--inert-bg); }
+.find .fe {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  border: 1px solid var(--rule); padding: 1px 6px; border-radius: 3px;
+}
+.find .fd { font-size: 14px; color: var(--ink-2); margin: 6px 0 0; line-height: 1.6; }
+.find .fv {
+  display: flex; gap: 18px; flex-wrap: wrap; margin: 8px 0 0;
+  font-family: var(--mono); font-size: 12px;
+}
+.find .fv span { color: var(--ink-3); }
+.find .fv b { color: var(--ink); font-weight: 700; }
+
+/* Evidence elements, in the six-element order. */
+.elements { display: grid; gap: 12px; margin: 0 0 22px; }
+@media (min-width: 760px) { .elements { grid-template-columns: repeat(2, 1fr); } }
+.elem { border: 1px solid var(--rule); border-radius: var(--radius); padding: 16px 18px; }
+.elem.touched { border-color: var(--warn-rule); background: var(--warn-bg); }
+.elem .eh { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 10px; }
+.elem .en { font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: .1em; color: var(--brand); }
+.elem .et { font-weight: 700; font-size: 14.5px; }
+.elem dl { margin: 0; display: grid; grid-template-columns: 112px 1fr; gap: 5px 12px; font-size: 13px; }
+.elem dt { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em;
+           text-transform: uppercase; color: var(--ink-3); padding-top: 2px; }
+.elem dd { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.elem dd b { color: var(--ink); }
+
+/* Policy provenance. A verdict is only reproducible if the exact rules that
+ * produced it are pinned, so the digest is shown, not just the version label. */
+.prov {
+  display: flex; gap: 20px; flex-wrap: wrap; padding: 13px 0;
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+  margin: 0 0 22px; font-family: var(--mono); font-size: 11.5px; color: var(--ink-3);
+}
+.prov b { color: var(--ink); font-weight: 700; }
+
+/* ─── Anchor (free tier) ─────────────────────────────────────────────────── */
+
+/* Mainnet variant of the notice. The default `.banner` is the cautionary one,
+ * because on a private chain there is something a reader must be told. */
+.banner-ok {
+  border-color: var(--brand);
+  background: var(--pass-bg);
+}
+
+/* Status stages. Shown as four named steps rather than a spinner: the wait is
+ * real (a free anchor joins a shared batch) and a reviewer should be able to see
+ * which stage it is at, not just that something is happening. */
+.stages { border-top: 2px solid var(--ink); margin: 0 0 20px; }
+.stage-row {
+  display: grid; grid-template-columns: 112px 1fr; gap: 14px; align-items: baseline;
+  padding: 11px 0; border-bottom: 1px solid var(--rule);
+}
+.stage-d { font-size: 13.5px; color: var(--ink-2); line-height: 1.55; }
+
+/* Compact key/value list for ids and digests. */
+.att-kv-lite { margin: 0 0 20px; border-top: 1px solid var(--rule); }
+.att-kv-lite > div {
+  display: grid; grid-template-columns: 180px 1fr; gap: 6px 16px;
+  padding: 10px 0; border-bottom: 1px solid var(--rule); align-items: baseline;
+}
+.att-kv-lite span {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.att-kv-lite code { font-size: 12px; color: var(--ink-2); overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  .att-kv-lite > div, .stage-row { grid-template-columns: 1fr; gap: 4px; }
+}
+
+/* ─── Corridor ───────────────────────────────────────────────────────────
+ * Read by a bank officer, so it is laid out as a document rather than a
+ * dashboard: numbered sections, a prose line under each heading, and tables
+ * that answer one question each. Reuses the verdict and finding components from
+ * the Bank Review tab — the six axes mean the same thing here.
+ * ─────────────────────────────────────────────────────────────────────── */
+
+h2.sec {
+  font-size: 19px; font-weight: 900; letter-spacing: -.01em;
+  margin: 46px 0 8px; padding-top: 22px; border-top: 2px solid var(--ink);
+}
+.secp { max-width: 72ch; color: var(--ink-2); font-size: 15px; margin: 0 0 20px; }
+.secp b { color: var(--ink); font-weight: 700; }
+.tiny { font-size: 12.5px; color: var(--ink-3); line-height: 1.6; margin: 0 0 12px; }
+
+/* 1 · SWIFT mapping */
+.maprows { border-top: 1px solid var(--rule); margin: 0 0 8px; }
+.maprow {
+  display: grid; gap: 4px 14px; padding: 14px 0; border-bottom: 1px solid var(--rule);
+  grid-template-columns: 1fr 24px 1fr;
+}
+.mleft { font-size: 14px; font-weight: 500; color: var(--ink); }
+.marrow { color: var(--brand); font-weight: 700; text-align: center; }
+.mright code { font-size: 12.5px; color: var(--brand-2); overflow-wrap: anywhere; }
+.mnote { grid-column: 1 / -1; font-size: 13px; color: var(--ink-2); line-height: 1.6; }
+@media (max-width: 760px) {
+  .maprow { grid-template-columns: 1fr; }
+  .marrow { text-align: left; }
+}
+
+/* 2 · layers. Layer 3 is the only one marked as unchangeable, and the
+ * "who could rewrite this" row is given its own emphasis because it is the
+ * answer to the question the banker actually asked. */
+.layer-card {
+  border: 1px solid var(--rule); border-left: 3px solid var(--inert);
+  border-radius: 0 var(--radius) var(--radius) 0; padding: 18px 20px; margin: 0 0 14px;
+}
+.layer-card.layer-3 { border-left-color: var(--brand); background: var(--pass-bg); }
+.lhead { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 12px; }
+.lnum {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: .12em;
+  color: var(--ink-3);
+}
+.layer-card.layer-3 .lnum { color: var(--brand); }
+.lname { font-weight: 700; font-size: 15.5px; }
+.layer-card dl { margin: 0; display: grid; grid-template-columns: 158px 1fr; gap: 8px 16px; font-size: 13.5px; }
+.layer-card dt {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-3); padding-top: 2px;
+}
+.layer-card dt.danger, .layer-card dd.danger { color: var(--warn); }
+.layer-card dd { margin: 0; color: var(--ink-2); line-height: 1.6; }
+.layer-card dd.danger { font-weight: 500; }
+.layer-card ul { margin: 0; padding-left: 16px; }
+.layer-card li { margin: 0 0 3px; }
+@media (max-width: 760px) { .layer-card dl { grid-template-columns: 1fr; gap: 3px; } }
+
+/* 3 · the committed leaf */
+.leafbox { display: grid; gap: 0; border: 1px solid var(--rule-2); margin: 0 0 20px; }
+@media (min-width: 900px) { .leafbox { grid-template-columns: 1fr 1fr; } }
+.leafside { padding: 20px 22px; background: var(--ground); }
+.leafside + .leafside { border-top: 1px solid var(--rule); }
+@media (min-width: 900px) {
+  .leafside + .leafside { border-top: none; border-left: 1px solid var(--rule); }
+}
+.leafside h3 { font-size: 14.5px; font-weight: 700; margin: 0 0 8px; }
+.fieldlist { border-top: 1px solid var(--rule); }
+.fieldlist > div {
+  display: grid; grid-template-columns: 180px 1fr; gap: 4px 12px;
+  padding: 8px 0; border-bottom: 1px solid var(--rule); align-items: baseline;
+}
+.fieldlist span {
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); letter-spacing: .06em;
+}
+.fieldlist code { font-size: 11.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+.leafcalc {
+  font-family: var(--mono); font-size: 12px; line-height: 1.75; background: var(--ground-2);
+  border-radius: var(--radius); padding: 14px 16px; margin: 0 0 14px; color: var(--ink-2);
+  overflow-x: auto;
+}
+.leafcalc b { color: var(--brand); font-weight: 700; }
+
+/* 4 · the control under test, stated before the verdict */
+.control-box {
+  border-left: 3px solid var(--brand); background: var(--ground-2);
+  padding: 16px 20px; margin: 0 0 20px; border-radius: 0 var(--radius) var(--radius) 0;
+  max-width: 80ch;
+}
+.clabel {
+  font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--brand); margin: 0 0 4px;
+}
+.control-box p { font-size: 14px; color: var(--ink-2); line-height: 1.65; margin: 0 0 12px; }
+.control-box p:last-child { margin: 0; }
+
+/* 5 · audit procedure */
+.proc { border-top: 2px solid var(--ink); margin: 0 0 18px; }
+.procrow {
+  display: grid; gap: 4px 14px; padding: 13px 0; border-bottom: 1px solid var(--rule);
+  grid-template-columns: 30px 120px 1fr;
+}
+.pnum { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--brand); }
+.pwho { font-size: 13px; font-weight: 700; }
+.pact { font-size: 13.5px; color: var(--ink-2); line-height: 1.6; }
+.pneeds {
+  grid-column: 3; font-family: var(--mono); font-size: 11.5px; color: var(--ink-3);
+  line-height: 1.6;
+}
+@media (max-width: 760px) {
+  .procrow { grid-template-columns: 30px 1fr; }
+  .pneeds { grid-column: 2; }
+}
+
+/* 6 · limits */
+.limits { border-top: 2px solid var(--ink); }
+.limitrow {
+  display: grid; gap: 4px 20px; padding: 14px 0; border-bottom: 1px solid var(--rule);
+  grid-template-columns: 1fr 1.6fr;
+}
+.lclaim { font-size: 14px; font-weight: 700; color: var(--ink); }
+.lreal { font-size: 13.5px; color: var(--ink-2); line-height: 1.65; }
+@media (max-width: 760px) { .limitrow { grid-template-columns: 1fr; } }
+
+/* Set here rather than inline: the page ships under `style-src 'self'`, which
+ * blocks `style` attributes outright — these rules were silently dropped, so
+ * the section headings rendered at the browser's default h2 size. */
+.row.gap-b { margin-bottom: 14px; }
+.sect-h { font-size: 16px; font-weight: 700; margin: 0 0 12px; }
+
+/* The two steps share a page now, so the second needs a line to start from —
+ * without it the "received a proof?" heading reads as part of the anchor
+ * result above it. */
+#panel-verify { border-top: 1px solid var(--rule); margin-top: 44px; padding-top: 40px; }
+
+/* ── house style ──────────────────────────────────────────────────────────
+   Shared with the marketing site, the console and the docs host: small
+   letter-spaced mono section labels, and tags at 3px rather than the softer
+   radius a generic dashboard would use. */
+.eyebrow, .kicker {
+  display: block; font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 1px; text-transform: uppercase; color: var(--ink-3); margin: 0 0 7px;
+}
+.chip, .tag, .sid { border-radius: var(--radius-tag); }

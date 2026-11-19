@@ -1,0 +1,18 @@
+{
+  "name": "@stonehash/attest-console",
+  "version": "0.1.0",
+  "private": true,
+  "description": "StoneHash Attest Sandbox Console — sign up, get a key, anchor a digest. No bundler, no framework.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "node build.mjs sync && tsc -p tsconfig.json",
+    "test": "node --test 'test/*.test.ts'",
+    "sync": "node build.mjs sync"
+  },
+  "devDependencies": {
+    "@stonehash/attest-rules": "workspace:*",
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3"
+  }
+}

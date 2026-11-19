@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.1.2</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.stonehash</groupId>
+  <artifactId>stonehash-attest-core</artifactId>
+  <version>0.1.0</version>
+  <name>StoneHash Attest Core</name>
+  <description>The platform back end: API, workers, storage and chain access. One artifact, an executable jar.</description>
+
+  <properties>
+    <!-- The lowest Java this is built for and tested on. It runs on 17 and later. -->
+    <java.version>17</java.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <!-- Not managed by Spring Boot: named here, and nowhere else. -->
+    <mybatis-starter.version>4.1.0</mybatis-starter.version>
+    <bouncycastle.version>1.87</bouncycastle.version>
+  </properties>
+
+  <!--
+    The allow-list. A dependency that is not here is not used; one that is added says why.
+
+    There is no Spring MVC and no Jackson on purpose. The HTTP boundary of this service is a
+    contract (which request is a 404, what an empty body means, how a path is decoded, what the
+    JSON looks like byte for byte) and it is held by this module's own router and JSON writer,
+    not by a framework's defaults.
+  -->
+  <dependencies>
+    <!-- The container: configuration, wiring, the embedded Tomcat (servlet API). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-tomcat</artifactId>
+    </dependency>
+    <!-- The servlet application context the embedded server runs in. No Spring MVC comes with it. -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-web</artifactId>
+    </dependency>
+
+    <!-- Storage: a connection pool and transactions, explicit SQL through MyBatis, migrations through Flyway. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jdbc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.mybatis.spring.boot</groupId>
+      <artifactId>mybatis-spring-boot-starter</artifactId>
+      <version>${mybatis-starter.version}</version>
+    </dependency>
+    <!-- flyway-core without Spring Boot's Flyway module: migrations run as a step of their own, never at start. -->
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-mysql</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.mysql</groupId>
+      <artifactId>mysql-connector-j</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <!--
+      The bank SDK: the one implementation of the bytes both sides must agree on (canonical JSON,
+      signing input, the rules engine). Java 11, no dependency of its own. Installed from its
+      release directory by tools/install-sdk.sh, pinned by sdk.lock.
+    -->
+    <dependency>
+      <groupId>com.stonehash</groupId>
+      <artifactId>stonehash-attest-remit</artifactId>
+      <version>0.1.0</version>
+    </dependency>
+
+    <!-- What the JDK does not carry: scrypt (account passwords), secp256k1 and BIP340 (Bitcoin). -->
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcprov-jdk18on</artifactId>
+      <version>${bouncycastle.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <release>${java.version}</release>
+          <parameters>true</parameters>
+          <compilerArgs>
+            <arg>-Xlint:all,-processing,-serial</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

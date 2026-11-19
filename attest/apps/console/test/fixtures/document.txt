@@ -1,0 +1,2 @@
+StoneHash Attest console test document
+A file anchored by its SHA-256, kept beside its bundle for the verify screen's tests.

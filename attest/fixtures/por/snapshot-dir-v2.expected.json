@@ -1,0 +1,19 @@
+{
+  "about": "What any SDK must get from `snapshot-dir-v2/` — the same ledger and seed as `snapshot-dir/`, in the v2 tree. `tree.json` names the format; a directory whose `tree.json` names none is v1. U-100012 holds nothing: its proof carries an empty balances object.",
+  "exchange_id": "KR-EX-0a1b2c",
+  "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "algo": "merkle-sum-sha256-v2",
+  "root": "eeb2534289eb2a990c5b526a511a5d0ebf80a06069488a9cf1b8ef905feba297",
+  "totals": {
+    "BTC": "2463358024",
+    "ETH": "114050000000000000001",
+    "USDT": "255810750000"
+  },
+  "leaf_count": 12,
+  "commitment": "e5738f3ea6ed27ddc217057d1171cacd081f9db9e5e4f587f978d925fbcd29b1",
+  "proof_files": [
+    "snapshot-dir-v2.proof-U-100008.json",
+    "snapshot-dir-v2.proof-U-100012.json"
+  ],
+  "openings_file": "snapshot-dir-v2.openings-0-3-7.json"
+}

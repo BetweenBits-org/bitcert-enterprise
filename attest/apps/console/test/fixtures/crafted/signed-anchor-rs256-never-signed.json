@@ -1,0 +1,38 @@
+{
+  "schema": "bitcert-proof-bundle/v1",
+  "bitcoin_network": "regtest",
+  "generated_at": "2026-11-18T00:00:00.000Z",
+  "record": {
+    "kind": "attestation",
+    "leaf_bytes": "dc1abb3f82f5da4853f3a259352218759a40b58cb514397e0c2878810e6d7524",
+    "preimage": {
+      "scheme": "sha256-signed-statement/v1",
+      "content_type": "text/plain",
+      "statement": {
+        "schema": "stonehash-attestation-statement/v1",
+        "document": {
+          "sha256": "286c795c472cbee35ce3dae28212f3e53b2def1fa27609fb2d21172b4ac9510a",
+          "content_type": "text/plain"
+        },
+        "issuer": {
+          "key_id": "73c74988-c8b8-43ee-b823-3633f4c6213f",
+          "algorithm": "RS256",
+          "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEiQicJc6wPzI7crh+TBpBKcck3ak4hiVij/N7Mvs4bsksze/YaTKtODmKzJlXlzmtHvGEJA3q2BZyO4SS355wxg=="
+        },
+        "issued_at": "2026-11-18T08:20:07Z",
+        "signature": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBw"
+      }
+    }
+  },
+  "anchor": {
+    "reveal_txid": "21b2be6f79843accb35d25c9e329b990a1137b841f3e91738a8c38a9f7e5c1e0",
+    "reveal_tx_hex": "020000000111111111111111111111111111111111111111111111111111111111111111110000000000ffffffff010000000000000000376a3542433031018313c08c31e7e8726e669eb7b1452eae1c25be9d3af27a92b94010f332b6f793abababababababababababababababab00000000",
+    "op_return_payload_hex": "42433031018313c08c31e7e8726e669eb7b1452eae1c25be9d3af27a92b94010f332b6f793abababababababababababababababab"
+  },
+  "merkle": {
+    "leaf_index": 0,
+    "root": "8313c08c31e7e8726e669eb7b1452eae1c25be9d3af27a92b94010f332b6f793",
+    "siblings": [],
+    "directions": []
+  }
+}

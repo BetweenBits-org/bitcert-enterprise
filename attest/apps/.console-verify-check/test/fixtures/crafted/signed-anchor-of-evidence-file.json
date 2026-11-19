@@ -1,0 +1,38 @@
+{
+  "schema": "bitcert-proof-bundle/v1",
+  "bitcoin_network": "regtest",
+  "generated_at": "2026-11-18T00:00:00.000Z",
+  "record": {
+    "kind": "attestation",
+    "leaf_bytes": "fdf231a4acfe5b79258e10ab3bdcd8c61c2e4c354bbb1dedef4c28d3b7f62fb2",
+    "preimage": {
+      "scheme": "sha256-signed-statement/v1",
+      "content_type": "application/json",
+      "statement": {
+        "schema": "stonehash-attestation-statement/v1",
+        "document": {
+          "sha256": "9f2caeebe606b256bc2e769e11b3ea0f417bd078448771677db609be45c1655e",
+          "content_type": "application/json"
+        },
+        "issuer": {
+          "key_id": "probe-key",
+          "algorithm": "ES256",
+          "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEm7Z7faJLPCMhmuYDY5FYiicBaRgibjIkj83HbJ9fhLIJdB0a0+n1t6xFnErJlrsVN4MI1L4KdkiJxMozCSg7Tw=="
+        },
+        "issued_at": "2026-11-18T09:00:00Z",
+        "signature": "6WmBGKYPVzl55vDIgxiljdJuqRq4BrqAVuIqZa2Nb3_RD8CZO1yxYswcVDPixpAFcx_Zsok0ooARtnCCUCN9Uw"
+      }
+    }
+  },
+  "anchor": {
+    "reveal_txid": "4ca47a406a870f8d12be547b0cff5b4feeacbc729103d2b9d37b9241ec4c9754",
+    "reveal_tx_hex": "020000000111111111111111111111111111111111111111111111111111111111111111110000000000ffffffff010000000000000000376a354243303101dda2dd96527f83b2bf8999b5ea1fdd4fac8ba17f61d60e153df0cbd4a8244a14abababababababababababababababab00000000",
+    "op_return_payload_hex": "4243303101dda2dd96527f83b2bf8999b5ea1fdd4fac8ba17f61d60e153df0cbd4a8244a14abababababababababababababababab"
+  },
+  "merkle": {
+    "leaf_index": 0,
+    "root": "dda2dd96527f83b2bf8999b5ea1fdd4fac8ba17f61d60e153df0cbd4a8244a14",
+    "siblings": [],
+    "directions": []
+  }
+}

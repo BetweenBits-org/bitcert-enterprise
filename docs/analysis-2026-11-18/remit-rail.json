@@ -1,0 +1,976 @@
+{
+ "layer": "remit-rail",
+ "summary": "The remit rail is an optional module inside the single core process (attest/apps/core/src/remit, REMIT_ENABLED). It drives a VN to SG settlement state machine: REQUEST_ACCEPTED, BANK_AUTHORIZED, TRAVEL_RULE_PENDING, PAYOUT_PRE_APPROVED, ONCHAIN_SETTLED, PAYOUT_IN_PROGRESS, BENEFICIARY_CREDIT_CONFIRMED and EVIDENCE_ANCHORED, plus the terminal states CANCELLED, RETURNED and EXCEPTION. Its counterparty is a partner simulator (demo-partners :3300) that plays the BFI, the payout bank and the settlement wallet on a local anvil chain. The first two states are set inside the POST /v1/settlements request. The next three legs run in-process as a fire-and-forget setImmediate chain that makes four sequential partner HTTP calls (20 s timeout, no retry). Signed BFI callbacks drive the payout states, and reconciliation, evidence packaging and one attestation leaf per payment all run inside the PAYOUT_COMPLETED callback request. The RemitWorker only promotes EVIDENCE_ANCHORED and delivers webhooks, on a hardcoded 2 s tick. One happy-path payment costs about 165 SQL statements (about 109 reads and 56 autocommit writes), 22 platform ES256 signatures, about 16 verifications, 1 JWE, 4 outbound partner calls, 3 inbound callbacks and 11 signed webhooks. Payments share Merkle batches (up to 1,024 leaves per Bitcoin anchor), so anchoring cost is spread across them. The first hard ceiling is the webhook outbox: 20 deliveries per 2 s tick, one at a time, 5 s timeout. That is 10 per second, or about 0.9 payments per second for orgs with a webhook URL, which is below T1. The pipeline has no durable queue, no backpressure, no recovery sweep and no retry. A restart strands in-flight payments, and any partner timeout leaves a payment in terminal EXCEPTION. State changes are read-then-write with no compare-and-set, and event sequence numbers are MAX(seq)+1. Concurrent cancel, RFI-answer and callback paths can therefore lose updates or issue a second settlement instruction, and the UNIQUE (payment_id, seq) key is the only guard, a probabilistic one. promoteAnchored full-scans remit_payments every 2 s with no LIMIT. Bank-side SDK polling (every 1.5 to 3 s, each poll audited) and the SDK's LIKE-based duplicate search add load comparable to the pipeline itself. The settlement leg is sandbox-only: anvil unlocked account, automine, 1-confirmation finality, five reused deposit addresses, one transfer per payment, synchronous wait. The simulator rewrites whole JSON files on every update, so it would not sustain T1 for long (estimate). T1 is reachable after targeted fixes. T2 needs a durable job queue, far fewer statements per payment, multi-instance safety and an asynchronous settlement leg on a real chain. T3 needs net settlement (one transfer per batch, not per payment), sharding and batched signing.",
+ "components": [
+  {
+   "name": "Remit API routes",
+   "role": "HTTP surface: POST /v1/quotes; POST /v1/settlements (Idempotency-Key required); GET ledger, detail, evidence and on-chain status; cancel; rfi-response; daily manifests; anonymous BFI callbacks; console product activation; sandbox registry admin",
+   "files": [
+    "attest/apps/core/src/remit/routes.ts",
+    "attest/apps/core/src/http/routes.ts",
+    "attest/apps/core/src/http/server.ts",
+    "attest/apps/core/src/audit.ts"
+   ],
+   "tech": "node:http router, TypeScript run by Node 22 type stripping",
+   "notes": "No rate limiter on any remit route. 1 MiB JSON body cap. Every API-key call except a few console GETs writes an audit_log row, awaited before the response. Callbacks are anonymous and not audited."
+  },
+  {
+   "name": "RemitOrchestrator",
+   "role": "State machine driver: synchronous acceptance (REQUEST_ACCEPTED, then BANK_AUTHORIZED), in-process async pipeline via setImmediate (travel rule, payout approval, USDC transfer), BFI callback handling, six-axis reconciliation, evidence commit, anchored promotion",
+   "files": [
+    "attest/apps/core/src/remit/orchestrator.ts"
+   ],
+   "tech": "TypeScript, node:crypto",
+   "notes": "advance() can resume from any state, but nothing calls it after a restart. Callers are acceptSettlement and respondRfi only."
+  },
+  {
+   "name": "RemitStore",
+   "role": "Payments, append-only signed events, quotes, idempotency keys, travel-rule ciphertexts; forward-only transition(); keyset ledger search",
+   "files": [
+    "attest/apps/core/src/remit/store.ts",
+    "attest/apps/core/src/db.ts"
+   ],
+   "tech": "MySQL 8 via mysql2 pool (SQLite in tests)",
+   "notes": "No transactions. transition() reads, checks, then UPDATEs by id only. Event seq = MAX(seq)+1, backed by UNIQUE (payment_id, seq). store.get is SELECT *."
+  },
+  {
+   "name": "RemitWorker",
+   "role": "Timer in the core process: promoteAnchored(), then outbox.deliverDue(); process-local running flag",
+   "files": [
+    "attest/apps/core/src/remit/worker.ts",
+    "attest/apps/core/src/main.ts"
+   ],
+   "tech": "setInterval",
+   "notes": "Tick hardcoded to 2,000 ms whenever WORKER_TICK_MS > 0. Does not advance payments through the pipeline."
+  },
+  {
+   "name": "WebhookOutbox",
+   "role": "Table-backed, platform-signed, at-least-once bank notifications with a backoff ladder; bank polling is the backstop",
+   "files": [
+    "attest/apps/core/src/remit/webhook.ts"
+   ],
+   "tech": "remit_webhook_deliveries table, fetch",
+   "notes": "20 rows per tick, sequential, 5 s timeout, 5 attempts, never pruned"
+  },
+  {
+   "name": "Trust Registry and subscriptions",
+   "role": "Institution keys and roles, product subscriptions (webhook URL lives in config JSON), verification keyring, registry snapshot",
+   "files": [
+    "attest/apps/core/src/remit/registry.ts"
+   ],
+   "tech": "institutions and subscriptions tables",
+   "notes": "Uncached. list() is a full-table read used several times per payment."
+  },
+  {
+   "name": "Signing and encryption",
+   "role": "ES256 event and element signatures; platform key PEM created at first boot; ECDH-ES + A256GCM JWE for the Travel Rule payload",
+   "files": [
+    "attest/apps/core/src/remit/sign.ts",
+    "attest/apps/core/src/remit/jwe.ts"
+   ],
+   "tech": "node:crypto (synchronous), JCS",
+   "notes": "verifyEvent re-parses the SPKI on every call. The platform key is a file on local disk (sandbox custody)."
+  },
+  {
+   "name": "Evidence and reconciliation",
+   "role": "Collect the signed elements from events, verify them against the registry keyring, evaluate six axes, assemble the package (all events, policy, verdict, full registry snapshot), compute the nonce'd commitment, then svc.issue (one attestation leaf per payment)",
+   "files": [
+    "attest/apps/core/src/remit/evidence.ts",
+    "attest/packages/attest-rules/src/signature.ts",
+    "attest/apps/core/src/service.ts"
+   ],
+   "tech": "attest-rules engine, WebCrypto verify (cached imported keys)"
+  },
+  {
+   "name": "Quote engine and IVMS101 mapper",
+   "role": "Static-rate VN to SG quotes (BigInt fixed point, TTL 600 s); mode A Travel Rule message shaping and required-field check",
+   "files": [
+    "attest/apps/core/src/remit/quotes.ts",
+    "attest/apps/core/src/remit/ivms101.ts",
+    "attest/apps/core/src/config.ts"
+   ]
+  },
+  {
+   "name": "Partner connector",
+   "role": "BfiConnector and SettlementWallet interfaces; TripleAProfileSim HTTP client used as both",
+   "files": [
+    "attest/apps/core/src/remit/partners-client.ts"
+   ],
+   "tech": "fetch, single POST, AbortSignal.timeout(20_000)",
+   "notes": "No retry, no idempotency header"
+  },
+  {
+   "name": "Chain status lookup",
+   "role": "On-demand read of a settlement transaction for GET /v1/settlements/:id/chain",
+   "files": [
+    "attest/apps/core/src/remit/chain-status.ts"
+   ],
+   "tech": "JSON-RPC eth_getTransactionByHash, eth_getTransactionReceipt, eth_blockNumber, eth_getBlockByNumber",
+   "notes": "Not in the payment path. 5 s timeout per call, no cache."
+  },
+  {
+   "name": "Partner simulator (demo-partners)",
+   "role": "Sandbox BFI (decrypt Travel Rule, screen, pre-approve, watch chain, FX, callbacks), SG payout bank (FAST sim ledger), settlement wallet (ERC-20 transfer from treasury)",
+   "files": [
+    "demo-partners/server.mjs",
+    "demo-partners/chain/client.mjs"
+   ],
+   "tech": "Node .mjs, anvil JSON-RPC with unlocked accounts, JSON files as books",
+   "notes": "Sandbox-only. One process, three signing keys."
+  },
+  {
+   "name": "Settlement chain (anvil)",
+   "role": "Local EVM chain eip155:31337 with MockUSDC; automine (one block per transaction); in-memory",
+   "files": [
+    "attest/deploy/ecosystem.config.cjs",
+    "demo-partners/chain/client.mjs"
+   ],
+   "tech": "Foundry anvil :8545",
+   "notes": "Sandbox-only. No nonce management in code; anvil assigns nonces for the unlocked treasury."
+  },
+  {
+   "name": "Bank SDK and SWIFT adapter",
+   "role": "Runs at the bank: builds and signs instructions (in-process key or external HSM signer), submits, polls status, follows a folder of MT103, pacs.008 and pain.001 files, writes pacs.002 reports",
+   "files": [
+    "attest/packages/attest-remit/src/client.ts",
+    "attest/packages/attest-remit/src/adapter.ts",
+    "attest/packages/attest-remit/src/signer.ts",
+    "attest/packages/attest-remit/src/swift/parse.ts",
+    "attest/packages/attest-remit/src/swift/iso20022.ts",
+    "attest/packages/attest-remit/src/swift/mt103.ts",
+    "attest/packages/attest-remit/src/swift/status.ts"
+   ],
+   "tech": "TypeScript SDK",
+   "notes": "Not part of core. Its polling and duplicate searches are server load. Core never parses SWIFT."
+  }
+ ],
+ "flows": [
+  {
+   "name": "Quote and settlement acceptance",
+   "sync_or_async": "sync (inside two HTTP requests)",
+   "steps": [
+    "Bank SDK POST /v1/quotes: requireAuth (api_keys SELECT + SHA-256), requireRemit (subscription + institution SELECT), buildQuote (static rates, TTL 600 s), INSERT remit_quotes, audit INSERT (routes.ts:380-388)",
+    "Bank signs 3 evidence elements + bank_authorization (+ fields_assertion in mode B), locally or via HSM (client.ts:557-567)",
+    "POST /v1/settlements: Idempotency-Key of at least 8 chars; idempotencyHit SELECT; same body hash replays the cached 202, a different body gets 409 (routes.ts:395-412); payment_id must match ^[A-Za-z0-9][A-Za-z0-9_-]{3,63}$ (routes.ts:49)",
+    "acceptSettlement: global payment_id existence check (409), quote exists, belongs to the org, not expired, amounts restate it exactly; BFI registered with an encryption key; verify bank_signature; travel-rule completeness (mode A) or bank-signed fields_assertion (mode B); verify the 3 elements (orchestrator.ts:147-249)",
+    "INSERT payment (REQUEST_ACCEPTED); events REQUEST_ACCEPTED, BANK_EVIDENCE_SUBMITTED, BANK_AUTHORIZATION_VERIFIED; transition BANK_AUTHORIZED; enqueue webhook (orchestrator.ts:252-284)",
+    "setImmediate(advance) scheduled; REPLACE INTO remit_idempotency; audit_log INSERT awaited; 202 returned (orchestrator.ts:287-293, routes.ts:420-422, http/routes.ts:130-133)"
+   ]
+  },
+  {
+   "name": "Async pipeline: travel rule, payout approval, USDC transfer",
+   "sync_or_async": "async, in-process setImmediate chain (not a queue, not the worker)",
+   "steps": [
+    "advance() reads the state and runs whichever legs remain (orchestrator.ts:304-322)",
+    "travelRuleLeg: mode A builds IVMS101 and JWE-encrypts it to the BFI; saves ciphertext + digest; scrubs plaintext; event TRAVEL_RULE_SENT; state TRAVEL_RULE_PENDING; webhook; POST /bfi/travel-rule (20 s). ACK is verified and appended as TRAVEL_RULE_RECEIVED. RFI pauses (bank answers via rfi-response). REJECTED leads to CANCELLED (orchestrator.ts:341-423)",
+    "approvalLeg: POST /bfi/payout-approval; verify BFI signature; event PAYOUT_ACCEPTED; patch deposit_address; state PAYOUT_PRE_APPROVED; webhook (orchestrator.ts:520-552). Sim: deposit address from a pool of 5, valid_until 15 min (server.mjs:240-242)",
+    "transferLeg: sign the instruction; event SETTLEMENT_INSTRUCTED; webhook; POST /wallet/transfer. The sim checks policy, sends eth_sendTransaction from the unlocked treasury and polls the receipt (at most 50 x 200 ms) before answering. Then verify the wallet signature; event USDC_TRANSFER_CONFIRMED; patch chain_tx; state ONCHAIN_SETTLED; webhook; POST /bfi/settlement-notice (orchestrator.ts:554-593; server.mjs:280-327; client.mjs:101-113)",
+    "Any throw: event EXCEPTION, terminal state, webhook. No retry and no resume (orchestrator.ts:323-338)"
+   ]
+  },
+  {
+   "name": "BFI callbacks, payout, reconciliation, evidence commit",
+   "sync_or_async": "Simulator side async (watch loop); each callback is processed synchronously inside its HTTP request",
+   "steps": [
+    "Sim watchAndPayout polls eth_getLogs once a second, for up to 60 s, until the deposit is seen (server.mjs:375-386)",
+    "POST /v1/remit/callbacks USDC_RECEIVED: verify BFI signature; event; state PAYOUT_IN_PROGRESS; webhook. No state precondition (orchestrator.ts:609-613)",
+    "PAYOUT_SUBMITTED: event + webhook (orchestrator.ts:615-618)",
+    "PAYOUT_COMPLETED: L1 appends EVIDENCE_INSUFFICIENT and holds. L2/L3 run reconcilePayment (all events, registry keyring, 6 WebCrypto verifies, evaluate), then SETTLEMENT_RECONCILED, then BENEFICIARY_CREDIT_CONFIRMED (or EXCEPTION), webhook, assemblePackage (all events + full registry), commitment, svc.issue (one attestation leaf), EVIDENCE_COMMITTED + webhook. All inside the callback request (orchestrator.ts:620-650, 677-736)",
+    "PAYOUT_FAILED then USDC_RETURNED leads to RETURNED (orchestrator.ts:651-669)",
+    "The sim gives each callback 10 s and never retries; a failure leaves its own ledger at ERROR (server.mjs:330-356)"
+   ]
+  },
+  {
+   "name": "Evidence anchoring promotion",
+   "sync_or_async": "async (RemitWorker 2 s tick, plus the attest BatchWorker)",
+   "steps": [
+    "The attest BatchWorker batches the evidence leaf (BATCH_MAX_LEAVES 1024, flush 15 s, WORKER_TICK_MS 3000 live) and anchors it on regtest, generating one block after each anchor (main.ts:131-143)",
+    "RemitWorker tick: anchoredPending joins remit_payments to attestations where status is 'confirmed', no LIMIT (store.ts:307-313)",
+    "For each row, sequentially: store.get, event EVIDENCE_ANCHORED, transition, webhook (orchestrator.ts:743-757)"
+   ]
+  },
+  {
+   "name": "Webhook delivery",
+   "sync_or_async": "async (same RemitWorker tick, after promotion)",
+   "steps": [
+    "enqueue: skipped if the org has no webhook_url; otherwise sign the envelope and INSERT (webhook.ts:51-73)",
+    "deliverDue: SELECT pending and due ORDER BY created_at LIMIT 20 (webhook.ts:77-80)",
+    "for-await POST each, 5 s timeout; 2xx marks it delivered; otherwise reschedule after 2 s, 10 s, 30 s, 120 s; marked exhausted at attempt 5, after which the bank must poll (webhook.ts:83-118)"
+   ]
+  },
+  {
+   "name": "RFI answer and cancel",
+   "sync_or_async": "sync HTTP; RFI then resumes the async pipeline",
+   "steps": [
+    "rfi-response: requires TRAVEL_RULE_PENDING with an RFI event and no TRAVEL_RULE_RECEIVED (no lock); verify bank signature; platform JWE-encrypts the answers; POST /bfi/travel-rule-response; events; setImmediate(advance) (orchestrator.ts:429-481)",
+    "cancel: allowed in REQUEST_ACCEPTED, BANK_AUTHORIZED or TRAVEL_RULE_PENDING; verify bank signature; event; CANCELLED; webhook; best-effort POST /bfi/cancel (orchestrator.ts:489-518)"
+   ]
+  },
+  {
+   "name": "SWIFT folder adapter (bank side)",
+   "sync_or_async": "async polling loop at the bank",
+   "steps": [
+    "Poll the inbox every 3 s; a file is taken once unchanged for 2 s; files over 4 MiB are refused; parseSwiftMessages returns every transaction in the file (adapter.ts:236-290)",
+    "For each transaction, sequentially: submitSwift runs knownSwift (GET by id, plus up to 2 pages of ?q= search per reference, plus GETs per hit), POST /v1/quotes, 4-5 signatures (an external signer spawns one process per signature), POST /v1/settlements (adapter.ts:292-296; client.ts:844-856)",
+    "Follow every open payment with GET /v1/settlements/:id on each pass (parked ones every 60 s, EXCEPTION ones for 24 h); write pacs.002 XML and status JSON on change; fetch and re-verify evidence at EVIDENCE_ANCHORED (adapter.ts:410-481)"
+   ]
+  },
+  {
+   "name": "Daily manifest",
+   "sync_or_async": "sync",
+   "steps": [
+    "Bank signs {date, institution_id, payment_ids[], count} (client.ts:959-961)",
+    "Server verifies, selects all of the org's payments with substr(created_at,1,10)=date, diffs both ways, signs the verdict, issues an attestation, upserts remit_manifests (routes.ts:563-640)"
+   ]
+  }
+ ],
+ "per_txn_costs": [
+  {
+   "operation": "POST /v1/quotes",
+   "db_reads": "3 (api_keys, subscriptions, institutions)",
+   "db_writes": "2 (remit_quotes INSERT, audit_log INSERT)",
+   "crypto_ops": "1 SHA-256 (API key hash)",
+   "external_calls": "none",
+   "sync_cpu_notes": "BigInt fixed-point arithmetic, negligible",
+   "evidence": [
+    "attest/apps/core/src/remit/routes.ts:380-388",
+    "attest/apps/core/src/auth.ts:57-59"
+   ]
+  },
+  {
+   "operation": "POST /v1/settlements (synchronous part)",
+   "db_reads": "about 18 (auth 1, requireRemit 2, idempotency 1, dup check 1, quote 1, BFI institution 1, create re-read 1, 3 event appends x2, transition 2, notify 2)",
+   "db_writes": "about 8 (payment INSERT, 3 event INSERTs, state UPDATE, webhook INSERT, idempotency REPLACE, audit INSERT)",
+   "crypto_ops": "4 ES256 verifies (mode B: 5), 3 ES256 signs (2 events + 1 webhook envelope), SHA-256 of the body, JCS of each signed payload",
+   "external_calls": "none inside the request; schedules the async pipeline",
+   "sync_cpu_notes": "All crypto is synchronous node:crypto on the main thread; the SPKI is re-parsed on every verify",
+   "evidence": [
+    "attest/apps/core/src/remit/orchestrator.ts:147-294",
+    "attest/apps/core/src/remit/store.ts:252-264",
+    "attest/apps/core/src/remit/store.ts:271-293"
+   ]
+  },
+  {
+   "operation": "Async pipeline per payment (BANK_AUTHORIZED to ONCHAIN_SETTLED)",
+   "db_reads": "about 40 (including 2 full-table institutions reads via requireSettlementEntity)",
+   "db_writes": "about 16",
+   "crypto_ops": "10 ES256 signs (events, webhooks, sender signatures, instruction), 3 verifies (BFI ACK, BFI approval, wallet result), 1 JWE encrypt in mode A (P-256 keygen + ECDH + AES-256-GCM)",
+   "external_calls": "4 sequential partner POSTs (travel-rule, payout-approval, wallet/transfer, settlement-notice), each 20 s timeout, no retry. Simulator side: 1 eth_blockNumber, 1 eth_sendTransaction, at least 1 eth_getTransactionReceipt; the BFI makes 1 JWE decrypt",
+   "sync_cpu_notes": "Runs as an unbounded number of concurrent chains, one per accepted payment",
+   "evidence": [
+    "attest/apps/core/src/remit/orchestrator.ts:304-593",
+    "attest/apps/core/src/remit/partners-client.ts:67-87",
+    "demo-partners/chain/client.mjs:101-113"
+   ]
+  },
+  {
+   "operation": "BFI callbacks per payment (USDC_RECEIVED + PAYOUT_SUBMITTED + PAYOUT_COMPLETED, including reconcile and evidence commit)",
+   "db_reads": "about 40 (8 + 6 + 26)",
+   "db_writes": "about 16 (3 + 2 + 11, including 1 attestations INSERT via svc.issue)",
+   "crypto_ops": "7 ES256 signs, 3 synchronous verifies + 6 WebCrypto verifies (off-thread), JCS + SHA-256 over the whole evidence package, keyring rebuild (SPKI to JWK per institution)",
+   "external_calls": "3 inbound HTTP callbacks (no API key, not audited); the simulator makes at least 1 eth_getLogs",
+   "sync_cpu_notes": "The package embeds all events and the full registry snapshot, so its size grows with the number of institutions",
+   "evidence": [
+    "attest/apps/core/src/remit/orchestrator.ts:597-736",
+    "attest/apps/core/src/remit/evidence.ts:145-241",
+    "attest/apps/core/src/service.ts:143-185"
+   ]
+  },
+  {
+   "operation": "Anchored promotion per payment (RemitWorker)",
+   "db_reads": "about 7, plus a share of an unindexed join scan run every 2 s",
+   "db_writes": "3",
+   "crypto_ops": "2 ES256 signs",
+   "external_calls": "none",
+   "sync_cpu_notes": "Rows processed one after another; webhook delivery waits behind them in the same tick",
+   "evidence": [
+    "attest/apps/core/src/remit/orchestrator.ts:743-758",
+    "attest/apps/core/src/remit/store.ts:307-313"
+   ]
+  },
+  {
+   "operation": "Webhook delivery per payment (11 notifications)",
+   "db_reads": "about 0.55 (share of SELECT LIMIT 20)",
+   "db_writes": "11 UPDATEs (the 11 INSERTs are counted at enqueue)",
+   "crypto_ops": "11 envelope signatures at enqueue (included in the counts above)",
+   "external_calls": "11 outbound POSTs, sequential, 5 s timeout, up to 5 attempts",
+   "sync_cpu_notes": "Single sequential loop for all orgs",
+   "evidence": [
+    "attest/apps/core/src/remit/webhook.ts:51-118"
+   ]
+  },
+  {
+   "operation": "Whole happy-path payment (sum; mode A, webhook URL set, L3)",
+   "db_reads": "about 109",
+   "db_writes": "about 56, all autocommit, no transactions",
+   "crypto_ops": "22 platform ES256 signatures; about 16-17 verifications (10-11 synchronous + 6 WebCrypto); 1 JWE encrypt (mode A). Bank side 4-5 signatures; BFI 1 JWE decrypt",
+   "external_calls": "4 outbound partner calls, 3 inbound callbacks, 11 webhooks, 0 chain RPC from core; 1 attestation leaf sharing a Merkle batch of up to 1,024 leaves and one Bitcoin anchor",
+   "sync_cpu_notes": "Estimate, not measured: about 10 ms of main-thread CPU per payment (crypto, JCS, JSON parse of SELECT * rows, mysql2 protocol, HTTP), giving tens of payments per second per process. Excludes bank polling and SDK pre-checks.",
+   "evidence": [
+    "tally in /tmp/claude-1000/-home-ubuntu-bitcert-attest/2f97979f-81f1-428f-a2bb-400aab8b733b/scratchpad/notes/remit-rail.md"
+   ]
+  },
+  {
+   "operation": "GET /v1/settlements/:id (bank status poll)",
+   "db_reads": "4 (api_keys, payment SELECT *, attestation, all events with payloads)",
+   "db_writes": "1 (audit_log INSERT, awaited)",
+   "crypto_ops": "1 SHA-256 (API key)",
+   "external_calls": "none",
+   "sync_cpu_notes": "JSON.parse of every event payload and signature; the row includes package_json (tens of KB) once reconciled. The SDK polls every 1.5 s, the adapter every 3 s.",
+   "evidence": [
+    "attest/apps/core/src/remit/routes.ts:467-497",
+    "attest/apps/core/src/http/routes.ts:130-133"
+   ]
+  },
+  {
+   "operation": "GET /v1/settlements (ledger page, limit up to 100)",
+   "db_reads": "3 + N (api_keys, COUNT(*), page SELECT, one attestation SELECT per row)",
+   "db_writes": "1 (audit)",
+   "crypto_ops": "SHA-256 (API key)",
+   "external_calls": "none",
+   "sync_cpu_notes": "q= adds a leading-wildcard LIKE on id, quote_id and chain_tx, plus 3 correlated EXISTS with JSON_EXTRACT on remit_events; none of these can use an index",
+   "evidence": [
+    "attest/apps/core/src/remit/routes.ts:431-465",
+    "attest/apps/core/src/remit/store.ts:141-218"
+   ]
+  },
+  {
+   "operation": "GET /v1/settlements/:id/chain",
+   "db_reads": "2",
+   "db_writes": "1 (audit)",
+   "crypto_ops": "none",
+   "external_calls": "3-4 eth_ JSON-RPC calls, 5 s timeout each, no cache",
+   "evidence": [
+    "attest/apps/core/src/remit/chain-status.ts:62-101"
+   ]
+  },
+  {
+   "operation": "POST /v1/manifests/daily",
+   "db_reads": "4 + the day's payment ids for the org (non-sargable substr filter) + attestation duplicate check",
+   "db_writes": "attestation INSERT, manifest upsert, audit",
+   "crypto_ops": "1 verify, 1 sign, JCS + SHA-256",
+   "external_calls": "none",
+   "sync_cpu_notes": "Set difference over the day's ids; body capped at 1 MiB",
+   "evidence": [
+    "attest/apps/core/src/remit/routes.ts:563-640"
+   ]
+  },
+  {
+   "operation": "SDK submitSwift (bank side, per SWIFT transaction)",
+   "db_reads": "server side: 1 GET by id (4 reads) + 0-4 ledger searches (full org scans) + per-hit GETs",
+   "db_writes": "1 audit row per call",
+   "crypto_ops": "4-5 bank ES256 signatures (an external signer spawns one process per signature, 30 s timeout); mode B adds a JWE encrypt",
+   "external_calls": "3-8 API calls: GET by id, ?q= searches, POST /v1/quotes, POST /v1/settlements",
+   "sync_cpu_notes": "Parsing is linear in message size (4 MiB cap) and happens at the bank",
+   "evidence": [
+    "attest/packages/attest-remit/src/client.ts:778-856",
+    "attest/packages/attest-remit/src/signer.ts:179-208"
+   ]
+  }
+ ],
+ "capacity_findings": [
+  {
+   "id": "RR-01",
+   "title": "Pipeline runs as in-process fire-and-forget chains: no durable queue, no backpressure, no recovery",
+   "severity": "blocker",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "affects": "every payment between acceptance and ONCHAIN_SETTLED",
+   "claim": "After acceptance, each payment's next three legs run in a setImmediate chain inside the core process. Nothing persists the work item, nothing bounds concurrency, and nothing re-drives non-terminal payments: the RemitWorker only promotes anchored payments and delivers webhooks. A restart, deploy or crash leaves every payment that is mid-pipeline (BANK_AUTHORIZED, TRAVEL_RULE_PENDING after ACK, PAYOUT_PRE_APPROVED) stuck permanently. An unanswered RFI never times out to CANCELLED, although the design says it should. A burst starts one chain per accepted payment, and all of them contend for 10 DB connections and the partner.",
+   "evidence": [
+    "attest/apps/core/src/remit/orchestrator.ts:287-288 — setImmediate(() => { void this.advance(p.id).catch((e) => {",
+    "attest/apps/core/src/remit/worker.ts:41-43 — const promoted = await this.orchestrator.promoteAnchored(); ... await this.outbox.deliverDue();",
+    "attest/apps/core/src/main.ts:151-153 — server.close(() => { void db.close().finally(() => process.exit(0)); }); ... setTimeout(() => process.exit(0), 5_000).unref();",
+    "attest/apps/core/src/db.ts:942-943 — waitForConnections: true, connectionLimit: 10, (no queueLimit)"
+   ],
+   "quantification": "Payments stranded per restart = arrival rate x pipeline duration (seconds in the sandbox, minutes on a real chain). A 10x T1 peak (10/s) for 60 s starts 600 concurrent chains; a T2 peak (1,000/s) starts tens of thousands, each making 4 partner calls with 20 s timeouts, so overload ends in mass EXCEPTION rather than queueing.",
+   "fix": "Durable jobs table (claimed with SELECT ... FOR UPDATE SKIP LOCKED) or a broker, with bounded worker concurrency and per-org fairness; a boot-time and periodic sweep of non-terminal payments; RFI timeout to CANCELLED; 429 when queue depth passes a limit."
+  },
+  {
+   "id": "RR-02",
+   "title": "Webhook outbox ceiling: 20 per 2 s tick, sequential, 5 s timeout, i.e. 10 deliveries/s or about 0.9 payments/s",
+   "severity": "blocker",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "affects": "orgs that register a webhook_url; all orgs share one delivery loop",
+   "claim": "Delivery is one sequential loop per process: at most 20 rows per tick, one fetch at a time, a tick every 2 s (hardcoded), and it runs after promoteAnchored in the same tick. Each happy-path payment enqueues 11 webhooks, so orgs with a webhook URL saturate the outbox below 1 payment/s and the backlog grows without bound. A receiver that black-holes requests costs 5 s per attempt x 5 attempts = 25 s of the single loop per webhook, which starves every other org.",
+   "evidence": [
+    "attest/apps/core/src/remit/webhook.ts:78-79 — WHERE status = 'pending' AND next_attempt_at <= ? ORDER BY created_at LIMIT 20",
+    "attest/apps/core/src/remit/webhook.ts:83-89 — for (const d of due) { try { const res = await fetch(d.url, { ... signal: AbortSignal.timeout(5_000),",
+    "attest/apps/core/src/main.ts:102 — new RemitWorker(orchestrator, outbox, cfg.workerTickMs > 0 ? 2_000 : 0, log)",
+    "attest/apps/core/src/config.ts:390 — webhookMaxAttempts: int('REMIT_WEBHOOK_MAX_ATTEMPTS', 5),"
+   ],
+   "quantification": "Maximum 10 deliveries/s = 864k/day, about 78.5k payments/day at 11 webhooks each. T1 needs 11/s: the backlog grows about 86k/day and lag grows about 2.4 h per day. T2 needs 1,100/s (110x over); T3 needs 11,000/s. One org with a black-holed endpoint at only about 314 payments/day (275 s of loop time each) consumes the whole loop.",
+   "fix": "Concurrent delivery with per-endpoint concurrency caps and per-org queues; row claiming (a 'sending' status with a lease) for multiple instances; short connect timeout; a separate timer from promotion; coalescing of per-payment events."
+  },
+  {
+   "id": "RR-03",
+   "title": "No compare-and-set on state and racy event sequencing: concurrent paths can lose updates or instruct a second transfer",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "medium",
+   "affects": "cancel, rfi-response, BFI callbacks, multi-instance deployments",
+   "claim": "transition() reads the row, checks the order in JS, then UPDATEs by id only. appendEvent computes MAX(seq)+1 and then INSERTs, with no transaction. The only guard is UNIQUE (payment_id, seq), which makes one of two simultaneous appends fail at random. (a) Cancel vs approvalLeg: approvalLeg's UPDATE can land after cancel's and overwrite CANCELLED with PAYOUT_PRE_APPROVED, after which transferLeg instructs the wallet. The simulator refuses only because its BFI and wallet share one ledger record; a separate real settlement entity is never sent a cancel notice. (b) Two concurrent rfi-response calls both pass the checks and each schedules advance(), so two approval calls and two transfer calls can be made. (c) Duplicate or concurrent BFI callbacks re-run reconciliation and svc.issue.",
+   "evidence": [
+    "attest/apps/core/src/remit/store.ts:291-292 — await this.db.prepare('UPDATE remit_payments SET state = ?, updated_at = ? WHERE id = ?').run(to, nowIso(), paymentId);",
+    "attest/apps/core/src/remit/store.ts:255 — 'SELECT COALESCE(MAX(seq), -1) + 1 AS n FROM remit_events WHERE payment_id = ?'",
+    "attest/apps/core/src/db.ts:612 — UNIQUE KEY remit_events_payment_seq (payment_id, seq),",
+    "attest/apps/core/src/remit/orchestrator.ts:476-477 — setImmediate(() => { void this.advance(p.id).catch((e) => { (respondRfi; checks at 434-441 take no lock)",
+    "demo-partners/server.mjs:290,296,323 — if (!rec || rec.state !== 'PRE_APPROVED') ... await chain.transferFromTreasury(...) ... rec.state = 'FUNDS_IN_FLIGHT' (set after the await)"
+   ],
+   "quantification": "The race window is the SELECT-to-UPDATE gap in transition() plus the awaits before it. It widens as DB latency rises, so occurrences grow with load. The rail has no concurrency tests (test/remit.test.ts).",
+   "fix": "UPDATE ... WHERE id = ? AND state = ? with an affected-rows check, or SELECT ... FOR UPDATE in one transaction around event append and state change; atomic seq allocation; dedupe keys on rfi-response and on callbacks (partner event id); an idempotency key per payment_id on wallet instructions."
+  },
+  {
+   "id": "RR-04",
+   "title": "Partner calls have no retry and no idempotency key; any failure is a terminal EXCEPTION",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "affects": "travel rule, payout approval, wallet transfer, settlement notice",
+   "claim": "Each payment makes four sequential partner calls in its critical path. post() does one fetch with a 20 s timeout and maps every network error or status of 400 or above to a 502. advance() turns any throw into a terminal EXCEPTION, and transition() refuses to leave a terminal state. A /wallet/transfer timeout is ambiguous, because the transfer may have happened, and there is no TXID lookup path, although design section 9 requires retrying only after a TXID lookup. No idempotency key is sent, so adding naive retries would risk double execution.",
+   "evidence": [
+    "attest/apps/core/src/remit/partners-client.ts:70-74 — res = await fetch(`${base}${path}`, { method: 'POST', ... signal: AbortSignal.timeout(20_000),",
+    "attest/apps/core/src/remit/orchestrator.ts:333-335 — const seq = await this.platformEvent(paymentId, 'EXCEPTION', ...); await this.d.store.transition(paymentId, 'EXCEPTION');",
+    "attest/apps/core/src/remit/store.ts:275-277 — if (TERMINAL.includes(p.state)) { if (p.state === to) return p; throw new ServiceError(500, 'invalid_transition',",
+    "docs/REMIT-POR-DESIGN.md:284 — 전송 지시는 payment_id당 1회, 재시도는 TXID 조회 후에만(§8-3)"
+   ],
+   "quantification": "Terminal exceptions = payments x 4 calls x transient failure rate per call. At 0.1% per call that is about 345/day at T1 and about 34,000/day at T2, each needing manual reconciliation. Under overload (partner p99 above 20 s) it becomes mass EXCEPTION.",
+   "fix": "Idempotency key per (payment_id, leg) on every partner call; bounded jittered retries into a non-terminal retry state; an async wallet API (instruct, get tx hash, receive confirmation callback) with TXID lookup before any re-instruction; a circuit breaker per partner."
+  },
+  {
+   "id": "RR-05",
+   "title": "promoteAnchored: unbounded, unindexed scan every 2 s, processed sequentially ahead of webhook delivery",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "medium",
+   "affects": "RemitWorker, MySQL, webhook latency",
+   "claim": "anchoredPending filters on remit_payments.state joined to attestations.status, with no LIMIT and no index that starts with state. The indexes are (org_id, created_at), (org_id, state, created_at) and (attestation_id), so each tick likely scans one of two ever-growing tables (not EXPLAINed: the live DB was off-limits). Rows are then promoted one by one, about 10 statements and 2 signatures each, before deliverDue runs in the same try block. A throw aborts promotion and skips that tick's webhook deliveries.",
+   "evidence": [
+    "attest/apps/core/src/remit/store.ts:309-311 — SELECT p.id, p.attestation_id FROM remit_payments p JOIN attestations a ON a.id = p.attestation_id WHERE p.state = 'BENEFICIARY_CREDIT_CONFIRMED' AND a.status = 'confirmed'",
+    "attest/apps/core/src/db.ts:700-702 — remit_payments_org (org_id, created_at); remit_payments_org_state (org_id, state, created_at); remit_payments_anchor (attestation_id)",
+    "attest/apps/core/src/remit/orchestrator.ts:745-746 — for (const row of await this.d.store.anchoredPending()) { const p = await this.d.store.get(row.id);",
+    "attest/apps/core/src/remit/worker.ts:40-44 — try { const promoted = await this.orchestrator.promoteAnchored(); ... await this.outbox.deliverDue(); } catch (e) {"
+   ],
+   "quantification": "The table grows by 86k rows/day at T1 and 8.6M/day at T2, and is scanned 43,200 times a day. When a 1,024-leaf batch confirms, one tick runs about 10k statements serially (seconds) while webhooks wait.",
+   "fix": "Promote by batch_id when the BatchWorker confirms (event-driven), or add an index on (state, attestation_id) with LIMIT and ORDER BY; give promotion its own timer; use bounded parallelism."
+  },
+  {
+   "id": "RR-06",
+   "title": "Settlement leg is gross (one ERC-20 transfer per payment) and synchronous; the sandbox chain uses an unlocked anvil account with 1-confirmation finality",
+   "severity": "blocker",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "medium",
+   "affects": "transferLeg, settlement entity, chain",
+   "claim": "The wallet call blocks until the simulator has sent eth_sendTransaction from an unlocked anvil account and polled the receipt (up to 50 x 200 ms), all inside the core's 20 s partner timeout. Finality is 'receipt status 0x1', recorded as confirmations: 1. Every payment is its own transfer from one treasury address; anvil assigns the nonces, so there is no nonce handling in code. All of this is sandbox-only. On a real chain the rail needs a custody signer with a nonce manager, a confirmation-depth finality rule and an asynchronous callback. One sender address with one transfer per payment cannot reach T2 on Ethereum L1 and is impractical at T3 on any chain without netting.",
+   "evidence": [
+    "demo-partners/chain/client.mjs:107-111 — const txHash = await this.rpc('eth_sendTransaction', [{ from: fromAddr, to: this.usdc, gas: '0x30d40', ... }]); const rec = await this.receipt(txHash);",
+    "demo-partners/chain/client.mjs:86-92 — for (let i = 0; i < 50; i++) { const r = await this.rpc('eth_getTransactionReceipt', [txHash]); ... setTimeout(ok, 200)",
+    "demo-partners/server.mjs:296 — const sent = await chain.transferFromTreasury(to_address, usdc_amount);",
+    "demo-partners/server.mjs:308 — confirmations: 1,",
+    "attest/apps/core/src/remit/partners-client.ts:74 — signal: AbortSignal.timeout(20_000),"
+   ],
+   "quantification": "T2 needs 100 transfers/s and T3 1,000/s from one address. Ethereum L1 carries on the order of tens of ERC-20 transfers per second network-wide (external figure, not from code). A 12 s block plus any confirmation depth already exceeds the 10 s receipt poll and the 20 s HTTP wait.",
+   "fix": "Async transfer API (instruct, get tx hash, receive confirmation webhook); a nonce manager or several hot wallets; an explicit finality policy per chain; a high-throughput L2. For T3, net settlement: one transfer per corridor and BFI per interval, with a Merkle allocation in the evidence."
+  },
+  {
+   "id": "RR-07",
+   "title": "About 165 autocommit SQL statements per payment over a 10-connection pool",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "medium",
+   "affects": "MySQL, the whole core process",
+   "claim": "Every helper reads back what it just wrote: appendEvent is 3 statements and transition is 3. notify adds 2 reads per event even when no webhook URL is set. store.get is SELECT *, including request_body, verdict and package_json (tens of KB once reconciled). Nothing runs in a transaction, so each write is its own commit. The pool has 10 connections, shared by every product and the attest worker.",
+   "evidence": [
+    "attest/apps/core/src/remit/store.ts:120 — this.db.prepare('SELECT * FROM remit_payments WHERE id = ?')",
+    "attest/apps/core/src/remit/store.ts:263 — return (await this.db.prepare('SELECT * FROM remit_events WHERE id = ?').get(id))",
+    "attest/apps/core/src/remit/orchestrator.ts:130-131 — const fresh = (await this.d.store.get(p.id))!; await this.d.outbox.enqueue(p.org_id, await this.webhookUrl(p.org_id), ...",
+    "attest/apps/core/src/db.ts:943 — connectionLimit: 10,"
+   ],
+   "quantification": "About 109 reads and 56 writes per happy-path payment, plus 4 reads and 1 write per bank poll. T1 means about 165 statements/s plus polling, which is fine. T2 means about 16,500 statements/s and about 5,600 commits/s before polling, beyond one 10-connection pool and one MySQL primary on this box. T3 means about 165,000 statements/s.",
+   "fix": "Remove read-after-write SELECTs, select only the needed columns, cache subscription, webhook URL and registry per process, wrap each leg's event append and state change in one transaction, enlarge the pool, move package_json to object storage."
+  },
+  {
+   "id": "RR-08",
+   "title": "Bank-side polling, and the audit write each poll triggers, rival the pipeline's own DB cost",
+   "severity": "major",
+   "kind": "operational",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "affects": "GET /v1/settlements/:id, audit_log, MySQL",
+   "claim": "The SDK's track() polls GET /v1/settlements/:id every 1.5 s for up to 180 s. The folder adapter re-reads every open payment every 3 s, one after another. Each poll costs 4 reads (api_keys, payment SELECT *, attestation, all events with payloads) and one audit_log INSERT that is awaited before the response, because only a handful of console GETs are exempt from auditing.",
+   "evidence": [
+    "attest/packages/attest-remit/src/client.ts:1001-1004 — if (Date.now() - t0 > (opts.timeoutMs ?? 180_000)) { ... await new Promise((ok) => setTimeout(ok, opts.intervalMs ?? 1_500));",
+    "attest/packages/attest-remit/src/adapter.ts:476-478 — for (const [paymentId, open] of Object.entries(this.state.open)) { try { await this.follow(paymentId, open);",
+    "attest/apps/core/src/http/routes.ts:132-133 — if (!ctx.audit || !isAudited(method, ctx.path)) return; await recordAudit(d.db, ctx.audit, { method, path: ctx.path, status, durationMs });",
+    "attest/apps/core/src/audit.ts:93-99 — SILENT_READS = new Set(['/healthz', '/readyz', '/v1/meta', ... '/v1/console/sandbox']) ... return !(method === 'GET' && SILENT_READS.has(path));"
+   ],
+   "quantification": "With about 20-35 s to EVIDENCE_ANCHORED in the sandbox, track() makes about 13-23 polls per payment: 52-92 more reads and 13-23 more audit rows per payment, i.e. 40-70% on top of about 165 statements. The adapter's sequential follow loop falls behind once open payments x GET latency exceeds 3 s (a few hundred open payments).",
+   "fix": "ETag/If-None-Match or long-poll/SSE on the status endpoint; exclude status polls from the audit log, or audit asynchronously in batches; make webhooks reliable enough to be the primary channel; page the events."
+  },
+  {
+   "id": "RR-09",
+   "title": "SDK duplicate pre-check runs LIKE '%ref%' searches over the whole ledger before every SWIFT submission",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "affects": "banks on the SWIFT path, MySQL",
+   "claim": "Before submitting, submitSwift searches the ledger through GET /v1/settlements?q=, by UETR and, for MT103 or messages without a UETR, by the bank's own reference, reading up to two pages of 50 per reference. The server answers with a leading-wildcard LIKE on id, quote_id and chain_tx, three correlated EXISTS with JSON_EXTRACT over remit_events, and a COUNT(*) under the same filter. None of these can use an index.",
+   "evidence": [
+    "attest/packages/attest-remit/src/client.ts:798-801 — for (const q of references) { let cursor: string | null = null; for (let pageNo = 0; pageNo < 2; pageNo++) { const page = await this.list({ q, limit: 50, ...",
+    "attest/apps/core/src/remit/store.ts:169-171 — where.push(`(UPPER(id) LIKE ? ESCAPE '!' OR UPPER(quote_id) LIKE ? ESCAPE '!' OR UPPER(COALESCE(chain_tx, '')) LIKE ? ESCAPE '!' OR EXISTS (SELECT 1 FROM remit_events e",
+    "attest/apps/core/src/remit/store.ts:194-195 — SELECT COUNT(*) AS n FROM remit_payments WHERE ${where.join(' AND ')}"
+   ],
+   "quantification": "1-4 full scans of the org's payments and their events per submission: O(N) each, O(N^2) cumulative. A bank at T1 accumulates about 2.6M payments a month, so each submission would scan millions of rows.",
+   "fix": "Store UETR, instruction id and end-to-end id in indexed columns with a per-org unique key and dedupe on them server-side (409 naming the existing payment), so the SDK needs no search; make COUNT(*) optional."
+  },
+  {
+   "id": "RR-10",
+   "title": "Platform crypto and serialisation run on the single event loop",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "low",
+   "affects": "core process CPU",
+   "claim": "node:crypto sign and verify, JWE keygen and ECDH, and JCS canonicalisation run on the main thread, which also serves HTTP and runs both workers. verifyEvent re-parses the SPKI on every call. Per payment the platform makes 22 ES256 signatures and 10-11 synchronous verifications (6 more run off-thread through WebCrypto), does one JWE in mode A, and canonicalises the whole evidence package.",
+   "evidence": [
+    "attest/apps/core/src/remit/sign.ts:45 — const raw = sign('sha256', eventSigningBytes(payload), { key, dsaEncoding: 'ieee-p1363' });",
+    "attest/apps/core/src/remit/sign.ts:53 — pub = publicKeyFromSpki(spkiBase64);",
+    "attest/apps/core/src/remit/jwe.ts:68 — const ephemeral = generateKeyPairSync('ec', { namedCurve: 'P-256' });",
+    "attest/apps/core/src/remit/evidence.ts:235 — const canonical = Buffer.from(jcsString(pkg as unknown as JcsValue), 'utf8');"
+   ],
+   "quantification": "Estimate, not measured: crypto about 2-3 ms plus JSON, JCS, mysql2 and HTTP handling, about 10 ms of main-thread CPU per payment in total. One process therefore handles tens of payments per second; T2 needs several processes and T3 dozens. No remit load test exists (the seed script runs 36 payments at concurrency 6).",
+   "fix": "Cache KeyObjects per institution; move signing to a worker_threads pool or an HSM/KMS with batching; sign per leg rather than per event and per webhook; then scale out horizontally, which first needs RR-03 and RR-13."
+  },
+  {
+   "id": "RR-11",
+   "title": "Daily manifest carries a whole day's payment ids in one request of at most 1 MiB",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "affects": "POST /v1/manifests/daily (completeness control)",
+   "claim": "The completeness control requires every payment id of the day in payment_ids[] in the JSON body, which is capped at 1 MiB. The server selects the day's rows with substr(created_at, 1, 10) = ?, which cannot use the (org_id, created_at) range.",
+   "evidence": [
+    "attest/apps/core/src/remit/routes.ts:574 — if (!Array.isArray(manifest.payment_ids) || manifest.count !== manifest.payment_ids.length) {",
+    "attest/apps/core/src/remit/routes.ts:588 — `SELECT id FROM remit_payments WHERE org_id = ? AND substr(created_at, 1, 10) = ? ORDER BY created_at`",
+    "attest/apps/core/src/http/server.ts:76 — const MAX_BODY = 1 << 20; // 1 MiB: requests carry digests, never documents"
+   ],
+   "quantification": "About 26 bytes per SDK id (PAY-xxxxxxxx-xxxxxxxxxx) fits about 40k ids; 64-character ids fit about 15k. A bank above about 0.2-0.5 payments/s cannot submit a manifest, and T1 is 86k/day.",
+   "fix": "Submit a Merkle root or hash chain of the day's ids (or paged parts) and compare server-side; use a created_at range predicate."
+  },
+  {
+   "id": "RR-12",
+   "title": "No rate limits, quotas or per-org fairness on remit endpoints or workers",
+   "severity": "moderate",
+   "kind": "configuration",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "affects": "all tenants",
+   "claim": "RateLimiter is used only for console auth, signup and the public free tier. Remit routes have none, the mysql2 pool waits with no queue limit, the webhook loop serves everyone oldest-first, and every accepted payment starts work at once. Core has no per-payment or per-day amount limits; the only caps live in the simulator (50,000 mUSDC, plus an RFI at 20,000 USD). The corridor is hardcoded to VN to SG.",
+   "evidence": [
+    "attest/apps/core/src/http/console.ts:141 — const authLimiter = new RateLimiter(d.cfg.console.authRateLimit);",
+    "attest/apps/core/src/http/public.ts:70-71 — const perAddress = new RateLimiter(d.cfg.publicAnchor.rateLimit); const global = new RateLimiter(d.cfg.publicAnchor.globalRateLimit);",
+    "attest/apps/core/src/remit/routes.ts:391-393 — r.post('/v1/settlements', async (ctx) => { const orgId = await d.requireAuth(ctx); const { bank } = await registry.requireRemit(orgId);",
+    "attest/apps/core/src/remit/quotes.ts:76 — if (req.corridor?.origin !== 'VN' || req.corridor?.destination !== 'SG') {"
+   ],
+   "quantification": "At a T2 peak (1,000/s) nothing sheds load before the DB pool and the partners saturate; one bank's burst or a looping adapter degrades every tenant.",
+   "fix": "Per-org token buckets on quotes, settlements and polls; 429 based on queue depth; per-org fair scheduling in the job queue and webhook outbox; configurable per-payment and per-day limits."
+  },
+  {
+   "id": "RR-13",
+   "title": "Not safe with more than one core instance: per-instance platform key and duplicated workers",
+   "severity": "moderate",
+   "kind": "operational",
+   "bites_at_tier": "T2",
+   "confidence": "medium",
+   "affects": "horizontal scaling",
+   "claim": "Each instance loads, or creates, its own PEM platform key and upserts it into the registry at boot. The last instance to boot wins, so the other instance's signatures stop verifying unless the key file is shared. Every instance runs a RemitWorker: promoteAnchored would append duplicate EVIDENCE_ANCHORED events and webhooks with fresh event_ids (so bank-side dedupe on event_id misses them), and deliverDue would send the same rows twice. The overlap guard is a process-local boolean.",
+   "evidence": [
+    "attest/apps/core/src/main.ts:78-84 — const platform = loadOrCreatePlatformKey(cfg.remit.platformKeyPath); ... await registry.upsert({ id: 'STONEHASH', ... signing_spki: platform.publicSpkiBase64,",
+    "attest/apps/core/src/remit/sign.ts:201-205 — if (existsSync(pemPath)) { pem = readFileSync(pemPath, 'utf8'); } else { ... const kp = generateKeyPairSync('ec', { namedCurve: 'P-256' });",
+    "attest/apps/core/src/remit/worker.ts:37-39 — async tick(): Promise<void> { if (this.running) return; this.running = true;"
+   ],
+   "quantification": "Scaling out, which T2 needs per RR-07 and RR-10, is blocked until these are fixed. Today pm2 runs one fork-mode instance.",
+   "fix": "Platform key in an HSM or KMS (one key id); leader election or row claiming (FOR UPDATE SKIP LOCKED, lease columns) for promotion and delivery; compare-and-set transitions (RR-03)."
+  },
+  {
+   "id": "RR-14",
+   "title": "Registry is uncached, so each payment does work proportional to the number of institutions",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "affects": "pipeline, reconciliation, evidence package size",
+   "claim": "registry.list() reads the whole institutions table. It runs twice per pipeline (requireSettlementEntity), once for the keyring, which converts every institution key to a JWK, and once for the registry snapshot that is embedded, in full, in every evidence package.",
+   "evidence": [
+    "attest/apps/core/src/remit/registry.ts:62 — return (await this.db.prepare('SELECT * FROM institutions ORDER BY created_at').all())",
+    "attest/apps/core/src/remit/registry.ts:126-130 — for (const inst of await this.list()) { if (!inst.signing_spki) continue; ... publicKeyJwk = spkiToJwk(inst.signing_spki);",
+    "attest/apps/core/src/remit/evidence.ts:223 — trust_registry: await registry.snapshot(),",
+    "attest/apps/core/src/remit/orchestrator.ts:763 — const settle = (await this.d.registry.list()).find((i) => i.role === 'SETTLEMENT_ENTITY');"
+   ],
+   "quantification": "Per payment: 4 full-table reads plus N key conversions, and about 0.3-0.5 KB per institution added to each stored package (estimate). With 1,000 institutions that is about 0.5 MB per package, times 8.6M payments/day at T2.",
+   "fix": "In-memory registry cache invalidated on upsert; cached KeyObjects and keyring; a versioned registry snapshot referenced by hash in the package instead of embedded."
+  },
+  {
+   "id": "RR-15",
+   "title": "Callbacks have no state precondition and no dedupe, do heavy work inside the BFI's request, and the simulator never retries them",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "affects": "payout states, evidence commit",
+   "claim": "handleCallback appends an event and transitions state for any verified BFI message, without checking the current state or deduplicating. PAYOUT_COMPLETED runs reconciliation, package assembly and svc.issue inside the callback request (about 37 statements and 6 verifications). The simulator gives each callback 10 s and never retries, so a slow or failed callback leaves the payment in ONCHAIN_SETTLED or PAYOUT_IN_PROGRESS forever. A real BFI that retries would duplicate events, webhooks and attestations. If svc.issue fails, the payment stays BENEFICIARY_CREDIT_CONFIRMED with no attestation and is never promoted.",
+   "evidence": [
+    "attest/apps/core/src/remit/orchestrator.ts:648 — await this.reconcileAndConfirm((await this.d.store.get(p.id))!);",
+    "attest/apps/core/src/remit/orchestrator.ts:719-721 — const nonce = newNonce(); const commitment = packageCommitment(pkg, nonce); const att = await this.d.svc.issue(p.org_id, commitment, 'application/json',",
+    "demo-partners/server.mjs:332-336 — const res = await fetch(`${CORE}/v1/remit/callbacks`, { method: 'POST', ... signal: AbortSignal.timeout(10_000),",
+    "demo-partners/server.mjs:351-352 — void watchAndPayout(payment_id).catch((e) => { rec.state = 'ERROR';"
+   ],
+   "quantification": "Under load, any callback slower than 10 s strands its payment, and nothing sweeps for it. Each retried PAYOUT_COMPLETED would create another attestation (a fresh nonce makes a new leaf) and more webhooks.",
+   "fix": "Write callbacks to an inbox table deduped on the partner's event id, acknowledge fast, process asynchronously with state preconditions; partner-side retries; a sweep for payments with no progress past a deadline."
+  },
+  {
+   "id": "RR-16",
+   "title": "Partner simulator cannot carry sustained volume",
+   "severity": "moderate",
+   "kind": "sandbox-only",
+   "bites_at_tier": "T1",
+   "confidence": "medium",
+   "affects": "sandbox and any load test on this box",
+   "claim": "demo-partners rewrites its whole ledger and accounts JSON files synchronously on every state change (about 7 rewrites per payment) and polls eth_getLogs once a second per payment for up to 60 s. It hands out deposit addresses from a pool of five anvil accounts, reused round-robin, and matches deposits by amount >= expected. With more than five payments in flight a deposit can be credited to the wrong payment.",
+   "evidence": [
+    "demo-partners/server.mjs:61-64 — function persist(file, obj) { const tmp = `${file}.tmp`; writeFileSync(tmp, JSON.stringify(obj, null, 2)); renameSync(tmp, file); }",
+    "demo-partners/chain/client.mjs:65 — this.bfiPool = this.accounts.slice(5);  // per-payment deposit addresses",
+    "demo-partners/chain/client.mjs:97-98 — depositAddressFor(index) { return this.bfiPool[index % this.bfiPool.length]; }",
+    "demo-partners/server.mjs:381-383 — for (let i = 0; i < 60 && !seen; i++) { const transfers = await chain.transfersTo(...); seen = transfers.find((t) => t.units >= expected) ?? null;"
+   ],
+   "quantification": "Write volume per payment is about 6 x the ledger size (about 1 KB x payments so far), i.e. about 60 MB serialised per payment after 10k payments. The simulator's event loop saturates after roughly 10^4 to 3x10^4 payments, within hours at T1 (estimate). A load test above a few payments per second on this box measures the simulator, not core.",
+   "fix": "Replace with real partner integrations. For load testing, use a simulator with a DB-backed ledger, unique deposit addresses and log subscriptions."
+  },
+  {
+   "id": "RR-17",
+   "title": "SWIFT bulk files are split and submitted one transaction at a time",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "affects": "banks using the folder adapter or submitSwift",
+   "claim": "The folder adapter accepts multi-transaction pacs.008 and pain.001 files and stacked MT103s (up to 4 MiB), but submits each transaction with its own sequential submitSwift: the duplicate pre-check, a fresh quote, 4-5 signatures (an external signer spawns one process per signature) and the settlement POST. There is no bulk endpoint. Parsing is linear in file size and happens at the bank; core never parses SWIFT. pacs.002 is also built bank-side.",
+   "evidence": [
+    "attest/packages/attest-remit/src/adapter.ts:292-295 — for (let index = 0; index < count; index++) { ... const done = await this.o.client.submitSwift(payments[index]!, {",
+    "attest/packages/attest-remit/src/client.ts:852-856 — const before = await this.knownSwift(paymentId, mapping, ...); ... const accepted = await this.submit(built.body, `swift-${paymentId}`);",
+    "attest/packages/attest-remit/src/signer.ts:192 — const child = spawn(program, args, { stdio: ['pipe', 'pipe', 'pipe'], detached: true });"
+   ],
+   "quantification": "Each transaction costs about 3-8 API calls plus 4-5 signer process spawns, serially. A 10,000-transaction file takes minutes to hours depending on signer latency and the RR-09 searches. One adapter instance tops out in the low tens of payments per second (estimate).",
+   "fix": "A bulk submission endpoint (one quote and one signed batch envelope per file, with per-transaction elements); parallel submission with bounded concurrency; HSM batch signing."
+  },
+  {
+   "id": "RR-18",
+   "title": "Remit tables grow without bound: no retention or archival",
+   "severity": "minor",
+   "kind": "operational",
+   "bites_at_tier": "T2",
+   "confidence": "medium",
+   "affects": "MySQL storage, console aggregates",
+   "claim": "No code deletes from remit_webhook_deliveries (11 rows per payment, each with its full signed body), remit_quotes (at least 1 per payment), remit_idempotency (1 per payment, no TTL) or remit_events. remit_payments.package_json stores the whole package: all events, verdict, policy and the full registry snapshot.",
+   "evidence": [
+    "attest/apps/core/src/remit/webhook.ts:67-69 — INSERT INTO remit_webhook_deliveries (id, org_id, payment_id, event_id, url, body, next_attempt_at, created_at)",
+    "attest/apps/core/src/remit/store.ts:351-352 — REPLACE INTO remit_idempotency (org_id, idem_key, request_hash, response_status, response_body, created_at)",
+    "attest/apps/core/src/remit/orchestrator.ts:723-724 — await this.d.store.patch(p.id, { package_json: JSON.stringify(pkg),"
+   ],
+   "quantification": "Estimate: tens of KB per payment across tables (events about 10 KB, package about 25-30 KB, webhooks about 7 KB), i.e. a few GB/day at T1 and about 0.5 TB/day at T2. The console dashboard aggregates remit_webhook_deliveries by org_id with no org_id index (console reader's area).",
+   "fix": "TTL on idempotency keys and quotes; prune or partition delivered webhooks; move packages to object storage keyed by commitment; partition events by month."
+  },
+  {
+   "id": "RR-19",
+   "title": "payment_id is one namespace shared by all tenants",
+   "severity": "minor",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "affects": "multi-tenant API users",
+   "claim": "The duplicate check and the primary key cover payment_id alone. An id that another org already used is refused with 409 duplicate_payment, which also reveals that the id exists. SDK-derived ids hash in the institution, but API callers with simple id schemes will collide as the number of tenants grows.",
+   "evidence": [
+    "attest/apps/core/src/remit/orchestrator.ts:152-155 — if (await this.d.store.get(paymentId)) { ... throw new ServiceError(409, 'duplicate_payment',",
+    "attest/apps/core/src/db.ts:574 — id                      VARCHAR(128) NOT NULL PRIMARY KEY,"
+   ],
+   "fix": "Make uniqueness per (org_id, payment_id), or prefix ids with the org; return 409 only for the caller's own org."
+  },
+  {
+   "id": "RR-20",
+   "title": "Idempotency guard is check-then-act",
+   "severity": "minor",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "affects": "POST /v1/settlements retries",
+   "claim": "idempotencyHit and idempotencyStore are separate statements on either side of acceptSettlement, and the key is stored only after success. Two concurrent retries with the same key both proceed; the payment_id primary key then admits one, and the other gets a 409 or an unmapped duplicate-key 500. The body hash uses JSON.stringify, so the same instruction with its keys in a different order gets a 409 conflict.",
+   "evidence": [
+    "attest/apps/core/src/remit/routes.ts:401-403 — const requestHash = sha256hex(JSON.stringify(body)); const hit = await store.idempotencyHit(orgId, idemKey);",
+    "attest/apps/core/src/remit/routes.ts:420-421 — const result = await orchestrator.acceptSettlement(orgId, bank, body); await store.idempotencyStore(orgId, idemKey, requestHash, 202, result);"
+   ],
+   "fix": "INSERT the key first with status 'in_progress' under the (org_id, idem_key) primary key; hash the JCS form; map duplicate-key errors to 409."
+  },
+  {
+   "id": "RR-21",
+   "title": "Evidence anchoring cost is shared: payments share Merkle batches and confirmation does not wait for the anchor",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "Each confirmed payment adds one attestation leaf through the ordinary svc.issue path (3 statements). The attest BatchWorker folds up to 1,024 leaves into one Bitcoin anchor (live BATCH_MAX_LEAVES=1024, flush 15 s), so anchoring cost per payment falls as volume rises. BENEFICIARY_CREDIT_CONFIRMED is announced before the anchor, and EVIDENCE_ANCHORED follows asynchronously.",
+   "evidence": [
+    "attest/apps/core/src/remit/orchestrator.ts:721-722 — const att = await this.d.svc.issue(p.org_id, commitment, 'application/json', { kind: 'remit-evidence', payment_id: p.id, schema: pkg.schema }, { product: 'remit' });",
+    "attest/apps/core/src/remit/evidence.ts:15-17 — Payment completion is never held hostage to the chain: `BENEFICIARY_CREDIT_CONFIRMED` is announced first and `EVIDENCE_ANCHORED` follows when the batch confirms",
+    "attest/apps/core/src/main.ts:63 — const svc = new AttestService(db, backend, cfg.batch.maxLeaves, inscriber);"
+   ],
+   "quantification": "At T2 that is one anchor per about 10 s of payments (1,024 leaves). The remaining per-payment cost is the promotion sweep (RR-05)."
+  },
+  {
+   "id": "RR-22",
+   "title": "Ledger reads are keyset-paged and bounded",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "GET /v1/settlements pages with a (created_at, id) keyset cursor backed by an (org_id, state, created_at) index; page size is at most 100 (list() at most 500), so page N costs the same as page 1. Caveats: a COUNT(*) on every page, one attestation lookup per row, and the non-sargable q= search (RR-09).",
+   "evidence": [
+    "attest/apps/core/src/remit/store.ts:142 — const limit = Math.max(1, Math.min(s.limit ?? 25, 100));",
+    "attest/apps/core/src/remit/store.ts:200 — where.push('(created_at < ? OR (created_at = ? AND id < ?))');",
+    "attest/apps/core/src/db.ts:701 — CREATE INDEX remit_payments_org_state ON remit_payments(org_id, state, created_at)",
+    "attest/apps/core/src/remit/routes.ts:451-452 — attestation: p.attestation_id ? { id: p.attestation_id, status: (await d.svc.get(orgId, p.attestation_id))?.status"
+   ]
+  },
+  {
+   "id": "RR-23",
+   "title": "Durable signed notifications, append-only signed event log, verified partner facts, idempotent SWIFT ids",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "Webhooks are written to a table before delivery, so they survive restarts; they are signed, retried with backoff, and backed by polling. Events are append-only with a unique (payment_id, seq), so a race fails loudly instead of corrupting the order. Every fact a partner asserts is signature-checked against the registry before it is stored. The payment id derived from the SWIFT UETR makes re-dropping a file safe.",
+   "evidence": [
+    "attest/apps/core/src/remit/webhook.ts:2-7 — Webhook outbox — at-least-once, platform-signed, backed by a table. ... so exhaustion is a recorded condition, not a lost message.",
+    "attest/apps/core/src/remit/orchestrator.ts:781-782 — if (!verifyEvent(payload, sig, inst.signing_spki)) { throw new ServiceError(400, 'invalid_signature',",
+    "attest/packages/attest-remit/src/client.ts:255-256 — const identity = payment.uetr ? `uetr|${payment.uetr}`"
+   ]
+  },
+  {
+   "id": "RR-24",
+   "title": "Partner integration sits behind interfaces",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "BfiConnector and SettlementWallet are the plug points, and TripleAProfileSim is just one implementation. Real BFIs and wallets, including async or bulk variants, can be added without rewriting the state machine. Note that the interface as written expects transfer() to return a mined tx synchronously (see RR-06).",
+   "evidence": [
+    "attest/apps/core/src/remit/partners-client.ts:55-65 — export interface BfiConnector { sendTravelRule(...) ... } export interface SettlementWallet { transfer(body: Record<string, unknown>): Promise<WalletTransferResult>; }",
+    "attest/apps/core/src/main.ts:88-90 — const partners = new TripleAProfileSim(cfg.remit.partnersBase); const orchestrator = new RemitOrchestrator({ store, registry, svc, bfi: partners, wallet: partners,"
+   ]
+  }
+ ],
+ "hard_limits": [
+  {
+   "name": "Remit worker tick",
+   "value": "2,000 ms, hardcoded (on whenever WORKER_TICK_MS > 0; ignores the live 3,000)",
+   "where": "attest/apps/core/src/main.ts:102",
+   "configurable": "on/off only"
+  },
+  {
+   "name": "Webhook rows per tick",
+   "value": "20",
+   "where": "attest/apps/core/src/remit/webhook.ts:79",
+   "configurable": "no"
+  },
+  {
+   "name": "Webhook delivery concurrency",
+   "value": "1 (sequential for-await)",
+   "where": "attest/apps/core/src/remit/webhook.ts:83-90",
+   "configurable": "no"
+  },
+  {
+   "name": "Webhook request timeout",
+   "value": "5,000 ms",
+   "where": "attest/apps/core/src/remit/webhook.ts:89",
+   "configurable": "no"
+  },
+  {
+   "name": "Webhook backoff ladder",
+   "value": "2 s, 10 s, 30 s, 120 s, 600 s (the 600 s step is unreachable with 5 attempts)",
+   "where": "attest/apps/core/src/remit/webhook.ts:34",
+   "configurable": "no"
+  },
+  {
+   "name": "Webhook max attempts",
+   "value": "5 (exhausted after about 162 s of backoff)",
+   "where": "attest/apps/core/src/config.ts:390",
+   "configurable": "yes, REMIT_WEBHOOK_MAX_ATTEMPTS"
+  },
+  {
+   "name": "Partner HTTP timeout",
+   "value": "20,000 ms, single attempt, no retry",
+   "where": "attest/apps/core/src/remit/partners-client.ts:74",
+   "configurable": "no"
+  },
+  {
+   "name": "Quote TTL",
+   "value": "600,000 ms",
+   "where": "attest/apps/core/src/config.ts:381; quotes.ts:105",
+   "configurable": "yes, REMIT_QUOTE_TTL_MS"
+  },
+  {
+   "name": "Corridor and currencies",
+   "value": "VN to SG only; trade USD, collect VND, payout SGD; static rates USD/VND 25380, USD/SGD 1.3350, fee 25.00 USD",
+   "where": "attest/apps/core/src/remit/quotes.ts:76-86; config.ts:383-386",
+   "configurable": "rates and fee via env; corridor no"
+  },
+  {
+   "name": "Payment id rule",
+   "value": "^[A-Za-z0-9][A-Za-z0-9_-]{3,63}$ (4-64 chars); 'reconcile' and 'bundle' reserved; globally unique (PK), not per org",
+   "where": "attest/apps/core/src/remit/routes.ts:49-50; db.ts:574",
+   "configurable": "no"
+  },
+  {
+   "name": "Idempotency-Key",
+   "value": "required, at least 8 chars; PK (org_id, idem_key); stored only on success; no TTL",
+   "where": "attest/apps/core/src/remit/routes.ts:395-398; db.ts:636",
+   "configurable": "no"
+  },
+  {
+   "name": "JSON request body cap",
+   "value": "1 MiB",
+   "where": "attest/apps/core/src/http/server.ts:76",
+   "configurable": "no"
+  },
+  {
+   "name": "MySQL pool",
+   "value": "10 connections, waitForConnections true, no queueLimit, shared by the whole process",
+   "where": "attest/apps/core/src/db.ts:942-943",
+   "configurable": "no"
+  },
+  {
+   "name": "Ledger page size",
+   "value": "default 25, max 100 (+1 lookahead); list() max 500",
+   "where": "attest/apps/core/src/remit/routes.ts:439; store.ts:132,142",
+   "configurable": "per request"
+  },
+  {
+   "name": "Rate limits on remit routes",
+   "value": "none",
+   "where": "attest/apps/core/src/remit/routes.ts (RateLimiter used only in http/console.ts:141, http/public.ts:70-71, http/routes.ts:115)",
+   "configurable": "no"
+  },
+  {
+   "name": "Chain status lookup",
+   "value": "3-4 RPCs, 5,000 ms timeout each, no cache",
+   "where": "attest/apps/core/src/remit/chain-status.ts:50,62-90",
+   "configurable": "RPC URL via REMIT_CHAIN_RPC"
+  },
+  {
+   "name": "Settlement chain (sandbox)",
+   "value": "anvil eip155:31337, automine, unlocked treasury accounts[1], finality = 1 receipt",
+   "where": "attest/apps/core/src/config.ts:387-389; demo-partners/chain/client.mjs:64,85-95; server.mjs:308",
+   "configurable": "REMIT_CHAIN_LABEL, REMIT_CHAIN_RPC; finality no"
+  },
+  {
+   "name": "Sim deposit address pool",
+   "value": "5 addresses reused round-robin",
+   "where": "demo-partners/chain/client.mjs:65,97-98",
+   "configurable": "no (sandbox)"
+  },
+  {
+   "name": "Sim receipt wait",
+   "value": "50 polls x 200 ms = 10 s",
+   "where": "demo-partners/chain/client.mjs:86-92",
+   "configurable": "no"
+  },
+  {
+   "name": "Sim anvil RPC timeout",
+   "value": "10,000 ms",
+   "where": "demo-partners/chain/client.mjs:51",
+   "configurable": "no"
+  },
+  {
+   "name": "Sim payout approval validity",
+   "value": "15 min",
+   "where": "demo-partners/server.mjs:242",
+   "configurable": "no"
+  },
+  {
+   "name": "Sim per-payment cap",
+   "value": "50,000 mUSDC",
+   "where": "demo-partners/server.mjs:294",
+   "configurable": "no"
+  },
+  {
+   "name": "Sim EDD RFI trigger",
+   "value": "trade at or above 20,000 USD",
+   "where": "demo-partners/server.mjs:134",
+   "configurable": "no"
+  },
+  {
+   "name": "Sim deposit watch",
+   "value": "60 polls x 1 s (eth_getLogs)",
+   "where": "demo-partners/server.mjs:381-386",
+   "configurable": "no"
+  },
+  {
+   "name": "Sim callback timeout",
+   "value": "10,000 ms, no retry",
+   "where": "demo-partners/server.mjs:336",
+   "configurable": "no"
+  },
+  {
+   "name": "SDK status polling",
+   "value": "every 1,500 ms, gives up after 180,000 ms",
+   "where": "attest/packages/attest-remit/src/client.ts:1001-1004",
+   "configurable": "per call (intervalMs, timeoutMs)"
+  },
+  {
+   "name": "SDK registry meta cache",
+   "value": "300,000 ms (forced refresh at most every 10 s)",
+   "where": "attest/packages/attest-remit/src/client.ts:403",
+   "configurable": "no"
+  },
+  {
+   "name": "Folder adapter cadence and limits",
+   "value": "poll 3,000 ms; parked payments every 60,000 ms; EXCEPTION followed for 24 h; file settle 2,000 ms; file cap 4 MiB",
+   "where": "attest/packages/attest-remit/src/adapter.ts:80,82,84,240,492",
+   "configurable": "pollMs and settleMs yes"
+  },
+  {
+   "name": "External signer timeout",
+   "value": "30,000 ms per signature, one process spawn per signature",
+   "where": "attest/packages/attest-remit/src/signer.ts:192,207-208",
+   "configurable": "yes, timeoutMs"
+  },
+  {
+   "name": "Attest batching used for remit evidence",
+   "value": "BATCH_MAX_LEAVES 1024, BATCH_FLUSH_INTERVAL_MS 15000, WORKER_TICK_MS 3000 (live)",
+   "where": "attest/apps/core/src/main.ts:131-143 (cfg.batch)",
+   "configurable": "yes, env"
+  }
+ ],
+ "scale_path": "T1 (about 1/s sustained, 10/s peaks), in order: (1) Webhook outbox: concurrent delivery with per-endpoint caps, per-org fairness, its own timer separate from promotion, and claimed rows; otherwise the 10/s ceiling is below T1. (2) Recovery: a boot-time and periodic sweep that resumes non-terminal payments, plus an RFI timeout to CANCELLED. (3) Compare-and-set on state transitions (UPDATE ... WHERE state = ?) and atomic event seq, with dedupe on rfi-response and BFI callbacks. (4) Partner calls: idempotency key per (payment_id, leg), bounded retries into a non-terminal state, and a TXID lookup before any wallet re-instruction. (5) Event-driven or indexed promoteAnchored with a LIMIT. (6) Indexed exact-match SWIFT reference columns with server-side dedupe, replacing the SDK's LIKE searches. (7) Daily manifest as a root or in pages. (8) Exempt status polls from the synchronous audit write.\n\nT2 (about 100/s, 1,000/s peaks): (1) Replace setImmediate with a durable job queue (FOR UPDATE SKIP LOCKED or a broker) with bounded concurrency, per-org quotas and 429 backpressure. (2) Cut statements per payment from about 165: no read-after-write, no SELECT *, cached registry, subscription and KeyObjects, one transaction per leg, a larger pool or a dedicated remit pool, package_json in object storage. (3) Multi-instance readiness: platform key in an HSM or KMS, claimed or leader-elected worker rows, then scale core horizontally. (4) Move signing off the main thread (worker threads or HSM) and sign per leg rather than per event and per webhook. (5) Asynchronous settlement leg with a nonce manager or several hot wallets on a high-throughput L2, an explicit confirmation-depth finality rule, and real partner APIs (the simulator cannot sustain T1). (6) ETag, long-poll or push for bank status; a bulk submission endpoint for multi-transaction SWIFT files. (7) Retention and partitioning for webhook deliveries, quotes, idempotency keys and events; the registry snapshot referenced by hash.\n\nT3 (about 1,000/s, 10,000/s peaks): (1) Net settlement: one on-chain transfer per corridor and BFI per interval, with a Merkle allocation per payment in the evidence, instead of one ERC-20 transfer per payment. (2) Bulk partner protocols (batched travel-rule messages, approvals and callbacks) and streaming notifications to banks instead of HTTP per event. (3) Shard the pipeline and MySQL by org or corridor, or move the event log to a stream with materialised state. (4) Batch signing (a signature over a Merkle root of events per interval) on signer clusters. (5) Capacity-plan MySQL commit throughput and the attest batcher (at least 1,000 leaves/s, i.e. one 1,024-leaf anchor per second).",
+ "open_questions": [
+  "Query plans for anchoredPending, search(q=) and the console remit aggregates were not EXPLAINed, because the live MySQL on :3306 was off-limits. Confirm full scans on a copy.",
+  "There is no remit load test (deploy/seed-remit-volume.mjs defaults to 36 payments at concurrency 6). Per-payment CPU (about 10 ms) and latency are estimates; measure them with the simulator replaced.",
+  "Production partners do not exist in code (the Triple-A profile is simulated). We need the real BFI and settlement entity APIs: sync vs async, idempotency keys, callback retry semantics, bulk endpoints, rate limits.",
+  "No production settlement chain or custody stack is chosen, in code or in the design doc (which scopes everything as 'stage 0 sandbox'). L1 vs L2, confirmation depth, nonce management and HSM signing throughput decide whether T2 is feasible.",
+  "Is net settlement acceptable to the evidence model and to regulators? Today there is exactly one chainTransfer element per payment, with settlementIdMemo binding payment_id to tx.",
+  "How many institutions will the registry hold at T2/T3? This drives the RR-14 per-payment cost and the evidence package size.",
+  "Will banks rely on webhooks or on polling? That decides whether RR-02 or RR-08 bites first.",
+  "Attest reader: do evidence leaves from different orgs share one Merkle batch, and what anchor-confirmation latency applies on public Bitcoin? Together these set how long rows sit in BENEFICIARY_CREDIT_CONFIRMED and how large each promotion burst is.",
+  "Under a backlog, could payments fail the policy settlementWindow 'P2D' (evidence.ts:42) or the BFI approval validity (15 min in the simulator)? Not verified.",
+  "Actual evidence package size is estimated at tens of KB; no sample package exists on disk to measure."
+ ]
+}

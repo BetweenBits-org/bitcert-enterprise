@@ -1,0 +1,271 @@
+{
+  "about": "Exported text to a base-unit integer string. Exact or refused: nothing is rounded.",
+  "cases": [
+    {
+      "text": "0.5",
+      "decimals": 8,
+      "unit": "decimal",
+      "base": "50000000"
+    },
+    {
+      "text": "1",
+      "decimals": 8,
+      "unit": "decimal",
+      "base": "100000000"
+    },
+    {
+      "text": "0",
+      "decimals": 8,
+      "unit": "decimal",
+      "base": "0"
+    },
+    {
+      "text": "0.00000001",
+      "decimals": 8,
+      "unit": "decimal",
+      "base": "1"
+    },
+    {
+      "text": ".5",
+      "decimals": 8,
+      "unit": "decimal",
+      "base": "50000000"
+    },
+    {
+      "text": " 12.50 ",
+      "decimals": 2,
+      "unit": "decimal",
+      "base": "1250"
+    },
+    {
+      "text": "007.10",
+      "decimals": 2,
+      "unit": "decimal",
+      "base": "710"
+    },
+    {
+      "text": "1234",
+      "decimals": 0,
+      "unit": "decimal",
+      "base": "1234"
+    },
+    {
+      "text": "1234.000",
+      "decimals": 0,
+      "unit": "decimal",
+      "base": "1234"
+    },
+    {
+      "text": "0.500000000000000000",
+      "decimals": 8,
+      "unit": "decimal",
+      "base": "50000000"
+    },
+    {
+      "text": "21.12345678",
+      "decimals": 8,
+      "unit": "decimal",
+      "base": "2112345678"
+    },
+    {
+      "text": "0.000000000000000001",
+      "decimals": 18,
+      "unit": "decimal",
+      "base": "1"
+    },
+    {
+      "text": "123456789012345678901234567890.123456789012345678",
+      "decimals": 18,
+      "unit": "decimal",
+      "base": "123456789012345678901234567890123456789012345678"
+    },
+    {
+      "text": "0.0",
+      "decimals": 0,
+      "unit": "decimal",
+      "base": "0"
+    },
+    {
+      "text": "00",
+      "decimals": 8,
+      "unit": "decimal",
+      "base": "0"
+    },
+    {
+      "text": "50000000",
+      "decimals": 8,
+      "unit": "base",
+      "base": "50000000"
+    },
+    {
+      "text": "00050",
+      "decimals": 8,
+      "unit": "base",
+      "base": "50"
+    },
+    {
+      "text": "0",
+      "decimals": 0,
+      "unit": "base",
+      "base": "0"
+    },
+    {
+      "text": " 7 ",
+      "decimals": 6,
+      "unit": "base",
+      "base": "7"
+    },
+    {
+      "text": "340282366920938463463374607431768211455",
+      "decimals": 18,
+      "unit": "base",
+      "base": "340282366920938463463374607431768211455"
+    }
+  ],
+  "errors": [
+    {
+      "text": "0.123456789",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_precision"
+    },
+    {
+      "text": "0.1",
+      "decimals": 0,
+      "unit": "decimal",
+      "code": "amount_precision"
+    },
+    {
+      "text": "-1",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_negative"
+    },
+    {
+      "text": "−1",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_negative"
+    },
+    {
+      "text": "1e-8",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_exponent"
+    },
+    {
+      "text": "1E5",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_exponent"
+    },
+    {
+      "text": "1,000.5",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_grouping"
+    },
+    {
+      "text": "1 000",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_grouping"
+    },
+    {
+      "text": "1_000",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_grouping"
+    },
+    {
+      "text": "",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_empty"
+    },
+    {
+      "text": "   ",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_empty"
+    },
+    {
+      "text": "5.",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_format"
+    },
+    {
+      "text": ".",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_format"
+    },
+    {
+      "text": "+5",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_format"
+    },
+    {
+      "text": "abc",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_format"
+    },
+    {
+      "text": "NaN",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_format"
+    },
+    {
+      "text": "0x10",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_format"
+    },
+    {
+      "text": "1.2.3",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_format"
+    },
+    {
+      "text": "99999999999999999999999999999999999999999999999999999999999999999999999999999999",
+      "decimals": 8,
+      "unit": "decimal",
+      "code": "amount_too_long"
+    },
+    {
+      "text": "0.5",
+      "decimals": 8,
+      "unit": "base",
+      "code": "amount_fraction_in_base"
+    },
+    {
+      "text": "-5",
+      "decimals": 8,
+      "unit": "base",
+      "code": "amount_negative"
+    },
+    {
+      "text": "1e3",
+      "decimals": 8,
+      "unit": "base",
+      "code": "amount_exponent"
+    },
+    {
+      "text": "12a",
+      "decimals": 8,
+      "unit": "base",
+      "code": "amount_format"
+    },
+    {
+      "text": "",
+      "decimals": 8,
+      "unit": "base",
+      "code": "amount_empty"
+    }
+  ]
+}

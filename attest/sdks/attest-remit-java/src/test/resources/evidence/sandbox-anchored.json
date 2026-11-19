@@ -1,0 +1,1385 @@
+{
+  "package": {
+    "schema": "stonehash.payment-evidence.v1",
+    "payment_id": "PAY-20261118-6f1e6bf387",
+    "corridor": {
+      "origin": "VN",
+      "destination": "SG"
+    },
+    "state": "BENEFICIARY_CREDIT_CONFIRMED",
+    "amounts": {
+      "trade": {
+        "currency": "USD",
+        "value": "2500.00"
+      },
+      "collected": {
+        "currency": "VND",
+        "value": "64084500"
+      },
+      "settled": {
+        "asset": "USDC",
+        "value": "2500.00"
+      },
+      "paid": {
+        "currency": "SGD",
+        "value": "3337.50"
+      }
+    },
+    "quote_id": "QT-edf6ebec-4d3a",
+    "events": [
+      {
+        "seq": 0,
+        "type": "REQUEST_ACCEPTED",
+        "issuer": "STONEHASH",
+        "payload": {
+          "payment_id": "PAY-20261118-6f1e6bf387",
+          "request_id": "REQ-PAY-20261118-6f1e6bf387",
+          "quote_id": "QT-edf6ebec-4d3a",
+          "accepted_at": "2026-11-18T03:03:48.179Z"
+        },
+        "sig": {
+          "alg": "ES256",
+          "key_id": "STONEHASH-SIGN-62b62710",
+          "issuer": "STONEHASH",
+          "sig": "ex8hw9hNMY2k9VuHPMIC3TF0irgAljHQGg4S4MXUeLAFCj9c3nuMIPjER_Y4bP4H7Vz-0uvDwwJU_-y-gSObCQ"
+        },
+        "at": "2026-11-18T03:03:48.182Z"
+      },
+      {
+        "seq": 1,
+        "type": "BANK_EVIDENCE_SUBMITTED",
+        "issuer": "VN-BANK-34897F",
+        "payload": {
+          "bankInstruction": {
+            "ref": "PAY-20261118-6f1e6bf387",
+            "amount": "2500.00",
+            "currency": "USD",
+            "debtor": "Saigon Import Co., Ltd.",
+            "creditor": "Lion City Exports Pte. Ltd.",
+            "approvedAt": "2026-11-18T03:03:48.052Z",
+            "iso20022Fields": [
+              "Dbtr",
+              "Cdtr",
+              "InstdAmt",
+              "Ccy",
+              "RmtInf",
+              "INV-2026-0458"
+            ],
+            "digest": "a2c1c27e524b9b13538640c3fd51125e8199a6c123f57caae922a837e307281a",
+            "signature": {
+              "status": "VALID",
+              "keyId": "VN-BANK-34897F",
+              "algorithm": "ES256",
+              "issuer": "Your bank",
+              "trustLevel": "ATTESTED",
+              "value": "3KnFmlRoniN67R0H4nZ2emPDPzFs__hl6ZriTWxYpj2_PbTFSnLoYTtt5GLiVYdxjFIXbIk0YAw4H7LnGwS7Dw"
+            }
+          },
+          "bankApproval": {
+            "approvalRef": "APPR-PAY-20261118-6f1e6bf387",
+            "regulatorReportRef": "SDK-DEMO",
+            "approvedByRole": "FX Compliance Officer",
+            "approvedAt": "2026-11-18T03:03:48.052Z",
+            "fxQuote": {
+              "pair": "USD/VND",
+              "rate": "25380",
+              "quotedAt": "2026-11-18T03:03:48.024Z",
+              "validUntil": "2026-11-18T03:13:48.024Z"
+            },
+            "digest": "116057b0367ba511fdc5d6d88d158e008c77d8d1d7a092af07dda26df2e7f696",
+            "signature": {
+              "status": "VALID",
+              "keyId": "VN-BANK-34897F",
+              "algorithm": "ES256",
+              "issuer": "Your bank",
+              "trustLevel": "ATTESTED",
+              "value": "Th8WeXaIYy-e4Y_-vymOD_qIuwKTm5T_LDOH7Hl1Ihgh9QIgHilhRfvQOlLZsAWOU5EK5m6w6diyxIL22L-Z-Q"
+            }
+          },
+          "commercialDocs": {
+            "invoiceRef": "INV-2026-0458",
+            "amount": "2500.00",
+            "currency": "USD",
+            "buyer": "Saigon Import Co., Ltd.",
+            "seller": "Lion City Exports Pte. Ltd.",
+            "attached": [
+              "invoice"
+            ],
+            "citedOnly": [],
+            "digest": "3f2fdfb0cf034f6603fdc43490c39e784932b248c82e837822a40d2679482170",
+            "signature": {
+              "status": "VALID",
+              "keyId": "VN-BANK-34897F",
+              "algorithm": "ES256",
+              "issuer": "Your bank",
+              "trustLevel": "ATTESTED",
+              "value": "Agc_iTg_qg8RfOWx4pGsY4LCqe1KjUxTbMYc4y_5rJjGWuePvzeft0u-y7CPZsQylH99W1Pz3mOvVj4at5jX6A"
+            }
+          }
+        },
+        "sig": null,
+        "at": "2026-11-18T03:03:48.190Z"
+      },
+      {
+        "seq": 2,
+        "type": "BANK_AUTHORIZATION_VERIFIED",
+        "issuer": "STONEHASH",
+        "payload": {
+          "payment_id": "PAY-20261118-6f1e6bf387",
+          "bank_authorization": {
+            "bank_id": "VN-BANK-34897F",
+            "instruction_ref": "INST-PAY-20261118-6f1e6bf387",
+            "fiat_received_ref": "RCPT-PAY-20261118-6f1e6bf387",
+            "kyb_status": "VERIFIED",
+            "kyb_policy_version": "sdk-1",
+            "trade_review": "APPROVED",
+            "purpose_code": "GOODS_PAYMENT",
+            "payment_release": "AUTHORIZED",
+            "approved_at": "2026-11-18T03:03:48.052Z"
+          },
+          "bank_signature": {
+            "alg": "ES256",
+            "key_id": "VN-BANK-34897F",
+            "issuer": "Your bank",
+            "sig": "igxiONnzK_kn6XxPbwjcCtDlQWdihgXp_jtRrvSRExVJn9EA_XZSrhNllXp1FpfFPytOaXhnw93ih1UkBwyLLg"
+          },
+          "verified_at": "2026-11-18T03:03:48.179Z"
+        },
+        "sig": {
+          "alg": "ES256",
+          "key_id": "STONEHASH-SIGN-62b62710",
+          "issuer": "STONEHASH",
+          "sig": "yiNNXf29QNR_fGrYG2jHVApiNXEb5h1sgitDl9bN5ltzaaoKzJ0kIdCRL7sHTL7FJD6HMLpws8f-_GL-K1beBQ"
+        },
+        "at": "2026-11-18T03:03:48.203Z"
+      },
+      {
+        "seq": 3,
+        "type": "TRAVEL_RULE_SENT",
+        "issuer": "STONEHASH",
+        "payload": {
+          "payment_id": "PAY-20261118-6f1e6bf387",
+          "protocol": "IVMS101/JWE",
+          "mode": "B",
+          "recipient": "SG-BFI-001",
+          "ivms101_digest": "8c76f2a546d111d924168b5c80544969a0076dcf7e82bafc14026bf1606b1596",
+          "ciphertext_commitment": "8a5607597bbaf78eaa51c0ecb33b38845d8c5c632cb8e1a3cac105d5bc165cdb",
+          "sent_at": "2026-11-18T03:03:48.240Z"
+        },
+        "sig": {
+          "alg": "ES256",
+          "key_id": "STONEHASH-SIGN-62b62710",
+          "issuer": "STONEHASH",
+          "sig": "TjWDIVZ1tNQnb0wgmyp65nwyq10XXuDuIontR6wSos9QC9j4cZMGs0CAXqZBD-i3AmoYM4f9Sk-f2HnC4WP9rA"
+        },
+        "at": "2026-11-18T03:03:48.240Z"
+      },
+      {
+        "seq": 4,
+        "type": "TRAVEL_RULE_RECEIVED",
+        "issuer": "SG-BFI-001",
+        "payload": {
+          "payment_id": "PAY-20261118-6f1e6bf387",
+          "ivms101_digest": "8c76f2a546d111d924168b5c80544969a0076dcf7e82bafc14026bf1606b1596",
+          "status": "ACCEPTED",
+          "received_at": "2026-11-18T03:03:48.258Z"
+        },
+        "sig": {
+          "alg": "ES256",
+          "key_id": "SG-BFI-001",
+          "issuer": "Triple-A profile BFI (sim)",
+          "sig": "E2jhd9XuTShmoIhlBWTPrf4J0aZt9s_23flk8RSSNeTQgHW215GClPLcdF5rVWYX5ljiZXgZnQ9_9t9cclTzYw"
+        },
+        "at": "2026-11-18T03:03:48.260Z"
+      },
+      {
+        "seq": 5,
+        "type": "PAYOUT_ACCEPTED",
+        "issuer": "SG-BFI-001",
+        "payload": {
+          "payment_id": "PAY-20261118-6f1e6bf387",
+          "deposit_address": "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
+          "chain": "eip155:31337",
+          "asset": "USDC",
+          "usdc_amount": "2500.00",
+          "approved_at": "2026-11-18T03:03:48.268Z",
+          "valid_until": "2026-11-18T03:18:48.268Z",
+          "travel_rule_element": {
+            "protocol": "IVMS101/JWE",
+            "ivms101Digest": "8c76f2a546d111d924168b5c80544969a0076dcf7e82bafc14026bf1606b1596",
+            "originatingVasp": "SETTLE-ENTITY-001",
+            "beneficiaryVasp": "SG-BFI-001",
+            "approvalStatus": "APPROVED",
+            "approvalDigest": "249bf2d66a6d5aac73d39ee901c2b284ed2f73b86daeedc5a1d526ce68e97b1a",
+            "approvedAt": "2026-11-18T03:03:48.268Z",
+            "approvedBeneficiaryAddress": "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
+            "digest": "95179724d43abda666145a365f6417de87b5e992ffc6405312245f48d785a502",
+            "signature": {
+              "status": "VALID",
+              "keyId": "SG-BFI-001",
+              "algorithm": "ES256",
+              "issuer": "Triple-A profile BFI (sim)",
+              "trustLevel": "ATTESTED",
+              "value": "OIFvL5NE6SE6I94wtdxJNNQHRbsy677IJ94fhxaJ-ljCiBTgD3fHkDy7ZWBVOxkSePqWoO6zlKDb2DnfPgr3Dg"
+            }
+          }
+        },
+        "sig": {
+          "alg": "ES256",
+          "key_id": "SG-BFI-001",
+          "issuer": "Triple-A profile BFI (sim)",
+          "sig": "1cKjzE0K6WoPgNOet2E1PX6KZ_OG5o1TQKfk6dMwm9pJ56tGyKSMlabdWO5QBMhflIQ0PQGS1xPJ8e7zWgNXHw"
+        },
+        "at": "2026-11-18T03:03:48.271Z"
+      },
+      {
+        "seq": 6,
+        "type": "SETTLEMENT_INSTRUCTED",
+        "issuer": "STONEHASH",
+        "payload": {
+          "payment_id": "PAY-20261118-6f1e6bf387",
+          "to_address": "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
+          "usdc_amount": "2500.00",
+          "chain": "eip155:31337",
+          "derived_from_approval_seq": 5,
+          "issued_at": "2026-11-18T03:03:48.295Z",
+          "signature": {
+            "alg": "ES256",
+            "key_id": "STONEHASH-SIGN-62b62710",
+            "issuer": "STONEHASH",
+            "sig": "f7Wv5T3uRirnj0Nqb3lox8HtxwNFxbVATtWveipAMOgmQZxisNYpff_4IZ2obG2gk25BzPeMolshfpOHx54lRA"
+          }
+        },
+        "sig": {
+          "alg": "ES256",
+          "key_id": "STONEHASH-SIGN-62b62710",
+          "issuer": "STONEHASH",
+          "sig": "PGm7hIi5vbEkAv1ZVq2-xjTa5SBvZVJJC02R3vxSCOSh35g0LNg-x7m6qM32Fm81rzQXQTpAl6GpssvuWtLTKw"
+        },
+        "at": "2026-11-18T03:03:48.295Z"
+      },
+      {
+        "seq": 7,
+        "type": "USDC_TRANSFER_CONFIRMED",
+        "issuer": "SETTLE-ENTITY-001",
+        "payload": {
+          "payment_id": "PAY-20261118-6f1e6bf387",
+          "tx_hash": "0x3303408747a3bdee364caef1aff4843d9062bdc1c6fcf16855b51f18232c0710",
+          "block": 88,
+          "from_address": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+          "to_address": "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
+          "usdc_amount": "2500.00",
+          "observed_at": "2026-11-18T03:03:48.308Z",
+          "chain_transfer_element": {
+            "chain": "eip155:31337",
+            "asset": "USDC",
+            "amount": "2500.00",
+            "currency": "USDC",
+            "fromAddress": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+            "toAddress": "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
+            "txRef": "0x3303408747a3bdee364caef1aff4843d9062bdc1c6fcf16855b51f18232c0710",
+            "settlementIdMemo": "PAY-20261118-6f1e6bf387",
+            "confirmations": 1,
+            "observedAt": "2026-11-18T03:03:48.308Z",
+            "digest": "5186010a41a10193a415699566874924285628d4198fbc962dfcbbd5f125b771",
+            "signature": {
+              "status": "VALID",
+              "keyId": "SETTLE-ENTITY-001",
+              "algorithm": "ES256",
+              "issuer": "Licensed Settlement Entity (sim)",
+              "trustLevel": "ATTESTED",
+              "value": "gm6ybPHoGKD0qxmsl290DXb1N4ZCuC8GVSnHwcUDw-9L4oqWOXYM1lZCKvv88L-KBorSCN47xriNybwyKpBUcw"
+            }
+          }
+        },
+        "sig": {
+          "alg": "ES256",
+          "key_id": "SETTLE-ENTITY-001",
+          "issuer": "Licensed Settlement Entity (sim)",
+          "sig": "JivY-l0TvQ0J8m0apy991Rbh4k2Ik9M_Wru2E5w6pHqBc7aSqVTo0JQgHtpEgTi7UGUdjDXhoPW-FlPf9eNkOQ"
+        },
+        "at": "2026-11-18T03:03:48.310Z"
+      },
+      {
+        "seq": 8,
+        "type": "USDC_RECEIVED",
+        "issuer": "SG-BFI-001",
+        "payload": {
+          "payment_id": "PAY-20261118-6f1e6bf387",
+          "tx_hash": "0x3303408747a3bdee364caef1aff4843d9062bdc1c6fcf16855b51f18232c0710",
+          "block": 88,
+          "amount": "2500.00",
+          "observed_at": "2026-11-18T03:03:48.340Z"
+        },
+        "sig": {
+          "alg": "ES256",
+          "key_id": "SG-BFI-001",
+          "issuer": "Triple-A profile BFI (sim)",
+          "sig": "9p8T0IFBYcFDUM2qRrmKPdJwWSBxNNlZGOXKIg1dDU4IMvqT7tO3E4QMv8_FDwseYBxO6RyXQdmLqDCaVJ5_Vg"
+        },
+        "at": "2026-11-18T03:03:48.342Z"
+      },
+      {
+        "seq": 9,
+        "type": "PAYOUT_SUBMITTED",
+        "issuer": "SG-BFI-001",
+        "payload": {
+          "payment_id": "PAY-20261118-6f1e6bf387",
+          "local_rail": "FAST",
+          "submitted_at": "2026-11-18T03:03:48.357Z"
+        },
+        "sig": {
+          "alg": "ES256",
+          "key_id": "SG-BFI-001",
+          "issuer": "Triple-A profile BFI (sim)",
+          "sig": "ZRAAOyUeDyly6qzWrZi-lQVBeY4BNeYISvymlms1Yq6n_eEPVtM2LaxFnfCYgheox2hbBgh15spHZdygHBEWaQ"
+        },
+        "at": "2026-11-18T03:03:48.360Z"
+      },
+      {
+        "seq": 10,
+        "type": "PAYOUT_COMPLETED",
+        "issuer": "SG-BFI-001",
+        "payload": {
+          "payment_id": "PAY-20261118-6f1e6bf387",
+          "bank_reference": "FAST-20261118-0119",
+          "credited_at": "2026-11-18T03:03:48.373Z",
+          "evidence_level": "L3",
+          "payout_receipt_element": {
+            "ref": "PAY-20261118-6f1e6bf387/FAST-20261118-0119",
+            "amount": "2500.00",
+            "currency": "USD",
+            "paidAt": "2026-11-18T03:03:48.373Z",
+            "local_amount": "3337.50",
+            "local_currency": "SGD",
+            "local_rate_pair": "USD/SGD",
+            "local_rate": "1.3350",
+            "quote_ref": "QT-edf6ebec-4d3a",
+            "evidence_level": "L3",
+            "beneficiary_bank": "DBS",
+            "bank_reference": "FAST-20261118-0119",
+            "local_credit_confirmation": {
+              "payload": {
+                "bank": "SG-PAYBANK-001",
+                "reference": "FAST-20261118-0119",
+                "account": "SG-ACC-9",
+                "amount": "3337.50",
+                "currency": "SGD",
+                "credited_at": "2026-11-18T03:03:48.373Z"
+              },
+              "sig": {
+                "alg": "ES256",
+                "key_id": "SG-PAYBANK-001",
+                "issuer": "SG Payout Bank (FAST sim)",
+                "sig": "hOaEGcN9yGk0Qwxu1fdVwMu7aeArAyzHc8L809usxoGXBU7Ijz5UCn6jCLEWuqxkoajopprveGtwrYmkKb2lSw"
+              }
+            },
+            "digest": "f7a068837d0f1bd81baf70aaa88597d4ed7075ad01ccea91d7f407bcf97287c1",
+            "signature": {
+              "status": "VALID",
+              "keyId": "SG-BFI-001",
+              "algorithm": "ES256",
+              "issuer": "Triple-A profile BFI (sim)",
+              "trustLevel": "ATTESTED",
+              "value": "TpEvP9SaXqN_dDDA0r8xQHcTAJzt3pu4XPpUFoZ0gHVU6zfcjPFErHmW2cmnIIrIrOk4Rt8VBjHe4U6ZQokOUA"
+            }
+          }
+        },
+        "sig": {
+          "alg": "ES256",
+          "key_id": "SG-BFI-001",
+          "issuer": "Triple-A profile BFI (sim)",
+          "sig": "wQZbmcSBdU8XJZhkO-iT0_veo2T-pBmb1JLFgKtBw6UWGsQ6uq9XVXXzECxMQHFHb3a6NKewtaG_zlwXM0zbpw"
+        },
+        "at": "2026-11-18T03:03:48.396Z"
+      },
+      {
+        "seq": 11,
+        "type": "SETTLEMENT_RECONCILED",
+        "issuer": "STONEHASH",
+        "payload": {
+          "payment_id": "PAY-20261118-6f1e6bf387",
+          "policy_version": "remit-corridor-v1",
+          "policy_digest": "a49dbfdc490b006be8f0eb5793830de0a289158ce8a5bc0e86e062440e8c886f",
+          "pass": true,
+          "axes": {
+            "integrity": "VALID",
+            "issuer": "VALID",
+            "matching": "MATCH",
+            "completeness": "COMPLETE",
+            "regulatoryMapping": "REVIEW_REQUIRED",
+            "businessFinality": "DEMO_ONLY"
+          },
+          "amounts": {
+            "collected": "VND 64084500",
+            "settled": "USDC 2500.00",
+            "paid": "SGD 3337.50"
+          },
+          "reconciled_at": "2026-11-18T03:03:48.417Z"
+        },
+        "sig": {
+          "alg": "ES256",
+          "key_id": "STONEHASH-SIGN-62b62710",
+          "issuer": "STONEHASH",
+          "sig": "9uuyCSvHYCayNIzoQIlawZz6SmnzNiczBc0kYl5fch4Bcu30Z4xpwLVnDBx6eU2tmPxhDOUv2kiuPsED2KQmFA"
+        },
+        "at": "2026-11-18T03:03:48.417Z"
+      }
+    ],
+    "evidence": {
+      "schemaVersion": "settlement-evidence/0.1",
+      "scenario": "remit · VN→SG · PAY-20261118-6f1e6bf387",
+      "settlementId": "PAY-20261118-6f1e6bf387",
+      "dataMode": "SYNTHETIC",
+      "notRealPayment": true,
+      "jurisdiction": {
+        "from": "VN",
+        "to": "SG"
+      },
+      "purpose": "Import trade payment under quote QT-edf6ebec-4d3a",
+      "elements": {
+        "chainTransfer": {
+          "chain": "eip155:31337",
+          "asset": "USDC",
+          "amount": "2500.00",
+          "currency": "USDC",
+          "fromAddress": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+          "toAddress": "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
+          "txRef": "0x3303408747a3bdee364caef1aff4843d9062bdc1c6fcf16855b51f18232c0710",
+          "settlementIdMemo": "PAY-20261118-6f1e6bf387",
+          "confirmations": 1,
+          "observedAt": "2026-11-18T03:03:48.308Z",
+          "digest": "5186010a41a10193a415699566874924285628d4198fbc962dfcbbd5f125b771",
+          "signature": {
+            "status": "VALID",
+            "keyId": "SETTLE-ENTITY-001",
+            "algorithm": "ES256",
+            "issuer": "Licensed Settlement Entity (sim)",
+            "trustLevel": "ATTESTED",
+            "value": "gm6ybPHoGKD0qxmsl290DXb1N4ZCuC8GVSnHwcUDw-9L4oqWOXYM1lZCKvv88L-KBorSCN47xriNybwyKpBUcw",
+            "checked": true
+          },
+          "digestVerified": true
+        },
+        "payoutReceipts": [
+          {
+            "ref": "PAY-20261118-6f1e6bf387/FAST-20261118-0119",
+            "amount": "2500.00",
+            "currency": "USD",
+            "paidAt": "2026-11-18T03:03:48.373Z",
+            "local_amount": "3337.50",
+            "local_currency": "SGD",
+            "local_rate_pair": "USD/SGD",
+            "local_rate": "1.3350",
+            "quote_ref": "QT-edf6ebec-4d3a",
+            "evidence_level": "L3",
+            "beneficiary_bank": "DBS",
+            "bank_reference": "FAST-20261118-0119",
+            "local_credit_confirmation": {
+              "payload": {
+                "bank": "SG-PAYBANK-001",
+                "reference": "FAST-20261118-0119",
+                "account": "SG-ACC-9",
+                "amount": "3337.50",
+                "currency": "SGD",
+                "credited_at": "2026-11-18T03:03:48.373Z"
+              },
+              "sig": {
+                "alg": "ES256",
+                "key_id": "SG-PAYBANK-001",
+                "issuer": "SG Payout Bank (FAST sim)",
+                "sig": "hOaEGcN9yGk0Qwxu1fdVwMu7aeArAyzHc8L809usxoGXBU7Ijz5UCn6jCLEWuqxkoajopprveGtwrYmkKb2lSw"
+              }
+            },
+            "digest": "f7a068837d0f1bd81baf70aaa88597d4ed7075ad01ccea91d7f407bcf97287c1",
+            "signature": {
+              "status": "VALID",
+              "keyId": "SG-BFI-001",
+              "algorithm": "ES256",
+              "issuer": "Triple-A profile BFI (sim)",
+              "trustLevel": "ATTESTED",
+              "value": "TpEvP9SaXqN_dDDA0r8xQHcTAJzt3pu4XPpUFoZ0gHVU6zfcjPFErHmW2cmnIIrIrOk4Rt8VBjHe4U6ZQokOUA",
+              "checked": true
+            },
+            "digestVerified": true
+          }
+        ],
+        "bankInstruction": {
+          "ref": "PAY-20261118-6f1e6bf387",
+          "amount": "2500.00",
+          "currency": "USD",
+          "debtor": "Saigon Import Co., Ltd.",
+          "creditor": "Lion City Exports Pte. Ltd.",
+          "approvedAt": "2026-11-18T03:03:48.052Z",
+          "iso20022Fields": [
+            "Dbtr",
+            "Cdtr",
+            "InstdAmt",
+            "Ccy",
+            "RmtInf",
+            "INV-2026-0458"
+          ],
+          "digest": "a2c1c27e524b9b13538640c3fd51125e8199a6c123f57caae922a837e307281a",
+          "signature": {
+            "status": "VALID",
+            "keyId": "VN-BANK-34897F",
+            "algorithm": "ES256",
+            "issuer": "Java SDK Check Bank",
+            "trustLevel": "ATTESTED",
+            "value": "3KnFmlRoniN67R0H4nZ2emPDPzFs__hl6ZriTWxYpj2_PbTFSnLoYTtt5GLiVYdxjFIXbIk0YAw4H7LnGwS7Dw",
+            "checked": true
+          },
+          "digestVerified": true
+        },
+        "commercialDocs": {
+          "invoiceRef": "INV-2026-0458",
+          "amount": "2500.00",
+          "currency": "USD",
+          "buyer": "Saigon Import Co., Ltd.",
+          "seller": "Lion City Exports Pte. Ltd.",
+          "attached": [
+            "invoice"
+          ],
+          "citedOnly": [],
+          "digest": "3f2fdfb0cf034f6603fdc43490c39e784932b248c82e837822a40d2679482170",
+          "signature": {
+            "status": "VALID",
+            "keyId": "VN-BANK-34897F",
+            "algorithm": "ES256",
+            "issuer": "Java SDK Check Bank",
+            "trustLevel": "ATTESTED",
+            "value": "Agc_iTg_qg8RfOWx4pGsY4LCqe1KjUxTbMYc4y_5rJjGWuePvzeft0u-y7CPZsQylH99W1Pz3mOvVj4at5jX6A",
+            "checked": true
+          },
+          "digestVerified": true
+        },
+        "travelRule": {
+          "protocol": "IVMS101/JWE",
+          "ivms101Digest": "8c76f2a546d111d924168b5c80544969a0076dcf7e82bafc14026bf1606b1596",
+          "originatingVasp": "SETTLE-ENTITY-001",
+          "beneficiaryVasp": "SG-BFI-001",
+          "approvalStatus": "APPROVED",
+          "approvalDigest": "249bf2d66a6d5aac73d39ee901c2b284ed2f73b86daeedc5a1d526ce68e97b1a",
+          "approvedAt": "2026-11-18T03:03:48.268Z",
+          "approvedBeneficiaryAddress": "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
+          "digest": "95179724d43abda666145a365f6417de87b5e992ffc6405312245f48d785a502",
+          "signature": {
+            "status": "VALID",
+            "keyId": "SG-BFI-001",
+            "algorithm": "ES256",
+            "issuer": "Triple-A profile BFI (sim)",
+            "trustLevel": "ATTESTED",
+            "value": "OIFvL5NE6SE6I94wtdxJNNQHRbsy677IJ94fhxaJ-ljCiBTgD3fHkDy7ZWBVOxkSePqWoO6zlKDb2DnfPgr3Dg",
+            "checked": true
+          },
+          "digestVerified": true
+        },
+        "bankApproval": {
+          "approvalRef": "APPR-PAY-20261118-6f1e6bf387",
+          "regulatorReportRef": "SDK-DEMO",
+          "approvedByRole": "FX Compliance Officer",
+          "approvedAt": "2026-11-18T03:03:48.052Z",
+          "fxQuote": {
+            "pair": "USD/VND",
+            "rate": "25380",
+            "quotedAt": "2026-11-18T03:03:48.024Z",
+            "validUntil": "2026-11-18T03:13:48.024Z"
+          },
+          "digest": "116057b0367ba511fdc5d6d88d158e008c77d8d1d7a092af07dda26df2e7f696",
+          "signature": {
+            "status": "VALID",
+            "keyId": "VN-BANK-34897F",
+            "algorithm": "ES256",
+            "issuer": "Java SDK Check Bank",
+            "trustLevel": "ATTESTED",
+            "value": "Th8WeXaIYy-e4Y_-vymOD_qIuwKTm5T_LDOH7Hl1Ihgh9QIgHilhRfvQOlLZsAWOU5EK5m6w6diyxIL22L-Z-Q",
+            "checked": true
+          },
+          "digestVerified": true
+        }
+      }
+    },
+    "policy": {
+      "policyVersion": "remit-corridor-v1",
+      "currencies": [
+        "USD",
+        "USDC"
+      ],
+      "unitOfAccountGroups": [
+        [
+          "USD",
+          "USDC"
+        ]
+      ],
+      "amountTolerance": "0.00",
+      "amountToleranceBps": 0,
+      "fxReference": "STONEHASH-QUOTE",
+      "settlementWindow": "P2D",
+      "fees": {
+        "deductible": false,
+        "maxBps": 0
+      },
+      "splitPayments": {
+        "allowed": false,
+        "aggregate": false
+      },
+      "partyIDMatch": "normalized",
+      "sourceTrustLevel": "ATTESTED",
+      "requiredElements": [
+        "chainTransfer",
+        "payoutReceipts",
+        "bankInstruction",
+        "commercialDocs",
+        "travelRule",
+        "bankApproval"
+      ],
+      "signatureRequiredElements": [
+        "payoutReceipts",
+        "bankInstruction",
+        "commercialDocs",
+        "travelRule",
+        "bankApproval",
+        "chainTransfer"
+      ],
+      "regulatoryFields": [
+        "originator",
+        "beneficiary",
+        "amount",
+        "currency",
+        "purpose",
+        "jurisdictionFrom",
+        "jurisdictionTo",
+        "chainTxRef",
+        "originatorAddress",
+        "beneficiaryAddress",
+        "invoiceRef",
+        "payoutRef",
+        "iso20022"
+      ],
+      "requireTravelRulePreflight": true,
+      "enforceFxQuoteWindow": true,
+      "settlementIdRequiredIn": [
+        "bankInstruction",
+        "chainTransfer",
+        "payoutReceipts",
+        "bankApproval"
+      ]
+    },
+    "verdict": {
+      "policyVersion": "remit-corridor-v1",
+      "policyDigest": "a49dbfdc490b006be8f0eb5793830de0a289158ce8a5bc0e86e062440e8c886f",
+      "scenario": "remit · VN→SG · PAY-20261118-6f1e6bf387",
+      "dataMode": "SYNTHETIC",
+      "axes": {
+        "integrity": {
+          "state": "VALID",
+          "findings": []
+        },
+        "issuer": {
+          "state": "VALID",
+          "findings": []
+        },
+        "matching": {
+          "state": "MATCH",
+          "findings": []
+        },
+        "completeness": {
+          "state": "COMPLETE",
+          "findings": []
+        },
+        "regulatoryMapping": {
+          "state": "REVIEW_REQUIRED",
+          "findings": [
+            {
+              "axis": "regulatoryMapping",
+              "code": "SYNTHETIC_DATA",
+              "severity": "warning",
+              "detail": "this evidence is synthetic, so field coverage cannot stand in for a real submission"
+            }
+          ]
+        },
+        "businessFinality": {
+          "state": "DEMO_ONLY",
+          "findings": [
+            {
+              "axis": "businessFinality",
+              "code": "DEMO_ONLY",
+              "severity": "warning",
+              "detail": "no funds moved: this is synthetic evidence for demonstration"
+            }
+          ]
+        }
+      },
+      "findings": [
+        {
+          "axis": "regulatoryMapping",
+          "code": "SYNTHETIC_DATA",
+          "severity": "warning",
+          "detail": "this evidence is synthetic, so field coverage cannot stand in for a real submission"
+        },
+        {
+          "axis": "businessFinality",
+          "code": "DEMO_ONLY",
+          "severity": "warning",
+          "detail": "no funds moved: this is synthetic evidence for demonstration"
+        }
+      ],
+      "manualReviewRequired": true,
+      "regulatoryDecision": "NOT_EVALUATED"
+    },
+    "trust_registry": {
+      "taken_at": "2026-11-18T03:03:48.443Z",
+      "institutions": [
+        {
+          "id": "STONEHASH",
+          "role": "STONEHASH",
+          "name": "StoneHash (platform)",
+          "country": null,
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAECCW6zLd/kMKyJv7Wlp+tnc6zeeMonpnHOJqT6RAo0u1Wn19ng38lJ8uIglcNMOUjG+WAYmgj493k7VBeVxa6xw==",
+          "authority": [
+            "REQUEST_ACCEPTED",
+            "BANK_AUTHORIZATION_VERIFIED",
+            "TRAVEL_RULE_SENT",
+            "SETTLEMENT_INSTRUCTED",
+            "SETTLEMENT_RECONCILED",
+            "EVIDENCE_COMMITTED",
+            "EVIDENCE_ANCHORED",
+            "webhook"
+          ]
+        },
+        {
+          "id": "VN-BANK-001",
+          "role": "COLLECTION_BANK",
+          "name": "Demo Commercial Bank (VN)",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAELMm29NiNWKKdaS68zrdIryd1IHsQ46zoQksfQDvAxU2lVitmfFyZlYVlAfJpP6ug6UYIZvDm7Uq3jBm1hDWotQ==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "SG-BFI-001",
+          "role": "BENEFICIARY_FI",
+          "name": "Triple-A profile BFI (sim)",
+          "country": "SG",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEQO/d7PlL9Alh5Sfc0r91sj61UUEr5Cl85dwo1AtFezoEdYvnfc497ug0C0U0HLD0fryGTwFLu4pYDaiMHh/m+Q==",
+          "authority": [
+            "TRAVEL_RULE_RECEIVED",
+            "PAYOUT_ACCEPTED",
+            "USDC_RECEIVED",
+            "PAYOUT_SUBMITTED",
+            "PAYOUT_COMPLETED",
+            "travelRule",
+            "payoutReceipts"
+          ],
+          "encryption_jwk": {
+            "kty": "EC",
+            "x": "YIaY-akbq1HiBmXVqRLJrJWjOrSPfF4FH2qctdrsHoo",
+            "y": "FanNl408d_vZ6LZBrIWRO9BN6dlfWlWA7AjDAR9y_nk",
+            "crv": "P-256"
+          }
+        },
+        {
+          "id": "SG-PAYBANK-001",
+          "role": "LOCAL_PAYOUT_BANK",
+          "name": "SG Payout Bank (FAST sim)",
+          "country": "SG",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErUR18q+Mt2B1BNjKpVMRxu33k6UYnI73dQBXTIC4N+LkuFs17ex26LgNpKprL1rcbNJTekX3QochnIszMlWfLA==",
+          "authority": [
+            "LOCAL_CREDIT_CONFIRMED"
+          ]
+        },
+        {
+          "id": "SETTLE-ENTITY-001",
+          "role": "SETTLEMENT_ENTITY",
+          "name": "Licensed Settlement Entity (sim)",
+          "country": "SG",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIfPRtsHatDoevkOC60CTALbs4NzbWTLddJvkvCdMre4yFYqD4v3D2TzjU2gQ+CIYToabA9KSyQKXvVd09zwZBw==",
+          "authority": [
+            "USDC_TRANSFER_CONFIRMED",
+            "chainTransfer"
+          ]
+        },
+        {
+          "id": "KY-EX-87402B",
+          "role": "EXCHANGE",
+          "name": "OrbitX Exchange (sim)",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7Z3llm6L0G06qQPi3sO4lN+I3teB248kVYzxZg+dt0afFIGt4aDaec0cN8Q0lMhBjMozcvQG4V3cEHP+9HSkIw==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "VN-BANK-F2A208",
+          "role": "COLLECTION_BANK",
+          "name": "Hanbit Bank (sim)",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAENww5P+YtEcxpzW0afwk7K5ttvhXXW/mFbR5X8fjfBzHwJ4yv2PfTbsOhtEIfeedP79avuughLjlEJxUlOoiUiQ==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "KY-EX-227D31",
+          "role": "EXCHANGE",
+          "name": "test1",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEI262Tf6rdCi3W66iSxl6niP5EWvOhDGOmxUvtT8rzyslBkOYmeDn583HnbpaPKisriwjLvz82R1Q0paViRHIgQ==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "VN-BANK-C04470",
+          "role": "COLLECTION_BANK",
+          "name": "ㄴㅇㄹㅇㄴ",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEz92qcyBRgpbuxH0JWGkCkUOzBOjPVNiH3v8tjPUHZJ+IP09V/KZfjWiqN21KB8G6jxJ2zxTleOAC8/+FiX0p3Q==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "EX-DEMO-001",
+          "role": "EXCHANGE",
+          "name": "Demo Exchange (sim)",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE1ct+jG6Pt7BFvndsXC5hdlQgtUGUhGaS0VGJyhOA1C8D3AMH4Fb5hso8GWoeUQF2khmtp0lsDqugiHhfGAQIOA==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-04E6C0",
+          "role": "EXCHANGE",
+          "name": "Dash E2E Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE9EdFMp90A2bInZu9NhZBHSFFVGMPnRnyoNKwEIDywI7lL+KVqL5gRYGM5qrz4DcXYWJ7Nw7yZiLb8dhGl6pnFA==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-444FB5",
+          "role": "EXCHANGE",
+          "name": "test",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE8KRFkYojSnrJAqG7CD1307RP4sdPvE4JhWBhL8B5aOY2iFL41o1mQTbuC+0NHFuk7YBMftUphWAhTwVWU0IRRA==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-E459B8",
+          "role": "EXCHANGE",
+          "name": "Seed Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEtThjdACNMlC56L/8BaEvDVvd9Cgo01wmU3TbF/0MKGIrQ9GN1bJxHi6IWeAIGm0TMpVth58rz0iZRx2b4Ktpbg==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-02BC48",
+          "role": "EXCHANGE",
+          "name": "Console Check Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEwYZKfy6HfosmqdMQjOGrcnr/sP5ztmfXbkFusQHmp/Etdmt8kWUeQTRvhK+eDXunJfQBHeonvpa0qtSZs7r8Sw==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-0588E0",
+          "role": "EXCHANGE",
+          "name": "Console Check Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEwxLUpyBGeC6OJny0TQDxh5kc3KXXvYr7Morx0uz1NoHifdbJavncBgRVsGx6zcYu6/lVLD8sxi4fma9imeDDzg==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-811FA8",
+          "role": "EXCHANGE",
+          "name": "File Only Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEI/+sRIcUxu7gAxE6RhHnutkiBD6NWnOOHDwMqlHy+mHPW2N7PI5Bf4bml3oS6Eku216vdUa4GLuFH4GT0djfiw==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "VN-BANK-336665",
+          "role": "COLLECTION_BANK",
+          "name": "Journey Test Bank (VN)",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyXvCMPhEmAu4Gp/1UuKaVOOMtAEXPxFu6GZDibeqlwMRUoE/j4qU1gYRDGiQckQKQ+9RDenZKayEoeyVhkxh4A==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "VN-BANK-EBDEB1",
+          "role": "COLLECTION_BANK",
+          "name": "Journey UX Bank",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEVmKNznPjK0brzz0mqP2khQf8cMmV4GNXOidG19lSKnKfrd93LLodMMusdw8/Ubwwel3OogwjZLqtGDekPXHDqQ==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "VN-BANK-31EC34",
+          "role": "COLLECTION_BANK",
+          "name": "Journey Console Bank",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEH0AFSugh1iAWKivx9h9l9FdwRcnJw1GWzM6uQkZPq2SNIglyqf+uw8mPiEeYovnPdZMzmTvOi8Ws1Gck3uA0SQ==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "KY-EX-3E88D4",
+          "role": "EXCHANGE",
+          "name": "Four Shapes Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAELIko7Bx0SPFVbAmnPkX8Xhw4/C7HpUXIFzZ4s5Qc4md2FwKihfErtj5al9UTe065vm66kKzS0v6LeosUN/IPPQ==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-B77014",
+          "role": "EXCHANGE",
+          "name": "Four Shapes Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDNjMKjxn60hetuKWy9EeJsL5uWDdKhy8b1cwHAh9jSWlnBTlyXhmgeYfulmiLZoTIZHKbYRuTh1a5+YIO8n7NA==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-6369E2",
+          "role": "EXCHANGE",
+          "name": "Four Shapes Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEoJMpdH2vAqpAa0cA4ce+B8Iipx293bwYk19lm/z4O5tRZaEEqsp3Bp/VYmKiRjp541afHzCyR7X8ArctAANRjA==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "VN-BANK-306A3C",
+          "role": "COLLECTION_BANK",
+          "name": "Journey Final Bank",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE3aOWGN0CGSk122+vjQopfSSW/SmVZjN57G5xMQiSldBfaTvGXJ30iPJW1wxpBYQ6VJRvsyDBUXBgf7Q3osH00A==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "VN-BANK-159BAA",
+          "role": "COLLECTION_BANK",
+          "name": "Journey Final Bank",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEwq45O4Mc2gJLO4LCAz+lRWuhlklANMhz2H06XtIssCMuJEgk1C+zjlo42bnOzf8ULg9QaIEGSuZcK9Mi0GaYLQ==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "VN-BANK-03BCE7",
+          "role": "COLLECTION_BANK",
+          "name": "Journey Final Bank",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEdHfiEIGBTvJ9XbH6tp4uIAYSBfjA7M0GvXMGciY23Yjl/1flMOCjzmK1ZJBdFE0tNfquwD+0Ocluq4MEZm8p6Q==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "VN-BANK-6E1CF2",
+          "role": "COLLECTION_BANK",
+          "name": "Journey Final Bank",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEWp/01elG04K9m0A5OPI+VGMPXHPrU5YeMG/RIRvzrO0cRdQe6xKxjfbIFVKQ15Y6c4CVs9fBobXQH1ssbKDgfg==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "VN-BANK-F991B0",
+          "role": "COLLECTION_BANK",
+          "name": "Journey Final Bank",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEEL7UDPUwqWkhTbjXpANiN9YGc+1PlN4Fmvdung3GWKOOZZ3BCQAwZZ6dshxOH15L5/4S7o5mVoF3HbDydayGAA==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "VN-BANK-264B46",
+          "role": "COLLECTION_BANK",
+          "name": "Journey Final Bank",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE47tvyNmB6s4imJ0Sz4tdzeE7GmYFjuHDuvaQLOhcVWtLU1jbSH29lGLe+VOjbwVsBx1v5pekXLZX2nk/6FboFw==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "VN-BANK-3BD270",
+          "role": "COLLECTION_BANK",
+          "name": "Journey Final Bank",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEvg6EhmGfkHxuFNOFoVWA+Dx1xhFMYemJcaeinj6QcrjJ1V698bBSVnHSDEIoB+Ia0UFMPh4NKsXBU4dnqfgFqA==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "KY-EX-D8E23E",
+          "role": "EXCHANGE",
+          "name": "File Only Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEqbkWGwZYgbMhX3X1T72uoeEDL3tkIvn5J6b3wfIy4aVBtS7UF6MlImoQzJiCX5XkIGW+qer79M8YrSm715oHew==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "VN-BANK-F1A93E",
+          "role": "COLLECTION_BANK",
+          "name": "Journey Merge Bank",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE3dtfGJV6w8nWzU0eVqKPa+vQl8CAntVubKGqQnlZxP521Hua6TNutN6U6Bt2sI6gS4a8AfUyh+I9hqEjoUavkQ==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "KY-EX-3E738A",
+          "role": "EXCHANGE",
+          "name": "Two Files Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEM85hTSDadfowG4PdrB8ZVoA1kwOzq9OaVaJug4MVZCqDyUr4+9rjbfA4jErbaphsyEn9y0ttl7H1O/YU/MBndQ==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "VN-BANK-FB0C61",
+          "role": "COLLECTION_BANK",
+          "name": "Review Integrator Bank",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4cnpqXTWzsNlxyY4O06BmoOz85ia3EoyzTM3zvmlCGbvkbN8wS9wqGGd/5nS7ZQcDFQJnGxArKk2oliZ01C7Pw==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "KY-EX-E4D4F6",
+          "role": "EXCHANGE",
+          "name": "Two Files Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEqpShQQgIPIcgn/ZIyAUIYLkQYHuwfC04QVzpuhYqEfXpWqvrdq45wAaMVQWG30tfYokzulfHQ0RAYBj98ugeuQ==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-8F6619",
+          "role": "EXCHANGE",
+          "name": "Two Files Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEsb0B2yq8WRADBKpTS+d26/GoytUn+YUGowKrQfEYkiaWI96N0sqgl0criW83JPtQk8xy7pejxFfOxmvNVqym6A==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-2685C6",
+          "role": "EXCHANGE",
+          "name": "Two Files Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEvENgwHHoBxd7N+70iR4+t85TNQ5mcCo3F6pjtucjc1Dr1ndLFZ8+87SDwvsTQkcle93XVD9NSGtBhoTnhev/ZA==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-1CA38C",
+          "role": "EXCHANGE",
+          "name": "Two Files Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEZQWcgx8d3eIeA45kf7mr1nxirXyP/dQPlr3n9ovIQDYzl828i4R468+WdwB25tvjEwUlts+GcAK06UFLWjqVbA==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-D9F082",
+          "role": "EXCHANGE",
+          "name": "File Only Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE42W0jlmKnRaDES0wHqt4Wo14sorr27FypSJcblYQL03BwV7FCBg3A5cTGXDbM/spbxcgOHSVP7ujjlkQvO45eA==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-2FBA58",
+          "role": "EXCHANGE",
+          "name": "Two Files Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEYOFhRxggBdeRoQb775rVTm+uyTdd1dxdlQCauLhqXMGPH/BalnMAwWCf9SmA5gUPnqv6DnfhLSHdzjBpblPTPA==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-F7D405",
+          "role": "EXCHANGE",
+          "name": "Two Files Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEvKC7VWuQPhy5op21sR8Jjhy0tkFXU/VGgeANZPpDxMDhvxIBMUCZYPrtUjp5igRFy1tpMXX4YSRZN0SZ56Dk+w==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-2765EF",
+          "role": "EXCHANGE",
+          "name": "Two Files Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEOTGngoLC+5yAzNDIyAsygHPCq82NgsJFbH0ii7XT81jrsi2YNrlXZIFMBQtH2JG6sOQC1/62tHPfGn1g2Lafgg==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-B2DC44",
+          "role": "EXCHANGE",
+          "name": "File Only Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEHjnCHSKiS212ThFj+XyQd4KbFwlM332wYF4JFsxdKan08W94ZfzAaU/JtiG5IZI0efZ8I1PFtsNyREHDwp3log==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-58A140",
+          "role": "EXCHANGE",
+          "name": "File Only Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE8AF/RahDTKO80QnPT0oPJ4YvSQjf2xqRVlbfwxhxwmNXAT6+WrjdfJnpZ+uRDlubyWrEVCGet+Vr2C4AdPrjzA==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-67EAF9",
+          "role": "EXCHANGE",
+          "name": "Two Files Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEZ34VyJO9cLmOXONI4FPv3gEyyJfmqBq1lfwP3HsA2r+OgnWe32/P0Ok65E3wF+iW9ITRf5W0uUi1/i+HQUy8JA==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "VN-BANK-15D508",
+          "role": "COLLECTION_BANK",
+          "name": "Journey Merge Bank",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE+OoJ+F/2LZD1MG/0V+38CyJZ/OxOTo/lDzOYh4U7rWsq1HzKgM9LIjDEK7V6R+m0RFNh0Mm1Ls8XL2Z2ygr91A==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "KY-EX-EF901A",
+          "role": "EXCHANGE",
+          "name": "Docs Check Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEVme7KlEXpST73vBVAl4U8Zc6QYhLxTfjNbZv7UPbqrAiRZfhBmXW2/EXshYGjfXkWATQrVgyBPK0uTedBVDjkA==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "VN-BANK-BBDC66",
+          "role": "COLLECTION_BANK",
+          "name": "Journey Merge Bank",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIU3koYwD13NqS2F0YNsQfPYTBdYKxLoER6PiIQUS3vhuf84XBSdGCN+j1LdvhabVLcvQckTmuzp+W8DzaLcPOA==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        },
+        {
+          "id": "KY-EX-C8B81A",
+          "role": "EXCHANGE",
+          "name": "Two Files Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE2Aryn6Ohyj0Qhp8Z/ZBEKp8JCv3SLxO7YPQaBVAQUPl8nKrUIrcyXSR2WFiR+thngu/TrlBS8AIfiI+Uakdh8w==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-1C25D8",
+          "role": "EXCHANGE",
+          "name": "Docs Check Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEcnq/s0xMeOMjoXTuMR4Qg58rw37G56BoEgIY4nUdc0WPSlQQY4wACNDOoTOYBnlfjZG5GmXfH0izpMaPrMjFmw==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "KY-EX-C77C76",
+          "role": "EXCHANGE",
+          "name": "Docs Check Exchange",
+          "country": "KY",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEAuwqm3CN9nCuG8Vg7cco2qdZcW4b82oLI4dQu649l4hawalCc1H5x+fDISK11BqZsIcUwMuDInVQ9IZFXbK8Dg==",
+          "authority": [
+            "POR_SNAPSHOT"
+          ]
+        },
+        {
+          "id": "VN-BANK-34897F",
+          "role": "COLLECTION_BANK",
+          "name": "Java SDK Check Bank",
+          "country": "VN",
+          "signing_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEczrU2PBv3HO1vrGRhT6HHSLHGDiytRiszefgh8qNH+I3p4BijmkB89NX4EImKitWWHHRNRGsVJtueV6wddljEA==",
+          "authority": [
+            "FIAT_FUNDS_RECEIVED",
+            "PAYMENT_RELEASE_AUTHORIZED",
+            "bankInstruction",
+            "bankApproval",
+            "commercialDocs"
+          ]
+        }
+      ]
+    },
+    "generated_at": "2026-11-18T03:03:48.444Z"
+  },
+  "commitment": {
+    "value": "5f24d3e4cf08cfbf77daf74826795233e0075c3882a7c8fb9af1c0f0f0bb536f",
+    "nonce": "8a32fed7daeaf210f43c561603cdc5151170c2ff90ddc9b32fe43fc031ae9586",
+    "domain": "STONEHASH-EVIDENCE-V1",
+    "how_to_verify": "SHA256(domain || nonce_bytes || JCS(package)) must equal value, and value is the anchored leaf"
+  },
+  "attestation": {
+    "id": "4238d0fb-847b-41da-8199-4ca9d9860a2d",
+    "status": "confirmed",
+    "bundle": {
+      "schema": "bitcert-proof-bundle/v1",
+      "bitcoin_network": "regtest",
+      "generated_at": "2026-11-18T03:04:36.237Z",
+      "record": {
+        "kind": "attestation",
+        "leaf_bytes": "5f24d3e4cf08cfbf77daf74826795233e0075c3882a7c8fb9af1c0f0f0bb536f",
+        "preimage": {
+          "scheme": "sha256-file",
+          "content_type": "application/json"
+        },
+        "descriptor": {
+          "attestation_id": "4238d0fb-847b-41da-8199-4ca9d9860a2d",
+          "batch_id": "487217ea-0b5f-4ba1-9578-270b5ce34883",
+          "kind": "remit-evidence",
+          "payment_id": "PAY-20261118-6f1e6bf387",
+          "schema": "stonehash.payment-evidence.v1"
+        }
+      },
+      "anchor": {
+        "reveal_txid": "f4043da7b43228f7c277508d4757d9d1a333b6c4d7fb56adad202aab3230c1cb",
+        "reveal_tx_hex": "02000000000102f0045dc9905bb24a77815841efc3dabd6a09ecb8929486c9d972d8c57fbbc0690100000000fdffffffe2f77886bf7c02173f77ad26efc1e3b58b1e2f5d6712039d3af4dabbd5fcd1620100000000fdffffff025fcd000000000000225120467eaaab8c9ee9dcebbc1f9d262c96dfd418fcc6a0cacdf352fbed776c53134a0000000000000000376a354243303101e53442c432db2230b5fda7e6ae34a4886b907256b91bceefcaea0bafc42158df487217ea0b5f4ba19578270b5ce34883014060a3bf0bfa86da7b10a2aaa656e6742730a7e7ca5aa921cbaea41a1b030c6d2eafd9bfa0cb5f9957d9ba45a700a1159a944c8c00d8f0a4c35a5f352e87585113014060a428a4a5e53f75a319abcf2843bce9d5e8a7a9bea53372c67526a00e2a9bbd06d055efcff839dff14eb6f6438c13e56b1c8b91bc57a1479ed3712da1c51fc200000000",
+        "op_return_payload_hex": "4243303101e53442c432db2230b5fda7e6ae34a4886b907256b91bceefcaea0bafc42158df487217ea0b5f4ba19578270b5ce34883",
+        "confirmed": {
+          "block_height": 10118,
+          "block_hash": "7cac7082403d09714841788676529e604579b17b94add7e941681fe772cade73",
+          "confirmations": 1
+        }
+      },
+      "merkle": {
+        "leaf_index": 0,
+        "root": "e53442c432db2230b5fda7e6ae34a4886b907256b91bceefcaea0bafc42158df",
+        "siblings": [],
+        "directions": []
+      }
+    }
+  }
+}

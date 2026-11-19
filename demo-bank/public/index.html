@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>데모은행 — 전자증빙 등록 시스템 (가상 데모)</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="logo">데모은행</span>
+    <span class="divider"></span>
+    <span class="system">전자증빙 등록 시스템</span>
+  </div>
+  <nav class="topnav" style="display:flex;gap:6px;margin-left:8px;flex:1">
+    <a href="/" style="color:#fff;background:rgba(255,255,255,.14);text-decoration:none;font-size:13px;padding:5px 12px;border-radius:6px">전자증빙 등록</a>
+    <a href="/remit.html" style="color:rgba(255,255,255,.75);text-decoration:none;font-size:13px;padding:5px 12px;border-radius:6px">국경간 송금</a>
+  </nav>
+  <span class="demo-badge">가상 데모 · StoneHash Attest 연동 검증용</span>
+</header>
+
+<main class="layout">
+  <aside class="side">
+    <section class="card">
+      <h2>서류 등록</h2>
+      <p class="hint">계약서·전표 등 증빙 서류를 등록하면 해시 생성 → HSM 전자서명 →
+      체인 기록 → 증빙 파일 수령까지 자동으로 진행됩니다.</p>
+      <label class="drop" id="drop">
+        <input type="file" id="file" hidden>
+        <span id="dropText">파일을 끌어다 놓거나 클릭하여 선택</span>
+      </label>
+      <button id="submit" class="primary" disabled>등록 및 체인 기록</button>
+      <p class="note">원본 파일은 <b>이 은행 서버에만</b> 저장됩니다. 외부로는
+      SHA-256 해시와 전자서명만 전송됩니다.</p>
+    </section>
+
+    <section class="card">
+      <h2>연동 정보</h2>
+      <dl class="kv" id="config">
+        <dt>상태</dt><dd>불러오는 중…</dd>
+      </dl>
+      <div class="links" id="links"></div>
+    </section>
+  </aside>
+
+  <section class="maincol">
+    <div class="listhead">
+      <h2>처리 내역</h2>
+      <span id="count" class="muted"></span>
+    </div>
+    <div id="records"></div>
+    <p id="empty" class="empty" hidden>아직 등록된 서류가 없습니다. 왼쪽에서 첫 서류를 등록해 보세요.</p>
+  </section>
+</main>
+
+<footer class="foot">
+  본 화면은 <b>가상의 은행 업무시스템</b>입니다. 실제 금융기관과 무관하며,
+  StoneHash Attest API·서명 도구 연동을 검증하기 위한 데모입니다.
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>

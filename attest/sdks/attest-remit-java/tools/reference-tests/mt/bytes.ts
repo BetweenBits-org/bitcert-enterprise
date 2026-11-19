@@ -1,0 +1,21 @@
+import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { parseSwiftMessages } from '../../../../../packages/attest-remit/src/index.ts';
+const sample = readFileSync(fileURLToPath(new URL('../../../../../packages/attest-remit/samples/mt103.sample.txt', import.meta.url)));
+const golden = JSON.parse(readFileSync(fileURLToPath(new URL('../../../src/test/resources/golden/parse.json', import.meta.url)), 'utf8'));
+const g = Buffer.from(golden.cases.find((c: { name: string }) => c.name === 'sample/mt103-free-format').input.base64, 'base64');
+console.log('golden sample == samples/mt103.sample.txt', g.equals(sample));
+const latin = Buffer.from(sample.toString('latin1').replace('HO CHI MINH CITY', 'HÔ CHI MINH CITY'), 'latin1');
+const p = parseSwiftMessages(latin)[0]!;
+console.log('latin1', JSON.stringify(p.debtor), p.digest === createHash('sha256').update(latin).digest('hex'));
+const utf8 = Buffer.from(sample.toString('latin1').replace('HO CHI MINH CITY', 'HÔ CHI MINH CITY'), 'utf8');
+console.log('utf8', JSON.stringify(parseSwiftMessages(utf8)[0]!.debtor));
+const bom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), sample]);
+const pb = parseSwiftMessages(bom)[0]!;
+console.log('bom', pb.instructionId, pb.uetr, pb.digest === createHash('sha256').update(bom).digest('hex'));
+const bomBare = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(':20:REF1\n:23B:CRED\n:32A:260105USD100,5\n:50K:A CO\n:59:/ACC9\nB LTD\n:71A:BEN\n')]);
+console.log('bom-bare', parseSwiftMessages(bomBare)[0]!.instructionId);
+// a C1 control in the latin1 fallback: 0x85 is U+0085
+const nel = Buffer.from(sample.toString('latin1').replace('HO CHI MINH CITY', 'HO CHI MINH CITY\u0085ÿ'), 'latin1');
+console.log('latin1-nel', JSON.stringify(parseSwiftMessages(nel)[0]!.debtor.addressLines).replace(/[\u0080-￿]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')));

@@ -1,0 +1,892 @@
+{
+ "layer": "Proof of reserves, rules and evidence (CPU- and memory-bound work)",
+ "summary": "This layer covers the CPU- and memory-heavy work around proof of reserves (PoR), the settlement rules engine, the evidence archive and the independent verifier. PoR is built so the platform never handles the ledger. The exchange builds the Merkle sum tree, either with the TypeScript SDK on its own servers or in the sandbox console page (up to 100k accounts), and sends only a signed statement: root, per-asset totals and leaf count. The server checks one ES256 signature, stores one por_snapshots row (about 1–60 KB, depending on the number of assets) and issues one attestation leaf, which goes through the normal batching. So the server's cost per snapshot is about 8 SQL statements plus auth, the same at 10 thousand or 10 million accounts. Only the optional spot check grows with N, as 8 × log2 N hashes. Per-user inclusion proofs are produced and served by the exchange and checked entirely in the user's browser. The platform's only per-verifier cost is an anonymous GET of the public snapshot material: 6 SELECTs, with no cache and no rate limit. That read is the PoR path most exposed to T3 bursts. The real limit for large exchanges is in the SDK. Ledger and tree are held in one Node process: measured 1M accounts × 3 assets took 61 s and 2.7 GB, and about 1.05M accounts fit the default heap. Issuing one customer's proof rebuilds the whole tree (37 s at 1M). Extrapolated, 10M accounts need roughly 27–31 GB and more than 10 minutes, and V8's 2^24 Map/Set limit caps the TS SDK near 16.7M accounts. The Go and Java SDKs are leaner but only build the v1 tree. Settlement reconcile and bundle are stateless pure functions, but they run all CPU work on the single event loop: JSON, canonicalisation, pure-JS SHA-256 and CRC-32, and the PDF. P-256 verifies go to the 4-thread libuv pool. There is no per-key rate limit, and each call writes one audit row. With typical inputs that is about 1 ms (reconcile) to a few ms (bundle), so T2 is comfortable and T3 needs several processes. In the remit rail, the same engine rebuilds its issuer keyring from the full institutions table on every payment. The verification packages make no network calls.",
+ "components": [
+  {
+   "name": "PoR platform API",
+   "role": "Takes signed snapshot statements and runs the optional 8-leaf spot check. Anchors the commitment through the ordinary attestation pipeline and measures declared reserves. Serves status (authenticated) and verification material (public).",
+   "files": [
+    "attest/apps/core/src/por/routes.ts",
+    "attest/apps/core/src/por/reserves.ts",
+    "attest/apps/core/src/remit/registry.ts (requirePor, institution keys)",
+    "attest/apps/core/src/remit/sign.ts (verifyEvent)",
+    "attest/apps/core/src/db.ts:653-673 (por_snapshots)"
+   ],
+   "tech": "Node 22 TS on node:http, MySQL table por_snapshots, node:crypto ES256 verify, fetch eth_call to anvil",
+   "notes": "Registered only when the Remit rail is enabled (http/routes.ts:140-164). No work grows with account count except the spot check."
+  },
+  {
+   "name": "PoR exchange SDK (TypeScript reference)",
+   "role": "Runs at the exchange. Reads the balance export (CSV long/wide/sheet or JSON), builds the Merkle sum tree, signs and submits the statement, and writes one private proof file (seed included). Later rebuilds the tree from the export plus the proof file to issue per-customer proofs.",
+   "files": [
+    "attest/packages/attest-por/src/anchor.ts",
+    "attest/packages/attest-por/src/intake.ts",
+    "attest/packages/attest-por/src/ledger.ts",
+    "attest/packages/attest-por/src/csv.ts",
+    "attest/packages/attest-por/src/accounts-json.ts",
+    "attest/packages/attest-por/src/sumtree.ts",
+    "attest/packages/attest-por/src/snapshot.ts",
+    "attest/packages/attest-por/src/snapshot-proof.ts",
+    "attest/packages/attest-por/src/store.ts",
+    "attest/packages/attest-por/src/client.ts",
+    "attest/packages/attest-por/src/sign.ts",
+    "attest/packages/attest-por/src/leaves.ts",
+    "attest/packages/attest-por/src/limits.ts",
+    "attest/packages/attest-por/src/portable.ts",
+    "attest/packages/attest-por/src/cli.ts"
+   ],
+   "tech": "Node ≥22.18 run from source with no dependencies. Hashing uses the verifier's pure-JS SHA-256 and JCS. Salts (HMAC) and ES256 use node:crypto.",
+   "notes": "Everything is held in memory and the tree build is synchronous. Default format is the sparse v2 tree (merkle-sum-sha256-v2). checkCapacity refuses ledgers too large for the V8 heap."
+  },
+  {
+   "name": "PoR SDKs in Go and Java",
+   "role": "Alternative exchange-side tree builders, conformance-tested against the reference vectors",
+   "files": [
+    "attest/sdks/attest-por-go/",
+    "attest/sdks/attest-por-java/",
+    "attest/sdks/attest-por-go/CONFORMANCE.md",
+    "attest/sdks/attest-por-java/CONFORMANCE.md",
+    "attest/sdks/attest-por-go/scripts/measure.sh",
+    "attest/sdks/attest-por-java/measure.sh"
+   ],
+   "tech": "Go 1.22, Java 11",
+   "notes": "Build the v1 dense tree only: 'merkle-sum-sha256-v2' appears nowhere under sdks/. Measured only up to 300k accounts. Owner paused SDK work on 11-17."
+  },
+  {
+   "name": "Console PoR screen (browser)",
+   "role": "Sandbox. Reads a picked balance file in the page, builds and signs the tree there with a per-session key, and submits only the statement. Can also rebuild from the balance file plus the proof file and download single-account proofs.",
+   "files": [
+    "attest/apps/console/src/por.ts",
+    "attest/apps/console/src/vendor/attest-por/",
+    "attest/apps/console/src/vendor/attest-verify/"
+   ],
+   "tech": "Browser TS bundle using the vendored SDK; pure-JS HMAC, SHA-256 and P-256 signing (portable.ts)",
+   "notes": "Capped at 100,000 accounts and 4,000,000 tree sums. Runs on the UI thread (about 7 s at 100k × 3 assets). Before each submit it registers its session key as institutions.console_spki."
+  },
+  {
+   "name": "Playground PoR verification page (browser)",
+   "role": "End user checks their inclusion proof against the published statement, exchange signature, commitment and Bitcoin bundle",
+   "files": [
+    "attest/apps/playground/src/por.ts",
+    "attest/apps/playground/src/vendor/attest-verify/"
+   ],
+   "tech": "Browser, pure-JS verifier",
+   "notes": "Its only API call is GET /v1/public/por/snapshots/:id. Static files come from the core process with cache-control: no-cache."
+  },
+  {
+   "name": "Independent verifier (attest-verify)",
+   "role": "Specification and verification: PoR sum-tree hashing and inclusion check, JCS, SHA-256, P-256 verify, proof-bundle verify, signed-statement verify",
+   "files": [
+    "attest/packages/attest-verify/src/merkle-sum.ts",
+    "attest/packages/attest-verify/src/sha256.ts",
+    "attest/packages/attest-verify/src/jcs.ts",
+    "attest/packages/attest-verify/src/bytes.ts",
+    "attest/packages/attest-verify/src/p256.ts",
+    "attest/packages/attest-verify/src/statement.ts",
+    "attest/packages/attest-verify/src/bundle.ts"
+   ],
+   "tech": "Synchronous TS with zero dependencies (pure-JS SHA-256, BigInt affine P-256)",
+   "notes": "The server uses only jcs, porSnapshotCommitment, verifyPorInclusion (spot check) and verifyStatement. verifyBundle runs only in browsers."
+  },
+  {
+   "name": "Rules engine (attest-rules)",
+   "role": "Six-axis settlement reconciliation. A separate pass verifies issuer signatures first.",
+   "files": [
+    "attest/packages/attest-rules/src/engine.ts",
+    "attest/packages/attest-rules/src/signature.ts",
+    "attest/packages/attest-rules/src/decimal.ts",
+    "attest/packages/attest-rules/src/policy.ts",
+    "attest/packages/attest-rules/src/demo-keys.ts",
+    "attest/packages/attest-rules/src/types.ts"
+   ],
+   "tech": "Pure TS with BigInt fixed-point decimals; WebCrypto ES256 verify with a cache of imported keys",
+   "notes": "Same code in the browser and on the server. Used by /v1/settlements/*, the console sandbox routes and remit reconcilePayment."
+  },
+  {
+   "name": "Evidence archive (attest-evidence)",
+   "role": "Builds a deterministic ZIP: evidence, canonical policy, verdict, source hashes, issuer signatures, a PDF report and a manifest with the SHA-256 of every member",
+   "files": [
+    "attest/packages/attest-evidence/src/bundle.ts",
+    "attest/packages/attest-evidence/src/zip.ts",
+    "attest/packages/attest-evidence/src/pdf.ts",
+    "attest/packages/attest-evidence/src/report.ts"
+   ],
+   "tech": "Hand-rolled ZIP (CompressionStream deflate-raw, pure-JS CRC-32) and text-only PDF 1.4",
+   "notes": "Built per request and never stored. No Zip64."
+  },
+  {
+   "name": "Settlement evidence endpoints",
+   "role": "POST /v1/settlements/reconcile returns the verdict. POST /v1/settlements/bundle returns the ZIP.",
+   "files": [
+    "attest/apps/core/src/http/evidence.ts",
+    "attest/apps/core/src/http/routes.ts:377-385"
+   ],
+   "tech": "node:http handlers behind API-key or console-session auth",
+   "notes": "Verify against DEMO_KEYRING only. 1 MiB body cap, no rate limit, one audit_log INSERT per call."
+  },
+  {
+   "name": "Issuer signing SDK and server check",
+   "role": "Customer-side ES256/RS256 statement signing, including HSM/KMS signers. The server re-verifies in issueSigned.",
+   "files": [
+    "attest/packages/attest-sign/src/index.ts",
+    "attest/packages/attest-sign/src/cli.ts",
+    "attest/apps/core/src/service.ts:325-347"
+   ],
+   "tech": "WebCrypto",
+   "notes": "The SDK makes no network calls. Server verification is importKey (not cached) plus verify on the libuv pool."
+  },
+  {
+   "name": "Remit use of the rules engine (cross-reference)",
+   "role": "Per-payment reconciliation gate and evidence package",
+   "files": [
+    "attest/apps/core/src/remit/evidence.ts",
+    "attest/apps/core/src/remit/registry.ts"
+   ],
+   "tech": "attest-rules with a registry-built keyring",
+   "notes": "Keyring and registry snapshot are rebuilt from the full institutions table on every payment. The orchestration belongs to the remit reader."
+  }
+ ],
+ "flows": [
+  {
+   "name": "PoR snapshot via the exchange SDK (root-only, the default)",
+   "steps": [
+    "The exchange calls anchorBalanceFile. readLiabilitiesCsv streams 64 KiB chunks into CsvLedgerReader and LedgerBuilder, which keeps one Map entry per account, and hashes the file in the same pass (anchor.ts:224, intake.ts:85-101, ledger.ts:186).",
+    "checkCapacity compares the estimated peak (150 MB + 2N×1.3 kB + figures×80 B) with 80% of V8's heap_size_limit and throws too_large if it does not fit (anchor.ts:170-173, limits.ts:54-96).",
+    "leaves = rows.map(leafFromRow): user_ref_hash with pure-JS SHA-256, salt with node:crypto HMAC (anchor.ts:256, leaves.ts:35-42).",
+    "buildPorTree validates the inputs, copies and sorts them by user_ref_hash, hashes the leaves, then folds level by level with BigInt sums. Every level stays in memory and the build is synchronous (sumtree.ts:80-153).",
+    "buildSnapshotStatement and ES256 signing via node:crypto. The proof file (seed included) is written with flag wx before anything is sent (anchor.ts:258-267).",
+    "POST /v1/por/snapshots carries {statement, sig} only, with connection: close (client.ts:97-109,164-176).",
+    "Server: requireAuth, then requirePor (2 SELECTs), validateSnapshotStatement, verifyEvent against signing_spki and then console_spki, unanchorable, and commitment = SHA256('STONEHASH-POR-V1\\n' ‖ JCS(statement)) (por/routes.ts:313-357).",
+    "Server: oneAtATime(org:commitment) as an in-memory queue, acceptedRow replay check, measureReserves (sequential eth_call), svc.issue (dup SELECT, INSERT attestation, SELECT), INSERT por_snapshots, 201 ACCEPTED (por/routes.ts:378-394).",
+    "The onDone hook INSERTs one audit_log row before the response is sent (http/routes.ts:130-134).",
+    "The batch worker anchors the commitment together with other leaves (BATCH_MAX_LEAVES=1024, 15 s flush; backend/chain layer).",
+    "The SDK atomically rewrites the proof file with snapshot_id. Optional waitAnchored polls GET every 2 s, by default for up to 120 s (anchor.ts:298-304, client.ts:213-220)."
+   ],
+   "sync_or_async": "Tree build is synchronous in the exchange's process. The HTTP submit waits for acceptance (including reserve eth_calls). Anchoring happens later in the batch worker."
+  },
+  {
+   "name": "PoR snapshot from the console page (browser)",
+   "steps": [
+    "The page reads the whole file (arrayBuffer), decodes it strictly as UTF-8 and infers assets and decimals from the file (console por.ts:680-701).",
+    "The SDK reader runs with maxAccounts 100,000, CSV fed in 1 MiB pieces; a treeSums check against 4,000,000 follows (por.ts:617-627,712-716).",
+    "Leaves are built with pure-JS HMAC and SHA-256, then buildPorTree runs on the UI thread (por.ts:719-723).",
+    "A session P-256 key is generated in the page and registered with POST /v1/console/institutions/:id/console-key, which UPDATEs institutions.console_spki (por.ts:737-740, remit/routes.ts:336-353).",
+    "The statement is signed with pure-JS ES256 (RFC 6979) and a draft proof file is built, then POST /v1/por/snapshots; with a spot check the 8 openings are posted too (por.ts:741-758).",
+    "watchAnchor polls GET /v1/por/snapshots/:id every 2 s, up to 90 times (por.ts:779-795)."
+   ],
+   "sync_or_async": "Client-side computation blocks the UI thread. Server calls as in the SDK flow, plus the console-key write and the polling."
+  },
+  {
+   "name": "PoR spot check (optional)",
+   "steps": [
+    "Submit with spot_check:true. The server draws min(8, leaf_count) random indices and INSERTs a CHALLENGED row with a 1 h expiry. Nothing is anchored yet (por/routes.ts:359-374).",
+    "The client builds the openings. openChallenged re-sorts all leaves and runs provePorLeaf O(log N) per index; the account reference is stripped (client.ts:82-91).",
+    "POST /openings: the server loads the row and checks state and expiry, compares the index list, then runs verifyPorInclusion for each opening against the declared root and totals (por/routes.ts:398-428).",
+    "On failure: UPDATE REJECTED. On success: anchorAndMeasure, then UPDATE VERIFIED (por/routes.ts:430-448)."
+   ],
+   "sync_or_async": "Two synchronous HTTP round trips. Anchoring is asynchronous."
+  },
+  {
+   "name": "Per-customer proof and end-user verification",
+   "steps": [
+    "The exchange calls openSnapshot(proofFile, export). It re-reads the export the way the proof file records, runs restoreSnapshot (full rebuild plus root, count and totals comparison), then sorts the leaves again (anchor.ts:337-354, snapshot-proof.ts:316-352).",
+    "proofFor(account) does a linear findIndex, then provePorLeaf walks O(log N). Alternatively writeAllProofs writes one file per account, sequentially (anchor.ts:361-379).",
+    "The exchange hands the proof file to its customer. The platform neither stores nor serves per-user proofs.",
+    "The customer opens the playground PoR page and fetches GET /v1/public/por/snapshots/:id. Server side that is 6 SELECTs: por_snapshots, 4 inside exportBundle, institutions (por/routes.ts:479-518, service.ts:638-669).",
+    "The browser runs every check: exchange signature (pure-JS verifyP256), inclusion against root and totals, user_ref hash, commitment recomputation, verifyBundle (playground por.ts:105-184)."
+   ],
+   "sync_or_async": "The exchange side is batch work. Verification is client-side. One synchronous public read."
+  },
+  {
+   "name": "Settlements reconcile",
+   "steps": [
+    "POST /v1/settlements/reconcile, then requireAuth (http/routes.ts:377-380).",
+    "ctx.body() buffers up to 1 MiB and runs JSON.parse; parse() calls validatePolicy (server.ts:296-311, evidence.ts:50-67).",
+    "verifyEvidenceSignatures(evidence, DEMO_KEYRING): structuredClone, then for each signed element signedBytes (spread + JCS) and an awaited crypto.subtle.verify, one at a time (signature.ts:248-268).",
+    "evaluate runs validatePolicy again, the six axes and the corridor checks, and policyDigest with pure-JS SHA-256 (engine.ts:67-287, policy.ts:42-44).",
+    "The JSON verdict is returned and onDone INSERTs an audit_log row."
+   ],
+   "sync_or_async": "Synchronous request. Event-loop work in between the threadpool verifies."
+  },
+  {
+   "name": "Settlements bundle",
+   "steps": [
+    "Same as reconcile up to the verdict (evidence.ts:86-106).",
+    "assembleFiles writes sorted, pretty-printed JSON for evidence, policy, verdict, source hashes and signatures, plus the PDF report (buildReport, renderPdf) and a manifest with the pure-JS SHA-256 of every member (bundle.ts:81-223).",
+    "writeZip runs a pure-JS CRC-32 per member and an awaited CompressionStream deflate-raw per member, then concatenates headers (zip.ts:109-179).",
+    "It takes the SHA-256 of the whole zip and returns 200 application/zip with x-evidence-sha256. Nothing is stored (bundle.ts:236-249, evidence.ts:115-122)."
+   ],
+   "sync_or_async": "Synchronous request. Deflate runs on the libuv pool, everything else on the event loop."
+  },
+  {
+   "name": "Remit per-payment rules evaluation (cross-reference)",
+   "steps": [
+    "orchestrator.ts:678 calls reconcilePayment: store.events, then stampDigests, then buildSettlementEvidence (remit/evidence.ts:145-149).",
+    "registry.keyring() runs SELECT * FROM institutions and converts SPKI to JWK for each institution, every call (registry.ts:124-147).",
+    "verifyEvidenceSignatures with that keyring, then evaluate(REMIT_POLICY), then the gate (remit/evidence.ts:150-175).",
+    "assemblePackage embeds registry.snapshot(), a second full institutions SELECT, and packageCommitment uses node SHA-256 over the JCS of the package (remit/evidence.ts:200-241)."
+   ],
+   "sync_or_async": "Inside the remit orchestrator (remit reader's scope)."
+  }
+ ],
+ "per_txn_costs": [
+  {
+   "operation": "PoR snapshot submit, root-only (POST /v1/por/snapshots)",
+   "db_reads": "5 plus auth: subscriptions and institutions (requirePor), the por_snapshots replay check, and the attestations dup-check and re-read inside svc.issue",
+   "db_writes": "3: INSERT attestations (svc.issue), INSERT por_snapshots, INSERT audit_log (onDone)",
+   "external_calls": "k sequential eth_calls to POR_CHAIN_RPC for k declared local reserve entries (0 unless declared), 5 s timeout each",
+   "crypto_ops": "1–2 node:crypto ES256 verifies, each after createPublicKey(SPKI). JCS of the statement once or twice for the signed bytes and once for the commitment. 1 pure-JS SHA-256.",
+   "sync_cpu_notes": "Scales with statement size (~1 KB at 3 assets, ~40 KB at 500), not with account count. Estimated under 1 ms of event-loop time.",
+   "evidence": [
+    "attest/apps/core/src/por/routes.ts:313-394",
+    "attest/apps/core/src/remit/registry.ts:201-214",
+    "attest/apps/core/src/service.ts:164-184",
+    "attest/apps/core/src/http/routes.ts:130-134"
+   ]
+  },
+  {
+   "operation": "PoR spot check (submit with spot_check:true, then POST /v1/por/snapshots/:id/openings)",
+   "db_reads": "submit: 2 plus auth. Openings: 3 plus auth, and 2 more inside svc.issue on success.",
+   "db_writes": "submit: INSERT por_snapshots + audit. Openings: UPDATE por_snapshots, INSERT attestations on success, and audit.",
+   "external_calls": "Reserve eth_calls on success (as above)",
+   "crypto_ops": "8 × verifyPorInclusion: 1 leaf hash plus log2 N node hashes each (pure-JS SHA-256 over the JCS of both children's sums) and BigInt adds per asset. That is 120 hashes at N=1e4, 144 at 1e5, 168 at 1e6, 200 at 1e7.",
+   "sync_cpu_notes": "A few ms at 3 assets (estimate). Grows with the assets carried by siblings near the root. Input is bounded by the 1 MiB body cap.",
+   "evidence": [
+    "attest/apps/core/src/por/routes.ts:359-374",
+    "attest/apps/core/src/por/routes.ts:398-449",
+    "attest/packages/attest-verify/src/merkle-sum.ts:161-206"
+   ]
+  },
+  {
+   "operation": "PoR status poll (GET /v1/por/snapshots/:id): console every 2 s up to 90 times, SDK every 2 s up to 120 s",
+   "db_reads": "2 plus auth (por_snapshots by id, attestations by id)",
+   "db_writes": "1 (audit_log; this path is not in SILENT_READS)",
+   "external_calls": "none",
+   "crypto_ops": "none",
+   "sync_cpu_notes": "JSON.parse of the totals, challenge and reserves columns",
+   "evidence": [
+    "attest/apps/core/src/por/routes.ts:460-465",
+    "attest/apps/console/src/por.ts:779-786",
+    "attest/packages/attest-por/src/client.ts:213-220",
+    "attest/apps/core/src/audit.ts:92-99"
+   ]
+  },
+  {
+   "operation": "PoR snapshot list (GET /v1/por/snapshots)",
+   "db_reads": "1 + up to 100 (one attestations SELECT per row) plus auth",
+   "db_writes": "1 audit_log",
+   "external_calls": "none",
+   "crypto_ops": "none",
+   "sync_cpu_notes": "Up to 100 rows × JSON.parse of the totals (≈40 KB each at 500 assets)",
+   "evidence": [
+    "attest/apps/core/src/por/routes.ts:452-458",
+    "attest/apps/core/src/por/routes.ts:181-204"
+   ]
+  },
+  {
+   "operation": "Public PoR verification material (GET /v1/public/por/snapshots/:id, anonymous)",
+   "db_reads": "6: por_snapshots, attestations, merkle_proofs, batches, anchor_txs, institutions",
+   "db_writes": "0 (anonymous requests are not audited)",
+   "external_calls": "none",
+   "crypto_ops": "none on the server; verification happens in the browser",
+   "sync_cpu_notes": "3 JSON.parse calls plus the response (≈3–50 KB depending on assets). No cache headers, no rate limit.",
+   "evidence": [
+    "attest/apps/core/src/por/routes.ts:479-518",
+    "attest/apps/core/src/service.ts:638-669"
+   ]
+  },
+  {
+   "operation": "Console PoR anchoring (browser page)",
+   "db_reads": "console-key: session lookup + SELECT institutions; then the submit above; then up to 90 polls",
+   "db_writes": "console-key: UPDATE institutions.console_spki + audit; submit: 3; each poll: 1 audit",
+   "external_calls": "none server-side beyond the submit",
+   "crypto_ops": "Client: per account a pure-JS HMAC (2 SHA-256), a user hash and a leaf hash, about one node hash each, and one pure-JS P-256 signature",
+   "sync_cpu_notes": "The whole tree is built on the page's UI thread: about 7 s at 100k accounts × 3 assets (documented). Capped at 100k accounts and 4M sums.",
+   "evidence": [
+    "attest/apps/console/src/por.ts:96-106",
+    "attest/apps/console/src/por.ts:670-776",
+    "attest/apps/core/src/remit/routes.ts:336-353"
+   ]
+  },
+  {
+   "operation": "Settlements reconcile (POST /v1/settlements/reconcile)",
+   "db_reads": "auth (≥1; backend layer)",
+   "db_writes": "1 audit_log INSERT",
+   "external_calls": "none",
+   "crypto_ops": "One WebCrypto ES256 verify per signed element with a known demo keyId: 4 in the sample evidence, 6 with travelRule and bankApproval, otherwise bounded only by 1 MiB. They run one after another on the 4-thread libuv pool. JCS per signed element, plus a pure-JS SHA-256 of the canonical policy.",
+   "sync_cpu_notes": "JSON.parse of up to 1 MiB, validatePolicy twice, structuredClone(evidence), and evaluate, which is O(elements + findings). Estimated ≤1 ms of event-loop time for typical evidence (not measured).",
+   "evidence": [
+    "attest/apps/core/src/http/evidence.ts:69-78",
+    "attest/packages/attest-rules/src/signature.ts:248-268",
+    "attest/packages/attest-rules/src/engine.ts:67-287",
+    "attest/packages/attest-rules/src/samples.ts:29-104"
+   ]
+  },
+  {
+   "operation": "Settlements bundle (POST /v1/settlements/bundle)",
+   "db_reads": "auth",
+   "db_writes": "1 audit_log INSERT; the archive is not stored",
+   "external_calls": "none",
+   "crypto_ops": "Everything reconcile does, plus pure-JS SHA-256 of 7 members and of the ZIP, and pure-JS CRC-32 of 7 members",
+   "sync_cpu_notes": "Sorted, pretty-printed JSON of the evidence and verdict, PDF rendering, and 7 CompressionStream deflates (zlib on the libuv pool). Estimated 2–4 ms typical. Adversarial 1 MiB inputs could take tens to a few hundred ms (estimate, not measured). The ZIP is held in memory for the response.",
+   "evidence": [
+    "attest/apps/core/src/http/evidence.ts:86-123",
+    "attest/packages/attest-evidence/src/bundle.ts:81-249",
+    "attest/packages/attest-evidence/src/zip.ts:109-179"
+   ]
+  },
+  {
+   "operation": "Remit per-payment rules evaluation (reconcilePayment + assemblePackage)",
+   "db_reads": "2 full scans of the institutions table (SELECT *, for the keyring and for the registry snapshot), plus payment events (remit layer)",
+   "db_writes": "remit layer",
+   "external_calls": "none",
+   "crypto_ops": "One SPKI-to-JWK conversion (createPublicKey + JWK export) per institution, one WebCrypto verify per signed element, and a node SHA-256 of the package",
+   "sync_cpu_notes": "Cost grows with the number of institutions on every payment. The package embeds the whole registry.",
+   "evidence": [
+    "attest/apps/core/src/remit/evidence.ts:145-151",
+    "attest/apps/core/src/remit/evidence.ts:200-226",
+    "attest/apps/core/src/remit/registry.ts:61-63",
+    "attest/apps/core/src/remit/registry.ts:124-160"
+   ]
+  },
+  {
+   "operation": "Signed anchor acceptance (svc.issueSigned)",
+   "db_reads": "svc.issue: 2 (backend layer), plus issuerTrust",
+   "db_writes": "svc.issue: 1 INSERT",
+   "external_calls": "none",
+   "crypto_ops": "statementLeaf (JCS + pure-JS SHA-256) twice; WebCrypto importKey (not cached) and verify (ES256 or RS256) on the libuv pool",
+   "sync_cpu_notes": "Sub-millisecond for statements a few hundred bytes long",
+   "evidence": [
+    "attest/apps/core/src/service.ts:325-347",
+    "attest/packages/attest-verify/src/statement.ts:231-279"
+   ]
+  },
+  {
+   "operation": "SDK snapshot build at the exchange (one per snapshot of N accounts)",
+   "db_reads": "none on the platform",
+   "db_writes": "none on the platform (1 submit)",
+   "external_calls": "1 POST plus optional status polls",
+   "crypto_ops": "Per account: pure-JS SHA-256 (user_ref_hash), node:crypto HMAC (salt) and a pure-JS leaf hash. About N node hashes (JCS of both children plus a BigInt add per held asset). One ES256 signature.",
+   "sync_cpu_notes": "O(N log N) sort plus O(N × held assets) hashing, all synchronous in one process. Measured: 1M accounts × 3 assets in 61 s at 2.7 GB peak; 300k × 500 assets (5 held) in 31 s at 1.9 GB; 100k × 3 tree-only in 3.5 s.",
+   "evidence": [
+    "attest/packages/attest-por/src/anchor.ts:199-309",
+    "attest/packages/attest-por/src/sumtree.ts:80-153",
+    "docs/POR-REFERENCE-ANALYSIS.md:144-159"
+   ]
+  },
+  {
+   "operation": "Per-customer proof at the exchange (openSnapshot + proofFor)",
+   "db_reads": "none on the platform",
+   "db_writes": "none",
+   "external_calls": "none",
+   "crypto_ops": "A full rebuild of the tree from the export (all hashes again), then an O(log N) path",
+   "sync_cpu_notes": "Measured 37 s for one proof at 1M accounts and 22 s at 300k × 500 assets. The lookup is a linear findIndex. A proof is 3–6 KB at 3 assets and 100–230 KB at hundreds of assets.",
+   "evidence": [
+    "attest/packages/attest-por/src/anchor.ts:337-368",
+    "docs/POR-REFERENCE-ANALYSIS.md:156-157",
+    "docs/POR-REFERENCE-ANALYSIS.md:171"
+   ]
+  },
+  {
+   "operation": "End-user proof verification (playground PoR page)",
+   "db_reads": "6 (the public read above)",
+   "db_writes": "0",
+   "external_calls": "none",
+   "crypto_ops": "Client only: pure-JS P-256 verify, log2 N + 1 sum-tree hashes, verifyBundle",
+   "sync_cpu_notes": "Server: one public GET plus static assets (~324 KB of playground files served by core with no-cache). All verification CPU is in the browser.",
+   "evidence": [
+    "attest/apps/playground/src/por.ts:105-184",
+    "attest/apps/playground/src/por.ts:257-266",
+    "attest/apps/core/src/http/static.ts:145-149"
+   ]
+  }
+ ],
+ "capacity_findings": [
+  {
+   "id": "POR-S1",
+   "title": "Platform PoR cost does not grow with ledger size",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "The server never builds or sees the Merkle sum tree. The exchange (SDK or console page) builds it and sends only a signed statement: root, per-asset totals, leaf count and as-of time. The server verifies one ES256 signature, stores one por_snapshots row and issues one attestation leaf, which rides the normal batch. On the default root-only path no server work depends on the number of accounts N. Only the optional spot check depends on N, through 8 openings of log2 N siblings.",
+   "evidence": [
+    "attest/apps/core/src/por/routes.ts:4-5 — 'The exchange built the tree; the platform never sees it. What arrives is the signed snapshot statement — root, per-asset totals, leaf count, as-of time'",
+    "attest/packages/attest-por/src/client.ts:8-10 — 'by default the statement and its signature. Root, totals, the number of accounts, the as-of time. No account, no balance, no leaf.'",
+    "attest/apps/core/src/por/routes.ts:263-264 — `attestationId = (await d.svc.issue(orgId, s.commitment, 'application/json', { kind: 'por-snapshot', ...` (one leaf per snapshot)",
+    "attest/apps/core/src/por/routes.ts:100-101 — `function challengeSize(leafCount: number): number { return Math.min(8, leafCount);`"
+   ],
+   "affects": "POST /v1/por/snapshots, POST /v1/por/snapshots/:id/openings",
+   "quantification": "A root-only submit costs about 5 reads + 3 writes + auth, 1–2 native P-256 verifies, and JCS + SHA-256 of a statement of about 1 KB (3 assets) to 40 KB (500 assets). That is the same at N = 1e4 and N = 1e7. The spot check needs 8 × (1 + log2 N) hashes: 120 at 1e4, 200 at 1e7.",
+   "fix": "Keep it this way. Snapshot frequency is per exchange (hourly or daily), so PoR writes are not a T2/T3 concern."
+  },
+  {
+   "id": "POR-2",
+   "title": "TypeScript exchange SDK builds the whole ledger and tree in one process's memory, synchronously; about 1M accounts fit the default heap",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "LedgerBuilder keeps every account in a Map. Leaves are a second N-sized array, buildPorTree copies and sorts them into a third, and every tree level is kept as JS objects with string sums. Nothing yields to the event loop or uses another core. The measured cost is about 2.7 kB per account. Beyond the default heap the SDK refuses to build (checkCapacity) unless --max-old-space-size is raised. V8's 2^24-entry Map/Set limit is a hard ceiling near 16.7M accounts regardless of memory; this is inferred and was not tested here. An exchange that embeds the SDK in a Node web process would freeze that process for the whole build.",
+   "evidence": [
+    "attest/packages/attest-por/src/limits.ts:17-21 — `150 MB + nodes × 1.3 kB + figures × 80 B (nodes = 2 × accounts)`; '100,000 accounts holding five of 500 listed assets each peaked at 0.7 GB in eight seconds; 300,000 at 1.6 GB in half a minute'",
+    "docs/POR-REFERENCE-ANALYSIS.md:156 — `| 1,000,000 | 3 | 3 | 61초 | 2.7 GB | 37초 · 6 KB |` (full build 61 s, 2.7 GB peak)",
+    "docs/POR-REFERENCE-ANALYSIS.md:161 — default-heap capacity: about 1.05M accounts (3 assets held), 0.74M (4 of 50), 0.54M (5 of 500), 0.25M (20 of 500)",
+    "attest/packages/attest-por/src/ledger.ts:186 — `private readonly accounts = new Map<string, PorBalances>();`; sumtree.ts:87,103 — `const seen = new Set<string>();` … `const sorted = [...inputs].sort(`"
+   ],
+   "affects": "Exchanges with 1M+ accounts (exchange-side snapshot build)",
+   "quantification": "Measured: about 0.6 s at 1e4 and 3.5–10 s at 1e5 (tree only, or 500 assets); 61 s and 2.7 GB at 1e6 × 3 assets. Extrapolated to 1e7: about 27–31 GB (limits.ts formula) and roughly 10–12 min on one thread. Refused under the default heap. Ceiling near 16.7M accounts from the Map/Set limit.",
+   "fix": "For 10M+ accounts, external-sort the leaves to disk and build level by level, keeping only a few levels resident. Store nodes in compact typed arrays. Use node:crypto SHA-256 on Node. Build subtrees in parallel in worker_threads or shards. Alternatively make the Go SDK (0.5 kB per account) the high-volume builder once it supports v2."
+  },
+  {
+   "id": "POR-3",
+   "title": "Every per-customer proof rebuilds the whole tree, the lookup is a linear scan, and the platform neither stores nor serves proofs",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "The proof file stores only the seed and the statement. To issue any proof the SDK re-reads the export and rebuilds the full tree, then finds the account with an O(N) scan. Bulk issue writes one pretty-printed file per account, sequentially. With hundreds of assets each proof is 100–230 KB, because siblings near the root carry nearly every asset's sum.",
+   "evidence": [
+    "attest/packages/attest-por/src/anchor.ts:342-347 — `const { rows, report } = await readExport(balanceFile, …); … ({ tree, leaves } = restoreSnapshot(proof, rows, { leaf: leafFromRow }));`",
+    "attest/packages/attest-por/src/anchor.ts:364 — `const at = leaves.findIndex((l) => l.user_ref === account);`",
+    "attest/packages/attest-por/src/anchor.ts:371-377 — writeAllProofs: one file per account, `out.end(JSON.stringify(customerProof(...), null, 2) + '\\n'); await once(out, 'finish');`",
+    "docs/POR-REFERENCE-ANALYSIS.md:156,171 — one proof at 1M accounts: 37 s; proof 3–6 KB at 3 assets, 100–230 KB at hundreds of assets"
+   ],
+   "affects": "Exchanges distributing proofs to millions of users",
+   "quantification": "1M accounts: 37 s per proof via openSnapshot (measured). Bulk proofs for 10M accounts: about 60 GB at 3 assets, or about 2 TB at 500 assets (200 KB each), written one file at a time.",
+   "fix": "Persist the built tree (level files) or a key-value store of per-account proofs at build time, with a user_ref to leaf-index map. Generate proofs in parallel workers and serve them from the exchange's storage or CDN. Optionally offer a hosted proof store keyed by user_ref_hash."
+  },
+  {
+   "id": "POR-1",
+   "title": "Public PoR verification read: 6 SELECTs per anonymous call, no cache, no rate limit, on the shared event loop",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T3",
+   "confidence": "high",
+   "claim": "Each end user who checks a proof triggers GET /v1/public/por/snapshots/:id. Every call re-reads the snapshot, re-assembles the proof bundle (4 SELECTs) and reads the institution. The response is identical for all users of a snapshot and changes only as anchor confirmations grow. No HTTP cache headers are set, there is no in-process cache, and the only public rate limiter covers /v1/public/anchors. A large exchange publishing to millions of users can therefore turn PoR into a T3 read burst on the core process that also batches, anchors and runs remit.",
+   "evidence": [
+    "attest/apps/core/src/por/routes.ts:479-492 — `r.get('/v1/public/por/snapshots/:id', async (ctx) => { const s = await row(...); … bundle = await d.svc.exportBundle(s.org_id, s.attestation_id); … await d.registry.institution(…)`",
+    "attest/apps/core/src/service.ts:639-669 — exportBundle: `this.get(orgId, attestationId)`, then `SELECT * FROM merkle_proofs …`, `SELECT merkle_root FROM batches …`, `SELECT * FROM anchor_txs WHERE batch_id = ?`",
+    "attest/apps/core/src/http/public.ts:70-71 — `new RateLimiter(d.cfg.publicAnchor.rateLimit)` / `globalRateLimit`: the only public limiter. Grep for cache-control/etag in core API: none (static.ts sets no-cache)."
+   ],
+   "affects": "GET /v1/public/por/snapshots/:id, playground PoR page",
+   "quantification": "T2 (100/s) means 600 SELECT/s, which is fine. T3 (1,000/s sustained, 10,000/s peaks) means 6,000–60,000 SELECT/s plus JSON serialisation on one event loop.",
+   "fix": "Cache the response per (snapshot id, anchor status, confirmations) in memory or at a CDN with a short TTL, or publish it as a static object once confirmed. Add per-IP and global limits. Serve the playground's hashed assets from a CDN instead of no-cache from core."
+  },
+  {
+   "id": "EV-1",
+   "title": "Settlement reconcile/bundle do all CPU work on the single event loop with no per-key rate limit; per-request work is bounded only by the 1 MiB body",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T3",
+   "confidence": "medium",
+   "claim": "Per call the server does: JSON.parse up to 1 MiB, validatePolicy twice, structuredClone, then per signed element a spread copy, JCS and an awaited WebCrypto P-256 verify (sequential, on the 4-thread libuv pool). Then evaluate and a pure-JS SHA-256 of the policy. Bundle adds sorted pretty-printed JSON, PDF rendering, pure-JS CRC-32 and SHA-256 over every member and the ZIP, and a deflate per member. Nothing limits how many signed elements a request carries.",
+   "evidence": [
+    "attest/apps/core/src/http/routes.ts:377-380 — `r.post('/v1/settlements/reconcile', async (ctx) => { await requireAuth(d, ctx); return settlementReconcile(ctx); });` (same for /bundle; no limiter)",
+    "attest/packages/attest-rules/src/signature.ts:251,258-260 — `const ev = structuredClone(evidence);` … `for (const item of node) { … signature = await verifySignature(item, keys);` (one verify per element)",
+    "attest/packages/attest-evidence/src/bundle.ts:199,245 — `sha256: bytesToHex(sha256(f.bytes))` per member and `sha256: bytesToHex(sha256(zip))` (pure-JS SHA-256)",
+    "attest/packages/attest-evidence/src/zip.ts:38,129 — pure-JS `crc32` byte loop; `const stored = compress ? await deflateRaw(e.data) : e.data;`"
+   ],
+   "affects": "POST /v1/settlements/reconcile, POST /v1/settlements/bundle, and every other request sharing the event loop",
+   "quantification": "Typical sample evidence has 4–6 signatures, about ≤1 ms (reconcile) or 2–4 ms (bundle) of event-loop time (estimate). T2 is about 10–40% of one core. T3 needs about 1 core for reconcile or 2–4 cores for bundle, which is more than one process. Adversarial 1 MiB inputs (thousands of signed receipts, about 2 MB of JSON hashed twice) are estimated at tens to a few hundred ms of blocking each; not measured.",
+   "fix": "Add per-key rate limits and caps (signed elements per request). Run these endpoints in a separately scaled stateless pool or worker_threads. Use node:crypto SHA-256 and zlib.crc32 on the server path."
+  },
+  {
+   "id": "EV-2",
+   "title": "'Stateless' endpoints still write: every authenticated call inserts one audit_log row before responding",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T3",
+   "confidence": "high",
+   "claim": "The onDone hook awaits an INSERT into audit_log for every authenticated request that is not in SILENT_READS. So reconcile and bundle each cost auth reads plus 1 write, and so does every PoR status poll from the console or SDK.",
+   "evidence": [
+    "attest/apps/core/src/http/routes.ts:130-133 — `r.onDone(async (ctx, status, durationMs) => { … if (!ctx.audit || !isAudited(method, ctx.path)) return; await recordAudit(d.db, ctx.audit, {…});`",
+    "attest/apps/core/src/audit.ts:92-96 — SILENT_READS: '/healthz','/readyz','/v1/meta','/v1/console/audit','/v1/console/me','/v1/console/dashboard','/v1/console/products','/v1/console/sandbox'",
+    "attest/apps/core/src/audit.ts:114-117 — `INSERT INTO audit_log (id, org_id, at, actor_type, actor_id, actor_label, service, method, path, status, duration_ms)`"
+   ],
+   "affects": "/v1/settlements/*, /v1/por/* (including polling)",
+   "quantification": "T2: 100 INSERT/s. T3: 1,000 INSERT/s sustained and 10,000/s at peaks, from reconcile alone. PoR polling adds 1 INSERT every 2 s per waiting console tab or SDK client.",
+   "fix": "Buffer audit rows and bulk-insert them asynchronously, or send them to a log pipeline. Do not audit polling GETs."
+  },
+  {
+   "id": "EV-3",
+   "title": "Remit rules evaluation rebuilds the issuer keyring from the whole institutions table on every payment",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "medium",
+   "claim": "reconcilePayment calls registry.keyring() on every payment. That reads every institution and converts each SPKI key to JWK. assemblePackage then reads the whole registry again and embeds it in every evidence package. The cost and the package size both grow with the number of institutions, per payment.",
+   "evidence": [
+    "attest/apps/core/src/remit/evidence.ts:150 — `const evidence = await verifyEvidenceSignatures(raw, await registry.keyring());`",
+    "attest/apps/core/src/remit/registry.ts:124-130 — `async keyring() { … for (const inst of await this.list()) { … publicKeyJwk = spkiToJwk(inst.signing_spki);` with list() = `SELECT * FROM institutions ORDER BY created_at`",
+    "attest/apps/core/src/remit/evidence.ts:223 — `trust_registry: await registry.snapshot(),` (second full read, embedded in every package)"
+   ],
+   "affects": "Remit payment pipeline (rules/evidence part)",
+   "quantification": "Per payment: 2 full table reads plus one key conversion per institution (estimated 10–30 µs each). Negligible with today's handful of institutions. At 1,000 institutions × 100 payments/s that is about 100k conversions/s (1–3 cores) and 200 full scans/s.",
+   "fix": "Cache the keyring and registry snapshot in memory behind a registry version, invalidated by setSigningKey, setConsoleKey and register. Embed only the keys the evidence references."
+  },
+  {
+   "id": "POR-4",
+   "title": "Go and Java SDKs build only the v1 dense tree, whose cost scales with accounts × listed assets",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "n/a",
+   "confidence": "medium",
+   "claim": "The reference TS SDK defaults to the sparse v2 tree, but nothing under sdks/ implements merkle-sum-sha256-v2. The Go and Java SDKs are leaner per account at 3 assets, but for exchanges listing hundreds of assets v1 is about 10× slower and about 5× larger. Neither was measured beyond 300k accounts, and Java has a structural cap. SDK work is paused by the owner.",
+   "evidence": [
+    "grep 'merkle-sum-sha256-v2' over attest/sdks/: no matches; attest/packages/attest-por/src/sumtree.ts:43 — `export const POR_TREE_ALGO: PorTreeAlgo = 'merkle-sum-sha256-v2';`",
+    "docs/POR-REFERENCE-ANALYSIS.md:146-147 — 20,000 accounts × 500 listed: v1 17.4 s / 1.1 GB vs v2 1.5 s / 0.2 GB",
+    "attest/sdks/attest-por-java/README.md:328-331 — 'Nothing larger than 300,000 accounts has been run… hard limit of the data structures is 67,108,862 accounts with up to 32 assets'",
+    "attest/sdks/attest-por-go/README.md:558-562 — 'about 0.5 kB per account… Every node of the tree carries a sum for every asset… Not measured beyond 300,000 accounts.'"
+   ],
+   "affects": "Exchanges integrating in Go or Java",
+   "quantification": "Go at 300k × 3 assets: 1.2–2.0 s and 232–240 MB peak. Java at 300k: 2.8 s and 376 MiB to 1.35 GiB peak. Java hard cap: 67,108,862 accounts with at most 32 assets.",
+   "fix": "Port v2 to Go and Java and measure at 1M and 10M. Lift Java's per-level array limit."
+  },
+  {
+   "id": "POR-S2",
+   "title": "End-user verification runs in the browser; the server only serves one public JSON read",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "The browser does all five checks: exchange signature, inclusion against root and totals, account hash, commitment and the Bitcoin bundle. It uses the zero-dependency verifier, with pure-JS P-256 for http pages. The verifier, rules, evidence and signing packages make no network calls. Server load per verifier is one anonymous GET plus static assets.",
+   "evidence": [
+    "attest/apps/playground/src/por.ts:2,143 — `PoR 사용자 검증 페이지 — 전부 브라우저 안에서.` … `const incl = verifyPorInclusion(proof, {`",
+    "attest/apps/playground/src/por.ts:261 — `const res = await fetch(`/v1/public/por/snapshots/${encodeURIComponent(id)}`);` (the page's only API call)",
+    "attest/packages/attest-verify/src/bundle.ts:22 — 'This function never opens a socket.' (grep fetch( over attest-verify, rules, evidence and sign src: no hits)",
+    "attest/apps/playground/src/app.ts:6-7 — 'There is no API behind this page: no document is uploaded, no digest is sent anywhere, and no StoneHash endpoint is contacted.'"
+   ],
+   "affects": "Playground, console verification",
+   "quantification": "Server cost per verification: 6 SELECTs plus about 324 KB of static files (no-cache)."
+  },
+  {
+   "id": "EV-S3",
+   "title": "Rules engine and archive assembler are pure, deterministic and keep no server state, so they scale out horizontally once separated",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "evaluate() and assembleEvidenceBundle hold no state and read no clock (archives take the caller's timestamp). Nothing is stored apart from the audit row. Imported verification keys are cached. Reconcile and bundle can therefore run in any number of processes with no coordination.",
+   "evidence": [
+    "attest/packages/attest-rules/src/engine.ts:6-7 — '`evaluate()` is a pure function of `(evidence, policy)`. It reads no clock, opens no socket, consults no environment and holds no state.'",
+    "attest/apps/core/src/http/evidence.ts:10-11 — 'The archive is assembled per request and never stored.'",
+    "attest/packages/attest-rules/src/signature.ts:166 — `const imported = new Map<string, Promise<CryptoKey>>();` (key import cache, bounded by the keyring)"
+   ],
+   "affects": "/v1/settlements/*"
+  },
+  {
+   "id": "POR-8",
+   "title": "Duplicate-snapshot protection is an in-memory queue that assumes one process; MySQL has no unique key for it",
+   "severity": "minor",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "claim": "Root-only replays of one statement are serialised by a Map of promises inside the process. por_snapshots has only a primary key and an index on (org_id, created_at). Once core runs more than one process, concurrent retries can store two snapshots of the same statement. The replay check also scans all of an org's snapshots, because there is no index on commitment.",
+   "evidence": [
+    "attest/apps/core/src/por/routes.ts:295-299 — 'One process serves this API (see service.ts), so a queue in memory is enough to close that.' `const queued = new Map<string, Promise<unknown>>();`",
+    "attest/apps/core/src/db.ts:653-673,699 — por_snapshots PRIMARY KEY (id); index `por_snapshots_org ON por_snapshots(org_id, created_at)` only",
+    "attest/apps/core/src/por/routes.ts:176-178 — `WHERE org_id = ? AND commitment = ? AND status = 'ACCEPTED' ORDER BY created_at LIMIT 1`"
+   ],
+   "affects": "POST /v1/por/snapshots when core is scaled out",
+   "quantification": "Correct today (pm2 fork mode, 1 instance). Breaks as soon as core runs 2 or more processes.",
+   "fix": "Add a unique key on (org_id, commitment) for accepted rows, or a dedupe table, with INSERT … ON DUPLICATE KEY, and index (org_id, commitment)."
+  },
+  {
+   "id": "POR-6",
+   "title": "PoR reads: console and SDK poll every 2 s, each poll is audited, and the snapshot list is N+1",
+   "severity": "minor",
+   "kind": "structural",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "After each submission the console polls up to 90 times and the SDK up to 60 times by default. Each poll costs auth, 2 SELECTs and 1 audit INSERT. The list endpoint issues one attestations SELECT per row, for up to 100 rows.",
+   "evidence": [
+    "attest/apps/console/src/por.ts:780-785 — `for (let i = 0; i < 90; i++) { await new Promise((ok) => setTimeout(ok, 2_000)); … status = (await api.porSnapshot(id)).attestation?.status`",
+    "attest/packages/attest-por/src/client.ts:213-219 — `async waitAnchored(snapshotId: string, timeoutMs = 120_000)` … `await new Promise((ok) => setTimeout(ok, 2_000));`",
+    "attest/apps/core/src/por/routes.ts:454-457 — `… ORDER BY created_at DESC LIMIT 100` then `Promise.all(rows.map((s) => wire(s, …)))`, with wire() running `SELECT id, status FROM attestations WHERE id = ?`"
+   ],
+   "affects": "GET /v1/por/snapshots[/:id]",
+   "quantification": "Up to 90 × (auth + 2 reads + 1 write) per anchored snapshot per open tab. The list costs up to 101 reads. Small, because snapshots are posted hourly or daily per exchange.",
+   "fix": "Back off or push status instead of fixed 2 s polling, stop auditing polls, and JOIN attestations in the list query."
+  },
+  {
+   "id": "POR-5",
+   "title": "Spot-check openings probably exceed the 1 MiB JSON body cap for exchanges with hundreds of assets",
+   "severity": "minor",
+   "kind": "configuration",
+   "bites_at_tier": "n/a",
+   "confidence": "low",
+   "claim": "The optional spot check opens 8 leaves, each with its full sibling path carrying near-root sums for almost every asset. Documented proof sizes at hundreds of assets are 100–230 KB each, and all 8 must fit in one JSON body capped at 1 MiB. The default root-only path is unaffected.",
+   "evidence": [
+    "attest/apps/core/src/http/server.ts:76 — `const MAX_BODY = 1 << 20; // 1 MiB: requests carry digests, never documents`",
+    "attest/apps/core/src/por/routes.ts:100-101 — `return Math.min(8, leafCount);`",
+    "docs/POR-REFERENCE-ANALYSIS.md:171 — account proof 100–230 KB with hundreds of assets (pretty-printed)"
+   ],
+   "affects": "POST /v1/por/snapshots/:id/openings",
+   "quantification": "8 × 100–230 KB is about 0.8–1.8 MB pretty-printed. Compact JSON is smaller, so the 413 is likely but not certain.",
+   "fix": "Give the openings route its own cap through ctx.raw(maxBytes), or send compact or fewer openings."
+  },
+  {
+   "id": "EV-5",
+   "title": "Server-side verifiers accept unbounded numeric strings and array lengths (bounded only by the 1 MiB body)",
+   "severity": "minor",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "low",
+   "claim": "The SDK caps amounts at 60 digits, but the verifier used on the server checks balances with an uncapped regex. The openings loop verifies every opening and sibling provided. The rules engine's decimals parse and rescale with no digit or scale cap. A single authenticated request can make the event loop process BigInts of up to about a million digits, or hash about 13k minimal siblings.",
+   "evidence": [
+    "attest/packages/attest-verify/src/merkle-sum.ts:70,89 — `const INT = /^(0|[1-9]\\d*)$/;` … `if (!INT.test(v))` (no length cap; SDK cap is MAX_DIGITS = 60 in amounts.ts:39)",
+    "attest/apps/core/src/por/routes.ts:425-427 — `for (const o of openings) { const r2 = verifyPorInclusion(o, { root: …, totals: … });` (no count or sibling cap before hashing)",
+    "attest/packages/attest-rules/src/decimal.ts:42,49-50 — `BigInt(int + frac)` … `const pow = (n: number): bigint => 10n ** BigInt(n); return { a: a.value * pow(scale - a.scale), …`"
+   ],
+   "affects": "POST /openings, /v1/settlements/*",
+   "quantification": "Estimated 0.1–0.5 s of blocking per crafted request; not measured. Needs an API key (and a PoR subscription for openings).",
+   "fix": "Cap digits (≤80) and decimal scale (≤36) on server paths. Reject openings whose count differs from the challenge or whose siblings exceed 64 before hashing anything."
+  },
+  {
+   "id": "POR-10",
+   "title": "The SDK hashes with the verifier's pure-JS SHA-256 and re-sorts leaves several times, even on Node",
+   "severity": "minor",
+   "kind": "structural",
+   "bites_at_tier": "n/a",
+   "confidence": "medium",
+   "claim": "user_ref_hash, the leaf hash and every node hash go through a pure-JS SHA-256 that allocates per call. Each node hash also re-encodes hex and JCS-serialises both children's sums. restoreSnapshot, openChallenged and the console sort leaves again after buildPorTree has already sorted them.",
+   "evidence": [
+    "attest/packages/attest-verify/src/sha256.ts:37,47-48 — `const w = new Uint32Array(64);` … `const m = new Uint8Array(total); m.set(data);` (per call)",
+    "attest/packages/attest-verify/src/merkle-sum.ts:124-128 — `sha256(concat(utf8(NODE_DOMAIN), hexToBytes(left.hash), hexToBytes(right.hash), jcs(left.sums), jcs(right.sums)))`",
+    "attest/packages/attest-por/src/snapshot-proof.ts:351 — `return { tree, leaves: [...leaves].sort((a, b) => …) };` after sumtree.ts:103 sorted; client.ts:83 sorts again per spot check"
+   ],
+   "affects": "Exchange-side build and proof time",
+   "quantification": "Measured about 61 µs per account end to end at 1M × 3. Native hashing would probably cut the hashing share several-fold (estimate).",
+   "fix": "Inject node:crypto createHash on the Node path and keep the pure-JS spec for browsers. Return leaves already sorted from buildPorTree."
+  },
+  {
+   "id": "POR-7",
+   "title": "Reserve measurement makes sequential eth_calls to one local RPC inside the submit request, with no cap on entries",
+   "severity": "minor",
+   "kind": "sandbox-only",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "Declared reserve addresses are read one at a time from POR_CHAIN_RPC (local anvil by default), each with a 5 s timeout, before the snapshot is stored. Entries on other chains are marked DECLARED_ONLY. A statement with many declared entries holds the request for minutes if the RPC hangs.",
+   "evidence": [
+    "attest/apps/core/src/por/reserves.ts:61-68 — `for (const e of entries) { if (e.chain !== localChain || !e.token_contract) { … 'DECLARED_ONLY' … } const bal = await erc20BalanceOf(rpcUrl, e.token_contract, e.address);`",
+    "attest/apps/core/src/por/reserves.ts:50 — `signal: AbortSignal.timeout(5_000),`",
+    "attest/apps/core/src/config.ts:393 — `porChainRpc: rpcUrl('POR_CHAIN_RPC', 'http://127.0.0.1:8545'),`"
+   ],
+   "affects": "POST /v1/por/snapshots, /openings",
+   "quantification": "k entries means k sequential RPCs. If the RPC hangs, 100 entries could hold a request for about 500 s.",
+   "fix": "Production needs per-chain indexers or RPC pools, parallel batched reads, an entry cap, and measurement as an async job after acceptance."
+  },
+  {
+   "id": "EV-4",
+   "title": "Settlement endpoints verify only against the five published demo keys",
+   "severity": "minor",
+   "kind": "sandbox-only",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "/v1/settlements/* always uses DEMO_KEYRING, so real issuer identity can never pass the issuer axis. Production needs a per-tenant or registry keyring, which should be cached (see EV-3).",
+   "evidence": [
+    "attest/apps/core/src/http/evidence.ts:46-48 — `return verifyEvidenceSignatures(evidence, DEMO_KEYRING);`",
+    "attest/packages/attest-rules/src/demo-keys.ts:15-16 — 'Their private halves are published too… so anyone can forge these signatures — which is the point.'"
+   ],
+   "affects": "/v1/settlements/*",
+   "fix": "Make the keyring configurable per tenant, built from the registry and cached."
+  },
+  {
+   "id": "POR-9",
+   "title": "The PoR API exists only when the Remit rail is enabled and depends on the Remit registry",
+   "severity": "minor",
+   "kind": "structural",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "PoR routes are registered inside the remit branch and use the remit registry for subscriptions, exchange keys and the chain label. PoR cannot be deployed or scaled separately from Remit.",
+   "evidence": [
+    "attest/apps/core/src/http/routes.ts:140,157-163 — `if (d.remit) { … registerPorRoutes(r, { … registry: d.remit.registry, … chain: { label: d.cfg.remit.chainLabel, rpc: d.cfg.remit.porChainRpc } }); }`"
+   ],
+   "affects": "PoR deployment topology",
+   "fix": "Give PoR its own registry dependency so it can be enabled and scaled on its own."
+  },
+  {
+   "id": "SIG-S4",
+   "title": "Server-side signature checks use native crypto, not the pure-JS P-256",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "PoR statements are verified with node:crypto, and evidence and signed-anchor statements with WebCrypto, whose verify runs on the libuv pool. The slow pure-JS P-256 runs only in browsers that lack crypto.subtle. Each server verify costs tens of microseconds, not milliseconds.",
+   "evidence": [
+    "attest/apps/core/src/remit/sign.ts:58 — `return verify('sha256', eventSigningBytes(payload), { key: pub, dsaEncoding: 'ieee-p1363' }, …)`",
+    "attest/packages/attest-verify/src/statement.ts:259-276 — `if (!globalThis.crypto?.subtle) { … verifyP256(sig, input, spki) }` … `await crypto.subtle.verify(`"
+   ],
+   "affects": "PoR submit, reconcile/bundle, signed anchors"
+  },
+  {
+   "id": "POR-S5",
+   "title": "Intake and build have guardrails: streaming strict CSV reader, capacity check before building, console caps, bounded amounts",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "The CSV export is streamed chunk by chunk and hashed in the same pass. The build is refused with an actionable message when the estimate exceeds the heap. The console refuses ledgers over 100k accounts or 4M sums. Amounts are capped at 60 digits and 36 decimals.",
+   "evidence": [
+    "attest/packages/attest-por/src/intake.ts:92-95 — `for await (const chunk of createReadStream(file) …) { hash.update(chunk); reader.pushBytes(chunk); }`",
+    "attest/packages/attest-por/src/anchor.ts:171-173 — `const capacity = checkCapacity(rows.length, …); if (!capacity.ok) throw new PorLedgerError('too_large', …)`",
+    "attest/apps/console/src/por.ts:101-106 — '100,000 accounts of three assets, all held, take about seven seconds' … `const MAX_ACCOUNTS = 100_000; const MAX_TREE_SUMS = 4_000_000;`",
+    "attest/packages/attest-por/src/amounts.ts:39,42 — `const MAX_DIGITS = 60;` `export const MAX_DECIMALS = 36;`"
+   ],
+   "affects": "SDK and console intake"
+  }
+ ],
+ "hard_limits": [
+  {
+   "name": "JSON request body cap (all JSON routes, including PoR submit and openings and /v1/settlements/*)",
+   "value": "1 MiB (1,048,576 bytes), buffered whole, then JSON.parse",
+   "where": "attest/apps/core/src/http/server.ts:76,296-311",
+   "configurable": "No (constant). ctx.raw(maxBytes) exists for per-route caps."
+  },
+  {
+   "name": "PoR spot-check sample size",
+   "value": "min(8, leaf_count) leaves",
+   "where": "attest/apps/core/src/por/routes.ts:100-102",
+   "configurable": "No"
+  },
+  {
+   "name": "PoR challenge lifetime",
+   "value": "3,600,000 ms (1 h)",
+   "where": "attest/apps/core/src/por/routes.ts:364",
+   "configurable": "No"
+  },
+  {
+   "name": "Statement leaf_count",
+   "value": "≤ 2,147,483,647 (signed 32-bit INT column)",
+   "where": "attest/apps/core/src/por/routes.ts:120; attest/apps/core/src/db.ts:663",
+   "configurable": "No"
+  },
+  {
+   "name": "PoR snapshot list page",
+   "value": "LIMIT 100, plus one attestation lookup per row",
+   "where": "attest/apps/core/src/por/routes.ts:455",
+   "configurable": "No"
+  },
+  {
+   "name": "Reserve eth_call",
+   "value": "5,000 ms timeout per entry, sequential, no cap on entry count; local chain only",
+   "where": "attest/apps/core/src/por/reserves.ts:50,61-76",
+   "configurable": "Timeout no. RPC URL via POR_CHAIN_RPC (default http://127.0.0.1:8545, config.ts:393)."
+  },
+  {
+   "name": "SDK build-capacity estimate",
+   "value": "150 MB + 2N × 1.3 kB + figures × 80 B, compared with 80% of V8 heap_size_limit. About 1.05M accounts at 3 assets under the default heap.",
+   "where": "attest/packages/attest-por/src/limits.ts:17,28-31,73-77; docs/POR-REFERENCE-ANALYSIS.md:161",
+   "configurable": "Yes, NODE_OPTIONS=--max-old-space-size"
+  },
+  {
+   "name": "V8 Map/Set entry limit (LedgerBuilder Map, buildPorTree Set)",
+   "value": "2^24 = 16,777,216 accounts (inferred engine limit, not tested here)",
+   "where": "attest/packages/attest-por/src/ledger.ts:186; attest/packages/attest-por/src/sumtree.ts:87",
+   "configurable": "No"
+  },
+  {
+   "name": "SDK JSON export size",
+   "value": "512 MiB (read whole; V8's maximum string length of about 536.9M chars bounds it in practice)",
+   "where": "attest/packages/attest-por/src/intake.ts:52",
+   "configurable": "No"
+  },
+  {
+   "name": "CSV quoted field length",
+   "value": "1,048,576 chars (1 << 20)",
+   "where": "attest/packages/attest-por/src/csv.ts:47",
+   "configurable": "No"
+  },
+  {
+   "name": "Account identifier",
+   "value": "≤ 256 UTF-8 bytes; no control characters or padding",
+   "where": "attest/packages/attest-por/src/ledger.ts:79,115-130",
+   "configurable": "No"
+  },
+  {
+   "name": "Asset symbol",
+   "value": "ASCII, 1–32 chars, /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/",
+   "where": "attest/packages/attest-por/src/ledger.ts:77",
+   "configurable": "No"
+  },
+  {
+   "name": "Amount",
+   "value": "≤ 60 digits (text ≤ 62 chars), ≤ 36 decimals",
+   "where": "attest/packages/attest-por/src/amounts.ts:39,42,57",
+   "configurable": "No"
+  },
+  {
+   "name": "Ledger problems kept in a report",
+   "value": "50 by default (all are counted)",
+   "where": "attest/packages/attest-por/src/ledger.ts:212",
+   "configurable": "Yes, LedgerOptions.maxProblems"
+  },
+  {
+   "name": "Console PoR screen",
+   "value": "100,000 accounts; 4,000,000 tree sums; CSV fed in 1 MiB pieces",
+   "where": "attest/apps/console/src/por.ts:105-106,624",
+   "configurable": "No"
+  },
+  {
+   "name": "Console anchor polling",
+   "value": "every 2,000 ms, at most 90 polls",
+   "where": "attest/apps/console/src/por.ts:780-781",
+   "configurable": "No"
+  },
+  {
+   "name": "SDK waitAnchored",
+   "value": "poll every 2,000 ms, default timeout 120,000 ms",
+   "where": "attest/packages/attest-por/src/client.ts:213-219",
+   "configurable": "Yes, argument"
+  },
+  {
+   "name": "Java PoR SDK structure limit",
+   "value": "67,108,862 accounts with at most 32 assets (one array per tree level); measured only to 300k",
+   "where": "attest/sdks/attest-por-java/README.md:328-331",
+   "configurable": "No"
+  },
+  {
+   "name": "Go PoR SDK memory",
+   "value": "about 0.5 kB per account at 3 assets (v1); measured only to 300k",
+   "where": "attest/sdks/attest-por-go/README.md:548-562",
+   "configurable": "GOMEMLIMIT"
+  },
+  {
+   "name": "Per-account proof size",
+   "value": "3–6 KB at 3 assets; 100–230 KB at hundreds of assets",
+   "where": "docs/POR-REFERENCE-ANALYSIS.md:171",
+   "configurable": "No (format property)"
+  },
+  {
+   "name": "Settlement verification keyring",
+   "value": "5 demo keys (DEMO_KEYRING)",
+   "where": "attest/packages/attest-rules/src/demo-keys.ts:32-66; attest/apps/core/src/http/evidence.ts:46-48",
+   "configurable": "No (code)"
+  },
+  {
+   "name": "Evidence ZIP format",
+   "value": "No Zip64 (members ≤ 4 GiB, ≤ 65,535 entries); about 8 members per archive",
+   "where": "attest/packages/attest-evidence/src/zip.ts:21-23",
+   "configurable": "No"
+  },
+  {
+   "name": "libuv threadpool (WebCrypto verify, deflate, fs)",
+   "value": "4 threads (UV_THREADPOOL_SIZE not set in the core .env)",
+   "where": "attest/apps/core/.env (key absent); attest/deploy/ecosystem.config.cjs:36-50",
+   "configurable": "Yes, env UV_THREADPOOL_SIZE"
+  }
+ ],
+ "scale_path": "T2 (about 100/s):\n1) Cache GET /v1/public/por/snapshots/:id per (snapshot, anchor status, confirmations), in-process or at a CDN, and add per-IP and global limits like the ones on /v1/public/anchors.\n2) Cache the remit issuer keyring and registry snapshot behind a registry version, invalidated on registry writes.\n3) Make audit writes asynchronous and batched, and stop auditing polling GETs.\n4) Add per-key rate limits and input caps on /v1/settlements/* (signed elements per request, amount digits and scale). For PoR openings, require count = challenge size, siblings ≤ 64 and digits ≤ 80.\n5) Replace the 2 s polling with backoff or push, and JOIN attestations in the snapshot list.\n6) Before core runs more than one process, move PoR replay protection from the in-memory queue to a unique key and index on (org_id, commitment).\n\nT3 (about 1,000/s, peaks 10k/s):\n7) Split reconcile/bundle into a separately scaled stateless worker pool (cluster or worker_threads). Switch server-side hashing to node:crypto SHA-256 and zlib.crc32.\n8) Run several core processes behind a load balancer. This needs step 6 and the backend reader's items.\n9) Publish confirmed PoR material and the playground's content-hashed assets as immutable objects on a CDN, instead of serving them no-cache from core.\n10) Send audit events to a log pipeline instead of a synchronous INSERT per request.\n\nLarge exchanges (10M+ accounts; exchange-side, not a rate tier):\na) Build from a sorted on-disk leaf stream level by level (external sort, compact typed-array nodes, native SHA-256, parallel subtrees), instead of holding the ledger, the leaves and every level as JS objects. This removes the roughly 27–31 GB / 16.7M-account ceiling.\nb) Persist the tree or per-account proofs at build time, so issuing a proof is an O(log N) lookup rather than a 37 s+ rebuild with a linear scan. Generate all proofs in parallel and serve them from the exchange's storage.\nc) Port v2 to the Go and Java SDKs and measure them at 1M and 10M.\nd) For hundreds of assets, reduce the 100–230 KB proof size with sharded or aggregated trees or the planned ZK upgrade, and raise or route-specifically set the 1 MiB cap for spot-check openings.",
+ "open_questions": [
+  "What is the real event-loop time of reconcile/bundle and of openings verification, for typical and for adversarial 1 MiB inputs? This pass was strictly read-only and nothing was benchmarked, so every ms figure above that is not quoted from a README or doc is an estimate.",
+  "Does the TS SDK actually hit the V8 2^24 Map/Set ceiling (about 16.7M accounts)? It is inferred from engine behaviour and was not exercised. The Go SDK states no cap beyond memory.",
+  "Will large exchanges use the TS SDK or the Go/Java SDKs? The Go/Java SDKs lack the v2 tree and are paused (owner, 11-17), which decides whether hundreds of listed assets are affordable at 1M+ accounts.",
+  "What end-user verification traffic is expected per published snapshot? That sizes the cache or CDN for GET /v1/public/por/snapshots/:id.",
+  "Do 8 compact-JSON spot-check openings at 500 assets exceed 1 MiB? The documented proof sizes (100–230 KB) are for pretty-printed files.",
+  "What keyring will /v1/settlements/* use in production? evidence.ts says 'Production keys would be configuration, not a code change', but no configuration hook exists yet.",
+  "How many institutions will production have, and how often does reconcilePayment run per payment? Both decide whether EV-3 matters; the remit reader owns the orchestration.",
+  "What is the production design for reserve measurement (multi-chain RPC or indexers, async)? Today it reads only the local anvil.",
+  "The cost of authenticate() per request (backend reader) adds to every per-request figure here."
+ ]
+}

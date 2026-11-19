@@ -1,0 +1,56 @@
+{
+  "schema": "stonehash.por-proof.v1",
+  "exchange": {
+    "institution_id": "KR-EX-0a1b2c",
+    "name": "Sample Exchange"
+  },
+  "asof": "2026-11-16T00:00:00Z",
+  "root": "eeb2534289eb2a990c5b526a511a5d0ebf80a06069488a9cf1b8ef905feba297",
+  "totals": {
+    "BTC": "2463358024",
+    "ETH": "114050000000000000001",
+    "USDT": "255810750000"
+  },
+  "leaf_count": 12,
+  "user_ref": "U-100012",
+  "proof": {
+    "leaf_index": 9,
+    "leaf": {
+      "user_ref": "U-100012",
+      "user_ref_hash": "c1b45464df81ac35f4ad0bccd0feb5b15cb7b505b7f6bb1cee61397a631ea359",
+      "salt": "fd79bc88932c4cd1e905d4bd7ba8082da8391aa1181cb077e2797d05f04ac538",
+      "balances": {}
+    },
+    "siblings": [
+      {
+        "hash": "c86ba06c038c7493632d2f420f9bf6765a69dd11d7f5da86bcc2c168c2fa9e6c",
+        "sums": {
+          "ETH": "1",
+          "USDT": "250000000000"
+        },
+        "dir": "left"
+      },
+      {
+        "hash": "69259e6bf5ea1899c096820d0fe8befe1a512a4b70182134cafeac5d10dedd16",
+        "sums": {
+          "BTC": "300012345"
+        },
+        "dir": "right"
+      },
+      {
+        "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+        "sums": {},
+        "dir": "right"
+      },
+      {
+        "hash": "bd9b4318f3380f09624c20cc390eb6146f1463d4d07ed8df8ad6632c04a026c1",
+        "sums": {
+          "BTC": "2163345679",
+          "ETH": "114050000000000000000",
+          "USDT": "5810750000"
+        },
+        "dir": "left"
+      }
+    ]
+  }
+}

@@ -1,0 +1,1221 @@
+{
+ "note": "Made once by apps/core-java/tools/make-remit-b1-vectors.mjs and kept: keys and signatures are random. Test keys; the private halves here protect nothing.",
+ "pem": {
+  "bank": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQge+oh+HfxPu7mICFc\nMkLbv/g+6UFksHcWL2l/cx8DlMShRANCAAQgjJ0sFw9iGP3lCK5uKTFaKpD0/RlQ\n+hePiHXaCAClQH7k1N2CouYPpdCXMVn6vABdxSMhKl8Sg1U3ACYOPn1y\n-----END PRIVATE KEY-----\n",
+  "bank2": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg02wF1IyjzEQQIH3E\nDPaKE7xYFBx3lBaiANFRdHb9thKhRANCAASIhwGYnsHQKJZNW36PCqYCNkLXSSVn\nKT/PbGgZqKFIdlPp7YGSqZZawIH5GLKqQD0FqqLG7MMSfKmKGdXmAutN\n-----END PRIVATE KEY-----\n",
+  "bfi": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgcQPYOuPgXYPJinAZ\ntj8AM0J3oK3hp2ajX6ta5lrSi1ChRANCAARWe521j0IIZJB/cw2DTAXCF+TDszsn\nIop63jwxW6ZnlncF913eQnyO2uHK0FuHrS3Is6uZZX+JFLHLw01h7mCY\n-----END PRIVATE KEY-----\n",
+  "settle": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgbCJbwBqMwbivmTL4\nGatIm3y4Q7bA2x1b/hUCEJo8ZuGhRANCAARg7YhpDYGg4oE9IIOjUHTbUB69WtBt\nVXGhZhHd7+zoS/F2PSaoMhILeovCr68GgrgqJUJX4cCH6CwLebfK9XAN\n-----END PRIVATE KEY-----\n",
+  "stranger": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgeirAtIKTiirX7Ikr\niZgl24+Ofx9ww/WPlHDDRq2sJI2hRANCAARhUE1+q4INyOnGT1fLTQQtQx9bWSgI\nkQkbGhbLZHdQSnBYbvTi9+HUUl7q8s53xKos0OSuLDxlKNtN1jsWUYkT\n-----END PRIVATE KEY-----\n",
+  "platform": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgQi16rkw8Z+uxlTJ+\njhrSGZNwdMxIBx7ghCf6vvEugpWhRANCAASQsCitKW6C4R+GHrgDvDZHWBHcDn1l\nIigu9wC7ffvD8R/GcUb+VQZ5iJ4mXgCbePOdTUugmkqe3OCF6idQqDLs\n-----END PRIVATE KEY-----\n"
+ },
+ "encryption": {
+  "kty": "EC",
+  "x": "U1GOFcmmQy0P4gI2jdZH4geebsTnLqq2MU1R3ht493s",
+  "y": "l1W4L3v2X23rDlkKSjhJvtqKqfTD758IoPmKn7yXijo",
+  "crv": "P-256"
+ },
+ "authorization": {
+  "payload": {
+   "payment_id": "PAY-B1-0001",
+   "quote_id": "QT-B1-GOOD",
+   "amount": "10000.00",
+   "currency": "USD",
+   "instruction_ref": "INS-B1-0001",
+   "authorized_at": "2026-11-19T02:00:00.000Z"
+  },
+  "sig": {
+   "alg": "ES256",
+   "key_id": "VN-BANK-B1",
+   "issuer": "B1 Collection Bank",
+   "sig": "mThyBENom9ymRmfLo0gsrkE7w2P1vsl4efV4baAeTEnQmg7OghEyYdfppAGGk5VHGahmbj7_ZyJVzShis-VEVg"
+  },
+  "sigByBank2": {
+   "alg": "ES256",
+   "key_id": "VN-BANK-OTHER",
+   "issuer": "Other Bank",
+   "sig": "87jV5oxnXmIMlR6Z8J7patEGKuCbhA7SyCRo_c8a49eqVEHmDJuod5lHNREbStbQHyAqk51GsqiP-YlA3qy50Q"
+  }
+ },
+ "instructions": {
+  "base": {
+   "ref": "PAY-B1-0001",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "digest": "b446b8e8a4abdfe1f7a80c752eeea738b7af7036aa965f4f43bace5f018405fd",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "D1Q75a-XEQhr74llCFig3EWCGmAiImFY1j3R7hxWeIx-Gn9Hdi1H11PIRXb2gkGWSpmGzv6qkx6miVrOcL1KAQ"
+   }
+  },
+  "amount9999": {
+   "ref": "PAY-B1-0001",
+   "amount": "9999.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "digest": "0ea1931736ac76865d1112cf334a3d1fdfe93f0f2b61ebb071790566308ccb04",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "BwZyoqaGBwLDmX5I4ThzYJQDzdUBRQRBSSzN5jgdVQHQZi-a3tbjFzInXhJMyvBGtBkykcGh4XsOLeDR1zH8Rw"
+   }
+  },
+  "amountNumber": {
+   "ref": "PAY-B1-0001",
+   "amount": 10000,
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "digest": "ffc9b47b120a6c3b7c2e1e7fd6d5649c92722e98f40a9bc53875ede25e901416",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "7H_JvUkA-Wkkky6Q9sohXhYnSuwfCSRmxjp7bj8SNSimX_XSTOgbLSdeI7Xqh3jDv5xvLPi1sXhmhodizvdxkg"
+   }
+  },
+  "eur": {
+   "ref": "PAY-B1-0001",
+   "amount": "10000.00",
+   "currency": "EUR",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "digest": "2a3d51209dd36456fb6ce44f30475f1249bf39a088baa9960967b75eb0616a69",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "9Qh5jm1yHUOK_wrmoGX48dXqdEIbLI5oHfzcb706yOPIqS9kR_N7lU8XXzRAQmDoNGHg61wGHYrmmbvzDFVWAg"
+   }
+  },
+  "otherRef": {
+   "ref": "PAY-B1-9999",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "digest": "632bb7f0df5e73ff67271537a08a5f8ce8c15cc9f70573b720b487adbf3e012d",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "DayQtBZcLAHjOZhjwJDRq_Tkj_8tnHIYzqa7bjYqtTcHUBAraOn3eolDpzirlvS8xHAEp81WO9siCfTQGv_4vw"
+   }
+  },
+  "byBank2": {
+   "ref": "PAY-B1-0001",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "digest": "b446b8e8a4abdfe1f7a80c752eeea738b7af7036aa965f4f43bace5f018405fd",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "W3SX7_8Nsf0joiK024tL0uyAx5jNj0tqQ3oQ1FLvgvA0w_AOfYbiiZ1POoM7G35LLfvCGKk3WtqATzbz8VxeGg"
+   }
+  },
+  "srcFull": {
+   "ref": "PAY-B1-0001",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "sourceMessage": {
+    "type": "MT103",
+    "sha256": "a927f59a9ea7ad76b925e1aef4cbd2f2e9b0453e06f2cd0695f174b51d9d9412",
+    "uetr": "b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57",
+    "messageId": "M-1",
+    "instructionId": "I-1",
+    "endToEndId": "E-1",
+    "valueDate": "2026-11-19",
+    "content": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+    "index": 2
+   },
+   "digest": "6bb0111a57b02f761cb82ef763ed82bc7e9d5cc845d71b4c70d8223537bd0a6a",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "EwClk26uz3RLNJea_G2yRxiYK9sXRROgMJCogwbB1j_oHhMQfAmnNXaF1FTxIIgjyPAHwLjO4LbSdYVtehHsdw"
+   }
+  },
+  "srcBare": {
+   "ref": "PAY-B1-0001",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "sourceMessage": {
+    "type": "pacs.008.001.08",
+    "sha256": "ADD25477001509779485EF4C1A672AC1D482F14F6132071A20C9A9F93435FEC1"
+   },
+   "digest": "6dac338298f225e585360a4a50367045af0aefc5c438d85e1a3d91f455668f1e",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "dWs7XxqLM8NXGJbFvPPbeJUhGREgpKFx9bU4cBAxKY3_A5OCX-xwAXwsW5Sns3jOdHG8ACJVY_CoB5YpUMY_Aw"
+   }
+  },
+  "srcBadUetr": {
+   "ref": "PAY-B1-0001",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "sourceMessage": {
+    "type": "MT103",
+    "sha256": "a927f59a9ea7ad76b925e1aef4cbd2f2e9b0453e06f2cd0695f174b51d9d9412",
+    "uetr": "not-a-uuid",
+    "messageId": "M-1",
+    "instructionId": "I-1",
+    "endToEndId": "E-1",
+    "valueDate": "2026-11-19",
+    "content": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+   },
+   "digest": "f125ef9fef81d991cbfde2503152ae48359566e86b79ea9256465328b15a10e0",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "58nNu91yjcV8q9nrsuuWsYQrSlM-UQg_hOUzlN9AozEalYsUb5xYw5hiNrNwdVKjPNeyphMnepODjM2TTvMaOQ"
+   }
+  },
+  "srcText": {
+   "ref": "PAY-B1-0001",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "sourceMessage": "MT103",
+   "digest": "98ffd9f3a766625a36c555ba6d7aa8e80180eb32dd2dce9b7c8f1ec7e375ceda",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "FyFpp2fi7INqE0rNMnm4QDtDZ8scfvV7vAZEm-Uqd3fcT3tcTnEy4Z0IXtW_9MUC8H6KYUhgqaztnC0hORQAIQ"
+   }
+  },
+  "srcNull": {
+   "ref": "PAY-B1-0001",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "sourceMessage": null,
+   "digest": "9a495943e7c4b26d6d014579c8140d22b3136a33c1612158a61f11f738edcbb8",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "IKoBNzS2qKp1piUNHXNNtBpbFxtcGrdSVWqXJUulPbwpgCDOG2iWaYLrDo5N1pt7ppxbnVXP5TLnfHCYgSB_Zg"
+   }
+  },
+  "ref:PAY-B1-TAKEN": {
+   "ref": "PAY-B1-TAKEN",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "digest": "f22fc5f402cd864f7dbadbb3890dd6b423c5d8912f7e691714911cd382ac11e8",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "EqoQ2lEnTMCXWQZzz6mNDCz2Y4rXUjI9Sj9EfDcKT6wDNuRwGIWtp9HDDAt4uHHmefUIZj9Mo0rTCN_LVJrfTg"
+   }
+  },
+  "ref:PAY-B1-OTHERS": {
+   "ref": "PAY-B1-OTHERS",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "digest": "054d207dea287cb0b65758d6d87130152326116ce4a0e2bc9c8f485e1a499acc",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "vL8-V6OvTN5ocX-C5A_NY8jBuspEzQpq3WtRa8klDnxfPmeVbNTIistNaPy4EREctiiddSvD6bX8aIwGxJNJ9Q"
+   }
+  },
+  "ref:ABCD": {
+   "ref": "ABCD",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "digest": "8db119ef6a265f67f7fc2e0bb314af56333c217f9863307b5854b591efa43662",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "naWzM_hZAOOi-78hXVTLjdgka7Wlnlg2ug0GdYMvZ2iguic8K7veKijeuNMTkX7csSMHNb3iV9LdsKsx_OO4AA"
+   }
+  },
+  "ref:P999999999999999999999999999999999999999999999999999999999999999": {
+   "ref": "P999999999999999999999999999999999999999999999999999999999999999",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "digest": "23e5094c53a612c6ab5a4322b58ee709e428525505163d24ab572df67f3d05c9",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "03nrljqCqJjXDDybPfm5dwPAM5FUUhStsV5U263q0MtzUAH22kVER7U0fJMOkDU-0M3-FAjd98xsrXXwM2-rAw"
+   }
+  },
+  "MSG:first": {
+   "ref": "PAY-B1-MSG-1",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "sourceMessage": {
+    "type": "MT103",
+    "sha256": "a927f59a9ea7ad76b925e1aef4cbd2f2e9b0453e06f2cd0695f174b51d9d9412",
+    "uetr": "b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57",
+    "messageId": "M-1",
+    "instructionId": "I-1",
+    "endToEndId": "E-1",
+    "valueDate": "2026-11-19",
+    "content": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+   },
+   "digest": "a4bc05764db78129dbe47b84ad56602363c9840112c4539fc5c74038d34e6fb3",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "iGRroA75okhtMh-Z1L9Y8LC9qsLQGwBk3i-BUVeplZp7C36VpcQ26mm_hpIeQ4Prqfy9t_-LGJBBaPkvhvbzAw"
+   }
+  },
+  "MSG:second": {
+   "ref": "PAY-B1-MSG-2",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "sourceMessage": {
+    "type": "MT103",
+    "sha256": "a927f59a9ea7ad76b925e1aef4cbd2f2e9b0453e06f2cd0695f174b51d9d9412",
+    "uetr": "b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57",
+    "messageId": "M-1",
+    "instructionId": "I-1",
+    "endToEndId": "E-1",
+    "valueDate": "2026-11-19",
+    "content": "e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0"
+   },
+   "digest": "827d1b7ee3c7b8eb154b17191e60b97b2db3c2e38aa1cb4609a3e6a8975ebf36",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "FpjsS1eFplOsqK_9QadfQYSv7TW9V63PbAJ7-nfoPE1oK7Mh0DGhVdDGCt2qnJd_UXL4wPQIP8O6p2prWAF09A"
+   }
+  },
+  "UETR:first": {
+   "ref": "PAY-B1-UETR-1",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "sourceMessage": {
+    "type": "MT103",
+    "sha256": "a927f59a9ea7ad76b925e1aef4cbd2f2e9b0453e06f2cd0695f174b51d9d9412",
+    "uetr": "b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57",
+    "messageId": "M-1",
+    "instructionId": "I-1",
+    "endToEndId": "E-1",
+    "valueDate": "2026-11-19",
+    "content": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+   },
+   "digest": "c1b90e94ac2d71c648a6f495e3714ed95d57478b2cecfdaef195ff895a36fa8c",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "Dyu-5Oap3gRgFkxl0xYlLodDfr-4j79kpJlNNsp801u_C3v8Hcnb1mqzhIMmcxqpfCUXKHXAB4EdbC72Urr1dw"
+   }
+  },
+  "UETR:second": {
+   "ref": "PAY-B1-UETR-2",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "sourceMessage": {
+    "type": "MT103",
+    "sha256": "af0dbc42af0e9229b4d6c53d23d8252123015014224aaa0d0b998cfd9815cf02",
+    "uetr": "b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57",
+    "messageId": "M-1",
+    "instructionId": "I-1",
+    "endToEndId": "E-1",
+    "valueDate": "2026-11-19",
+    "content": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+   },
+   "digest": "26a5cb00435b2f65287dee2c9227077b196fbcd9d139aa3e6d4e1b352e32009c",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "h_xSy-kkAMC7z0rC6Snw1u68XSfe7xnM5o0EUQSphuPda2cSVM5O5G5AInu4DebBFXieewCgzBJwekaY_yLg4w"
+   }
+  },
+  "REUSED:first": {
+   "ref": "PAY-B1-REUSED-1",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "sourceMessage": {
+    "type": "MT103",
+    "sha256": "a927f59a9ea7ad76b925e1aef4cbd2f2e9b0453e06f2cd0695f174b51d9d9412",
+    "uetr": "b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57",
+    "messageId": "M-1",
+    "instructionId": "I-1",
+    "endToEndId": "E-1",
+    "valueDate": "2026-11-19",
+    "content": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+   },
+   "digest": "bd1d0c5fef06f8c38bd0f2f238476c3f5af0b2a9834408f06d4df8bcc9d74f03",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "4NM0gdt14cFJatCl7DPpP4PWnfapXimu4rCMhfxz8-0ePurW-Mzlb4aEvBaVgrA6ZEjBxLISLBqLowy6TEXT3A"
+   }
+  },
+  "REUSED:second": {
+   "ref": "PAY-B1-REUSED-2",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "sourceMessage": {
+    "type": "MT103",
+    "sha256": "eadf2da0777aa585b86b8889fda1aa4801efc3787b963e2d32658f2364315205",
+    "uetr": "b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57",
+    "messageId": "M-1",
+    "instructionId": "I-1",
+    "endToEndId": "E-1",
+    "valueDate": "2026-11-19",
+    "content": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+   },
+   "digest": "22ec314d8b56d0504ddb55d47a3eabbfda9f0fb714f53df91aa047e2246ede84",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "YyX6Rqtlc1lDbNJFVIUjiFtFRkuiNzMkjCD2TS4dD_jUo5H7tzv7jpy3flxpnbHPu-RhKkViBaKUWUixWPxSzA"
+   }
+  },
+  "TWIN:first": {
+   "ref": "PAY-B1-TWIN-1",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "sourceMessage": {
+    "type": "MT103",
+    "sha256": "a927f59a9ea7ad76b925e1aef4cbd2f2e9b0453e06f2cd0695f174b51d9d9412",
+    "messageId": "M-1",
+    "instructionId": "I-1",
+    "endToEndId": "E-1",
+    "valueDate": "2026-11-19",
+    "content": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+   },
+   "digest": "a22d96cafcda8ab3a2ea855f4bec9dc525f7fb90da302e520e1ba1aa8b84642f",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "2_4Oy8Sa7FrV0J7kLDXfuBLUkihGfM8VQv_jn6jjlA6A-bc31m5S8oCVxH_bHIhH9j-EPtJAoBihgjxGDFZ-jw"
+   }
+  },
+  "TWIN:second": {
+   "ref": "PAY-B1-TWIN-2",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "sourceMessage": {
+    "type": "MT103",
+    "sha256": "43c45ae75b53a20b117a89f44a91271ce1238aa3522c34d6413476bfc2f5037e",
+    "uetr": "0b5f6c1e-2a47-4c3d-9e8f-7a6b5c4d3e2f",
+    "messageId": "M-1",
+    "instructionId": "I-1",
+    "endToEndId": "E-1",
+    "valueDate": "2026-11-19",
+    "content": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+   },
+   "digest": "e05481b8683ae67fb39136ba864ee74081d6860adf7e8ea351c161cf538a7fd3",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "77V3koaQvt3aMuktEwgHS0PZidtwBMmI9tOQqTKLPSvnMmRtB6UjMt6vUrjo3JojI_yd71N2Od3ioCJDJpQGVQ"
+   }
+  },
+  "UNDATED:first": {
+   "ref": "PAY-B1-UNDATED-1",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "sourceMessage": {
+    "type": "MT103",
+    "sha256": "a927f59a9ea7ad76b925e1aef4cbd2f2e9b0453e06f2cd0695f174b51d9d9412",
+    "messageId": "M-1",
+    "instructionId": "I-1",
+    "endToEndId": "E-1",
+    "content": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+   },
+   "digest": "0525629241af87c267125899a742ad08136483241ab83b88f94802588d45ca00",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "IBLHtthtMPXSSncaSIbHJVGvMglGbTyOWBSWOkhDtI4M1ZBCswiP2--FKTAlhZWshXdFqL9fnHG9hNdTnukZmw"
+   }
+  },
+  "UNDATED:second": {
+   "ref": "PAY-B1-UNDATED-2",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "sourceMessage": {
+    "type": "MT103",
+    "sha256": "e2163382d6636a6b18e4911daedecbe4fa41ce37ec40326ac911798d0f916fb6",
+    "messageId": "M-1",
+    "instructionId": "I-1",
+    "endToEndId": "E-1",
+    "content": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+   },
+   "digest": "c4534cf2ea14f5dc7a4d0a96848d06d577728beb483771f8ae142f7e2b30db71",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "V_GyjCaGPUrCQsGHWBEWZpXneBpdNl5ASP8J8VXgC7scQSekQDun4qroYYP-j7xg8GFOhJYV6FtViiNIe5dSLA"
+   }
+  }
+ },
+ "approval": {
+  "approvalRef": "APPR-PAY-B1-0001",
+  "regulatorReportRef": "VN-SBV-C27-DEMO",
+  "approvedByRole": "FX Compliance Officer",
+  "approvedAt": "2026-11-19T02:00:00.000Z",
+  "fxQuote": {
+   "pair": "USD/VND",
+   "rate": "25380",
+   "quotedAt": "2026-11-19T01:59:00.000Z",
+   "validUntil": "2026-11-19T02:10:00.000Z"
+  },
+  "digest": "ba30f18d33a4bff6d866cf203211d21636a5d189bfcd4b38fc3209681baa9a68",
+  "signature": {
+   "status": "VALID",
+   "keyId": "VN-BANK-B1",
+   "algorithm": "ES256",
+   "issuer": "B1 Collection Bank",
+   "trustLevel": "ATTESTED",
+   "value": "Ixj_eKmeETFUONCDAViW2Jd9vo6zydowA6R7zWTC7aKNFqHQ7uCGTmqCYrfPmv6HMvQ9ezIwJ_mtN0wvV5oThA"
+  }
+ },
+ "docs": {
+  "invoiceRef": "INV-B1-0001",
+  "amount": "10000.00",
+  "currency": "USD",
+  "buyer": "Vina Trading Co., Ltd.",
+  "seller": "Pacific Supply Pte Ltd",
+  "attached": [
+   "invoice"
+  ],
+  "citedOnly": [],
+  "digest": "f3b184b316bdbd6c23e444a738bbf26e47ff5628f2b18e2eca2ef5626fc01906",
+  "signature": {
+   "status": "VALID",
+   "keyId": "VN-BANK-B1",
+   "algorithm": "ES256",
+   "issuer": "B1 Collection Bank",
+   "trustLevel": "ATTESTED",
+   "value": "cliV_3auY9Y_sogbIH97PCoeUpfnBQfrGa8dAtaCuiUpbwzy6TcUlO404NYDsZM0N6ybr2a4lIPWXWt-5U909w"
+  }
+ },
+ "modeB": {
+  "ciphertext": "eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTI1NkdDTSJ9..b1-iv.b1-ciphertext.b1-tag",
+  "digest": "51784fd6fe1a6494373ab56dec93910544e0d348f0f3e64fcc6e73b58f2d433c",
+  "good": {
+   "payload": {
+    "payment_id": "PAY-B1-0001",
+    "required_fields_present": true,
+    "ivms101_digest": "51784fd6fe1a6494373ab56dec93910544e0d348f0f3e64fcc6e73b58f2d433c",
+    "ciphertext_sha256": "3fd86c8565bbf8a27771223a0ba9f51f25beb9c630013ad4b79a6bf862cf1509"
+   },
+   "sig": {
+    "alg": "ES256",
+    "key_id": "VN-BANK-B1",
+    "issuer": "B1 Collection Bank",
+    "sig": "QPNfTLFj5mExSzvxM1Hv_fPDbTsOBzzENboPDytwUMoe4yeNK_uCS0tnFbUxJEMG5oYz6dDo4qTLwv0FPX_l0g"
+   }
+  },
+  "otherPayment": {
+   "payload": {
+    "payment_id": "PAY-B1-9999",
+    "required_fields_present": true,
+    "ivms101_digest": "51784fd6fe1a6494373ab56dec93910544e0d348f0f3e64fcc6e73b58f2d433c",
+    "ciphertext_sha256": "3fd86c8565bbf8a27771223a0ba9f51f25beb9c630013ad4b79a6bf862cf1509"
+   },
+   "sig": {
+    "alg": "ES256",
+    "key_id": "VN-BANK-B1",
+    "issuer": "B1 Collection Bank",
+    "sig": "LjcQKtAsrf90FxxIP4Yh74P7VYiw8RMG7KlzHiFzMxrXG0AC7gUde3WjhTkwChL4au57FTkjisvLB0TTCj2_zA"
+   }
+  },
+  "notPresent": {
+   "payload": {
+    "payment_id": "PAY-B1-0001",
+    "required_fields_present": "true",
+    "ivms101_digest": "51784fd6fe1a6494373ab56dec93910544e0d348f0f3e64fcc6e73b58f2d433c",
+    "ciphertext_sha256": "3fd86c8565bbf8a27771223a0ba9f51f25beb9c630013ad4b79a6bf862cf1509"
+   },
+   "sig": {
+    "alg": "ES256",
+    "key_id": "VN-BANK-B1",
+    "issuer": "B1 Collection Bank",
+    "sig": "nHYLQyxQgUCcJMzjXP16yWYZcKr631ThHZLbxc4Xft0E0J-9S3SLs_7jWZ48n7qqedQ-2a_SWH5ad7EGqnzw1A"
+   }
+  },
+  "otherDigest": {
+   "payload": {
+    "payment_id": "PAY-B1-0001",
+    "required_fields_present": true,
+    "ivms101_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "ciphertext_sha256": "3fd86c8565bbf8a27771223a0ba9f51f25beb9c630013ad4b79a6bf862cf1509"
+   },
+   "sig": {
+    "alg": "ES256",
+    "key_id": "VN-BANK-B1",
+    "issuer": "B1 Collection Bank",
+    "sig": "C3hl3KhpMvFkIBIK9bPNAHY3fTSjqyflz9Gve8IJH8xEw4Z_x9H9FnPcamUff_iRiTUJZWRHyVvKym-kXNH65Q"
+   }
+  },
+  "otherCiphertext": {
+   "payload": {
+    "payment_id": "PAY-B1-0001",
+    "required_fields_present": true,
+    "ivms101_digest": "51784fd6fe1a6494373ab56dec93910544e0d348f0f3e64fcc6e73b58f2d433c",
+    "ciphertext_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+   },
+   "sig": {
+    "alg": "ES256",
+    "key_id": "VN-BANK-B1",
+    "issuer": "B1 Collection Bank",
+    "sig": "y6Lev7f3czsvDvBX_rI_4_kJOaIRMpkr2mL5EIB-OLhEghBRTOz4TygXIw_d5E8FeIf9kG6gsIGYhhN6wyDc4Q"
+   }
+  },
+  "noCiphertextHash": {
+   "payload": {
+    "payment_id": "PAY-B1-0001",
+    "required_fields_present": true,
+    "ivms101_digest": "51784fd6fe1a6494373ab56dec93910544e0d348f0f3e64fcc6e73b58f2d433c"
+   },
+   "sig": {
+    "alg": "ES256",
+    "key_id": "VN-BANK-B1",
+    "issuer": "B1 Collection Bank",
+    "sig": "76X5gNxfnGmGkUSKk_m85IuPz61up0ghE3NaSmwap1Gyn55kWNqJ0SG__XOzTJ3NSTaRjdZONmspfItXHaJARw"
+   }
+  },
+  "byBank2": {
+   "payload": {
+    "payment_id": "PAY-B1-0001",
+    "required_fields_present": true,
+    "ivms101_digest": "51784fd6fe1a6494373ab56dec93910544e0d348f0f3e64fcc6e73b58f2d433c",
+    "ciphertext_sha256": "3fd86c8565bbf8a27771223a0ba9f51f25beb9c630013ad4b79a6bf862cf1509"
+   },
+   "sig": {
+    "alg": "ES256",
+    "key_id": "VN-BANK-OTHER",
+    "issuer": "Other Bank",
+    "sig": "zn9QrGCIG-_ivCy_VhdvkWeg_M_5sv4WaauzirlGR9aMDLEyopqM3pzJ8t_mw5Uie_quanrD93xZdC9u87D1rg"
+   }
+  },
+  "extraMembers": {
+   "payload": {
+    "payment_id": "PAY-B1-0001",
+    "required_fields_present": true,
+    "ivms101_digest": "51784fd6fe1a6494373ab56dec93910544e0d348f0f3e64fcc6e73b58f2d433c",
+    "ciphertext_sha256": "3fd86c8565bbf8a27771223a0ba9f51f25beb9c630013ad4b79a6bf862cf1509",
+    "note": "further members change nothing",
+    "fields": [
+     "originator.name"
+    ]
+   },
+   "sig": {
+    "alg": "ES256",
+    "key_id": "VN-BANK-B1",
+    "issuer": "B1 Collection Bank",
+    "sig": "Ml_AW8oZ6jXaoRPOaq2yoYQypyw6LmyYnx3nexjI0svGv9ATrhVMW7wsfA881LbeOTgVAZBvZNaLsPQua4oyCA"
+   }
+  }
+ },
+ "evidence": {
+  "bankInstruction": {
+   "ref": "PAY-B1-0001",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "digest": "b446b8e8a4abdfe1f7a80c752eeea738b7af7036aa965f4f43bace5f018405fd",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "D1Q75a-XEQhr74llCFig3EWCGmAiImFY1j3R7hxWeIx-Gn9Hdi1H11PIRXb2gkGWSpmGzv6qkx6miVrOcL1KAQ"
+   }
+  },
+  "bankApproval": {
+   "approvalRef": "APPR-PAY-B1-0001",
+   "regulatorReportRef": "VN-SBV-C27-DEMO",
+   "approvedByRole": "FX Compliance Officer",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "fxQuote": {
+    "pair": "USD/VND",
+    "rate": "25380",
+    "quotedAt": "2026-11-19T01:59:00.000Z",
+    "validUntil": "2026-11-19T02:10:00.000Z"
+   },
+   "digest": "ba30f18d33a4bff6d866cf203211d21636a5d189bfcd4b38fc3209681baa9a68",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "f4Rma-ZBCP9sbgUYomOxghzu1Di9XijTl4pDE4XdVmpz3qriNCY_-XAFXTy1fQLEpCn1UL_3owjsYbMF1cErZQ"
+   }
+  },
+  "commercialDocs": {
+   "invoiceRef": "INV-B1-0001",
+   "amount": "10000.00",
+   "currency": "USD",
+   "buyer": "Vina Trading Co., Ltd.",
+   "seller": "Pacific Supply Pte Ltd",
+   "attached": [
+    "invoice"
+   ],
+   "citedOnly": [],
+   "digest": "f3b184b316bdbd6c23e444a738bbf26e47ff5628f2b18e2eca2ef5626fc01906",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "N6NwRVGzG7LDnGCMi0kc5hVVbBgJYxmVKhY1k1uPNYzdl2nlHTK5ZDlmHiVXgvIvgUc_4fREG20zq1cfVHp1tA"
+   }
+  },
+  "travelRule": {
+   "protocol": "IVMS101/JWE",
+   "ivms101Digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "originatingVasp": "SETTLE-B1",
+   "beneficiaryVasp": "SG-BFI-B1",
+   "approvalStatus": "APPROVED",
+   "approvalDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+   "approvedAt": "2026-11-19T02:00:10.000Z",
+   "approvedBeneficiaryAddress": "0xabababababababababababababababababababab",
+   "digest": "35bfce0a080f7cc5830f524f765e943005fc2bcade9474fdc05e8158d550bf05",
+   "signature": {
+    "status": "VALID",
+    "keyId": "SG-BFI-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Beneficiary Institution",
+    "trustLevel": "ATTESTED",
+    "value": "MouQFUwmnYkALbWc7Q4cDc2mZeIv1lwkViw1gSQsIMXTXOuPMoA_mZiB2ueVM3M8ZMVZqqfujgiKXHV7GuDGlg"
+   }
+  },
+  "chainTransfer": {
+   "chain": "eip155:31337",
+   "asset": "USDC",
+   "amount": "10000.00",
+   "currency": "USDC",
+   "fromAddress": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+   "toAddress": "0xabababababababababababababababababababab",
+   "txRef": "0xefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef",
+   "settlementIdMemo": "PAY-B1-0001",
+   "confirmations": 1,
+   "observedAt": "2026-11-19T02:00:20.000Z",
+   "digest": "f2e949a656c2645890f1efc0c9e4cb89a2ca0b795ef9a0cacd790d85783ba930",
+   "signature": {
+    "status": "VALID",
+    "keyId": "SETTLE-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Settlement Entity",
+    "trustLevel": "ATTESTED",
+    "value": "etHMx09J2qAOhTaDi0hVYHLkxT1hJIDJ-pv8ZM4efI_SqzEkDZkp8XoDR3xvBt0s5VVFn99Z--hVadMls6rKwg"
+   }
+  },
+  "receipt": {
+   "ref": "PAY-B1-0001/FAST-20261119-0001",
+   "amount": "10000.00",
+   "currency": "USD",
+   "paidAt": "2026-11-19T02:00:30.000Z",
+   "local_amount": "13350.00",
+   "local_currency": "SGD",
+   "local_rate_pair": "USD/SGD",
+   "local_rate": "1.3350",
+   "quote_ref": "QT-B1-GOOD",
+   "bank_reference": "FAST-20261119-0001",
+   "evidence_level": "L3",
+   "digest": "27df1c967a1e0c0a1550e823f9fe5ff3fe5454974d62c4c178e7c1a453e43b89",
+   "signature": {
+    "status": "VALID",
+    "keyId": "SG-BFI-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Beneficiary Institution",
+    "trustLevel": "ATTESTED",
+    "value": "DrPfmse_kjqNnvYLoiiFJXgK5hP9BhEytRLQvsPUuZcR9PS3DSod2GaJ1DwX0DISrZ2ceMOGQwPPRdOdbcRyjA"
+   }
+  },
+  "receiptOtherAmount": {
+   "ref": "PAY-B1-0001/FAST-20261119-0001",
+   "amount": "10100.00",
+   "currency": "USD",
+   "paidAt": "2026-11-19T02:00:30.000Z",
+   "local_amount": "13350.00",
+   "local_currency": "SGD",
+   "local_rate_pair": "USD/SGD",
+   "local_rate": "1.3350",
+   "quote_ref": "QT-B1-GOOD",
+   "bank_reference": "FAST-20261119-0001",
+   "evidence_level": "L3",
+   "digest": "85f31d782c93b5d29b292badc7d2b0564c9b1f504db4909e279136c08e14169b",
+   "signature": {
+    "status": "VALID",
+    "keyId": "SG-BFI-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Beneficiary Institution",
+    "trustLevel": "ATTESTED",
+    "value": "4WjGRUfljhBO0R8l3rdalSUIMRrLw4ai2Tst5bxW5xR9ZWpTI6duMK2VnioxotkwRz72MEu98aQFte2N-xwFmA"
+   }
+  },
+  "receiptByStranger": {
+   "ref": "PAY-B1-0001/FAST-20261119-0001",
+   "amount": "10000.00",
+   "currency": "USD",
+   "paidAt": "2026-11-19T02:00:30.000Z",
+   "local_amount": "13350.00",
+   "local_currency": "SGD",
+   "local_rate_pair": "USD/SGD",
+   "local_rate": "1.3350",
+   "quote_ref": "QT-B1-GOOD",
+   "bank_reference": "FAST-20261119-0001",
+   "evidence_level": "L3",
+   "digest": "27df1c967a1e0c0a1550e823f9fe5ff3fe5454974d62c4c178e7c1a453e43b89",
+   "signature": {
+    "status": "VALID",
+    "keyId": "SG-BFI-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Beneficiary Institution",
+    "trustLevel": "ATTESTED",
+    "value": "Bm1e7HuYxbeSDBYRXlYmCAN3uyAOTloXsNDK77nbNuD8sUmsqAMPRnhr4MkTUF5JkZQRZAXv30Hzm0UUgqfHlg"
+   }
+  },
+  "receiptUnsigned": {
+   "ref": "PAY-B1-0001/FAST-20261119-0001",
+   "amount": "10000.00",
+   "currency": "USD",
+   "paidAt": "2026-11-19T02:00:30.000Z",
+   "local_amount": "13350.00",
+   "local_currency": "SGD",
+   "local_rate_pair": "USD/SGD",
+   "local_rate": "1.3350",
+   "quote_ref": "QT-B1-GOOD",
+   "bank_reference": "FAST-20261119-0001",
+   "evidence_level": "L1",
+   "digest": "8fa2897cf083a53d6d0bc16ef57002220f90fd797eff0c6ab586ff6c96d30694",
+   "signature": {
+    "status": "ABSENT"
+   }
+  },
+  "receiptL2": {
+   "ref": "PAY-B1-0001/FAST-20261119-0001",
+   "amount": "10000.00",
+   "currency": "USD",
+   "paidAt": "2026-11-19T02:00:30.000Z",
+   "local_amount": "13350.00",
+   "local_currency": "SGD",
+   "local_rate_pair": "USD/SGD",
+   "local_rate": "1.3350",
+   "quote_ref": "QT-B1-GOOD",
+   "evidence_level": "L2",
+   "digest": "acda8b17f38e0190c258f9f40095571d09ee7cfd5bac5c4d8a6c41a4611033c7",
+   "signature": {
+    "status": "VALID",
+    "keyId": "SG-BFI-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Beneficiary Institution",
+    "trustLevel": "ATTESTED",
+    "value": "N7okTSD-Sjq8V9ESFVR8q52kMOXsuJ27si0o9ek-0-bnl-IH5TK33T3QWCfJnbz53M8PkQL7hwBpOV4DJCHJtQ"
+   }
+  },
+  "instructionWrongDigest": {
+   "ref": "PAY-B1-0001",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "digest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "txrRi2WcFUfESWAuaKN-tKxOby_TRp_1a8ZKx1lRDOcxkgEgzxUhnA_I6D-Ayfpu5QHaxvbuFG7f2SShDpN2tA"
+   }
+  },
+  "instructionNoDigest": {
+   "ref": "PAY-B1-0001",
+   "amount": "10000.00",
+   "currency": "USD",
+   "debtor": "Vina Trading Co., Ltd.",
+   "creditor": "Pacific Supply Pte Ltd",
+   "approvedAt": "2026-11-19T02:00:00.000Z",
+   "iso20022Fields": [
+    "Dbtr",
+    "Cdtr",
+    "InstdAmt",
+    "Ccy",
+    "RmtInf",
+    "INV-B1-0001"
+   ],
+   "signature": {
+    "status": "VALID",
+    "keyId": "VN-BANK-B1",
+    "algorithm": "ES256",
+    "issuer": "B1 Collection Bank",
+    "trustLevel": "ATTESTED",
+    "value": "etwYyiwDwEs8vFt2vs6elGJY1hlttpG4cj5M43PfdQJv9uoOV15IPYO-oT5F_0q808X5QHTBZd3hJxutD422Ww"
+   }
+  }
+ },
+ "keySample": {
+  "payload": {
+   "payment_id": "PAY-B1-0001",
+   "note": "signed with the P-256 key of key-materials.json"
+  },
+  "sig": {
+   "alg": "ES256",
+   "key_id": "KEY-SAMPLE",
+   "issuer": "Key sample",
+   "sig": "wAkSegRdRzJCwvI1eIzk0gpLkA9hy3OMiSYF8TNLsG63cWldWEC8HdLHdCDmylVZOsYzVzqN17-rh8IqAVJQ5w"
+  }
+ }
+}

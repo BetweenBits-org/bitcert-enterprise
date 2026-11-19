@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>데모은행 — 국경간 송금 (무역대금) · 스테이블코인 정산</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/remit.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="logo">데모은행</span>
+    <span class="divider"></span>
+    <span class="system">국경간 송금 — 무역대금 (VN→SG)</span>
+  </div>
+  <nav class="topnav">
+    <a href="/">전자증빙 등록</a>
+    <a href="/remit.html" class="active">국경간 송금</a>
+  </nav>
+  <span class="demo-badge">가상 데모 · 합성 자금 · StoneHash 정산 레일</span>
+</header>
+
+<main class="layout">
+  <aside class="side">
+    <section class="card" id="subCard">
+      <h2>송금 상품 구독</h2>
+      <div id="subBody">불러오는 중…</div>
+    </section>
+
+    <section class="card persona importer">
+      <div class="persona-tag">화면 1 · 수입업체 (송금인)</div>
+      <h2>해외 무역대금 지급 신청</h2>
+      <dl class="kv" id="importerInfo"></dl>
+      <label class="fl">인보이스 번호
+        <input id="invRef" placeholder="INV-2026-0455" value="">
+      </label>
+      <label class="fl">인보이스 금액 (USD)
+        <input id="invAmt" inputmode="decimal" placeholder="10000.00" value="10000.00">
+      </label>
+      <label class="fl">데모 시나리오
+        <select id="scenario"></select>
+      </label>
+      <p class="note" id="scenarioNote"></p>
+      <label class="fl" style="display:flex;gap:8px;align-items:center">
+        <input type="checkbox" id="modeB" style="width:auto">
+        트래블룰 모드 B — 은행측 암호화 (평문 PII가 은행 밖으로 안 나감)
+      </label>
+      <dl class="kv" id="beneInfo"></dl>
+      <button id="requestBtn" class="primary">송금 신청 (은행 심사 요청)</button>
+      <p class="note">신청하면 은행 심사 큐로 넘어갑니다. 오른쪽 화면에서 은행 담당자가
+      심사·승인하면 당행이 StoneHash 플랫폼을 호출해 정산이 시작됩니다.</p>
+    </section>
+
+    <section class="card">
+      <h2>일별 마감 대사 (Manifest)</h2>
+      <p class="hint">당행이 오늘 지시한 송금 목록을 서명해 제출하면, 플랫폼 목록과
+      양방향으로 대조해 누락을 찾아냅니다 (§7-4 완전성 통제).</p>
+      <label class="fl" style="display:flex;gap:8px;align-items:center">
+        <input type="checkbox" id="omitOne" style="width:auto">
+        1건 누락 시뮬레이션 (DISCREPANT 재현)
+      </label>
+      <button id="manifestBtn" class="primary">오늘자 Manifest 서명·제출</button>
+      <div id="manifestOut"></div>
+    </section>
+
+    <section class="card">
+      <h2>수취측 화면 (별도 기관)</h2>
+      <p class="hint">실제로 돈이 움직였는지는 상대 기관의 화면에서 확인하세요.</p>
+      <div class="links" id="partnerLinks"></div>
+    </section>
+  </aside>
+
+  <section class="maincol">
+    <div class="listhead">
+      <h2>송금 처리 현황 <span class="persona-inline">화면 2 · 은행 심사역 + 결과 추적</span></h2>
+      <span id="count" class="muted"></span>
+    </div>
+    <div id="cases"></div>
+    <p id="empty" class="empty" hidden>진행 중인 송금이 없습니다. 왼쪽에서 수입업체 신청을 만들어 보세요.</p>
+  </section>
+</main>
+
+<footer class="foot">
+  본 화면은 <b>가상의 은행 업무시스템</b>입니다. 자금·기관·레일 전부 합성 데모이며
+  (mUSDC·사설 체인·모의 FAST), Triple-A는 시뮬레이션 대상 프로파일의 명칭입니다.
+</footer>
+
+<script src="/remit.js"></script>
+</body>
+</html>

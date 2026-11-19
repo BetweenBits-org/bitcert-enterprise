@@ -1,0 +1,403 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonehash.attest.core.remit.RemitMapper">
+
+  <!-- ── the lock an acceptance starts with ─────────────────────────────── -->
+
+  <select id="lockOrg" resultType="string">
+    SELECT id FROM orgs WHERE id = #{orgId} FOR UPDATE
+  </select>
+
+  <!-- ── settlements ────────────────────────────────────────────────────── -->
+
+  <sql id="paymentColumns">
+    id, org_id, quote_id, state, corridor_origin, corridor_destination, trade_currency, trade_amount, collect_currency, collect_amount,
+    usdc_amount, payout_currency, payout_amount, beneficiary_institution, deposit_address, chain_tx, evidence_level, request_body, verdict,
+    package_json, commitment, nonce, attestation_id, created_at, updated_at
+  </sql>
+
+  <select id="payment" resultType="java.util.LinkedHashMap">
+    SELECT <include refid="paymentColumns"/> FROM remit_payments WHERE id = #{id}
+  </select>
+
+  <select id="paymentForUpdate" resultType="java.util.LinkedHashMap">
+    SELECT <include refid="paymentColumns"/> FROM remit_payments WHERE id = #{id} FOR UPDATE
+  </select>
+
+  <select id="paymentExists" resultType="int">
+    SELECT 1 FROM remit_payments WHERE id = #{id}
+  </select>
+
+  <!-- A settlement starts as REQUEST_ACCEPTED; the transaction that inserts it moves it on. -->
+  <insert id="insertPayment">
+    INSERT INTO remit_payments
+      (id, org_id, quote_id, state, corridor_origin, corridor_destination,
+       trade_currency, trade_amount, collect_currency, collect_amount, usdc_amount,
+       payout_currency, payout_amount, beneficiary_institution, request_body,
+       created_at, updated_at)
+    VALUES (#{id}, #{orgId}, #{quoteId}, 'REQUEST_ACCEPTED', #{corridorOrigin}, #{corridorDestination},
+       #{tradeCurrency}, #{tradeAmount}, #{collectCurrency}, #{collectAmount}, #{usdcAmount},
+       #{payoutCurrency}, #{payoutAmount}, #{beneficiaryInstitution}, #{requestBody},
+       #{at}, #{at})
+  </insert>
+
+  <update id="moveState">
+    UPDATE remit_payments SET state = #{to}, updated_at = #{at} WHERE id = #{id} AND state = #{from}
+  </update>
+
+  <!-- Every write to a settlement's row writes updated_at with it: both read routes answer it. -->
+  <update id="setDepositAddress">
+    UPDATE remit_payments SET deposit_address = #{depositAddress}, updated_at = #{at} WHERE id = #{id}
+  </update>
+
+  <update id="setChainTx">
+    UPDATE remit_payments SET chain_tx = #{chainTx}, updated_at = #{at} WHERE id = #{id}
+  </update>
+
+  <update id="setEvidenceLevel">
+    UPDATE remit_payments SET evidence_level = #{evidenceLevel}, updated_at = #{at} WHERE id = #{id}
+  </update>
+
+  <update id="setVerdict">
+    UPDATE remit_payments SET verdict = #{verdict}, updated_at = #{at} WHERE id = #{id}
+  </update>
+
+  <update id="setPackage">
+    UPDATE remit_payments SET package_json = #{packageJson}, nonce = #{nonce}, commitment = #{commitment}, attestation_id = #{attestationId},
+           updated_at = #{at}
+     WHERE id = #{id} AND attestation_id IS NULL
+  </update>
+
+  <update id="setRequestBody">
+    UPDATE remit_payments SET request_body = #{requestBody}, updated_at = #{at} WHERE id = #{id}
+  </update>
+
+  <select id="anchoredPending" resultType="java.util.LinkedHashMap">
+    SELECT p.id, p.attestation_id FROM remit_payments p
+      JOIN attestations a ON a.id = p.attestation_id
+     WHERE p.state = 'BENEFICIARY_CREDIT_CONFIRMED' AND a.status = 'confirmed'
+  </select>
+
+  <!-- ── events ─────────────────────────────────────────────────────────── -->
+
+  <select id="events" resultType="java.util.LinkedHashMap">
+    SELECT id, payment_id, seq, type, issuer, payload, sig, created_at FROM remit_events WHERE payment_id = #{paymentId} ORDER BY seq
+  </select>
+
+  <select id="eventOfType" resultType="java.util.LinkedHashMap">
+    SELECT id, payment_id, seq, type, issuer, payload, sig, created_at FROM remit_events
+     WHERE payment_id = #{paymentId} AND type = #{type} ORDER BY seq LIMIT 1
+  </select>
+
+  <select id="eventsOfType" resultType="java.util.LinkedHashMap">
+    SELECT id, payment_id, seq, type, issuer, payload, sig, created_at FROM remit_events
+     WHERE payment_id = #{paymentId} AND type = #{type} ORDER BY seq
+  </select>
+
+  <select id="nextSeq" resultType="int">
+    SELECT COALESCE(MAX(seq), -1) + 1 FROM remit_events WHERE payment_id = #{paymentId}
+  </select>
+
+  <insert id="insertEvent">
+    INSERT INTO remit_events (id, payment_id, seq, type, issuer, payload, sig, created_at)
+    VALUES (#{id}, #{paymentId}, #{seq}, #{type}, #{issuer}, #{payload}, #{sig}, #{at})
+  </insert>
+
+  <!-- ── quotes ─────────────────────────────────────────────────────────── -->
+
+  <insert id="insertQuote">
+    INSERT INTO remit_quotes (id, org_id, corridor_origin, corridor_destination, request, response, expires_at, created_at)
+    VALUES (#{id}, #{orgId}, #{origin}, #{destination}, #{request}, #{response}, #{expiresAt}, #{at})
+  </insert>
+
+  <select id="quote" resultType="java.util.LinkedHashMap">
+    SELECT id, response, expires_at FROM remit_quotes WHERE id = #{id} AND org_id = #{orgId}
+  </select>
+
+  <!-- ── request idempotency ────────────────────────────────────────────── -->
+
+  <select id="idempotencyHit" resultType="java.util.LinkedHashMap">
+    SELECT request_hash, response_status, response_body FROM remit_idempotency WHERE org_id = #{orgId} AND idem_key = #{key}
+  </select>
+
+  <!-- Written once, last in the transaction that accepted the settlement: a row is always a finished answer. -->
+  <insert id="insertIdempotency">
+    INSERT INTO remit_idempotency (org_id, idem_key, request_hash, response_status, response_body, created_at)
+    VALUES (#{orgId}, #{key}, #{requestHash}, #{status}, #{body}, #{at})
+  </insert>
+
+  <!-- ── travel rule ────────────────────────────────────────────────────── -->
+
+  <insert id="insertTravelRule">
+    INSERT INTO remit_travel_rule (id, payment_id, protocol, recipient, ciphertext, ivms101_digest, status, response, created_at)
+    VALUES (#{id}, #{paymentId}, 'IVMS101/JWE', #{recipient}, #{ciphertext}, #{digest}, #{status}, #{response}, #{at})
+  </insert>
+
+  <select id="travelRule" resultType="java.util.LinkedHashMap">
+    SELECT ivms101_digest, ciphertext, status FROM remit_travel_rule WHERE payment_id = #{paymentId} ORDER BY created_at DESC LIMIT 1
+  </select>
+
+  <!-- ── webhooks ───────────────────────────────────────────────────────── -->
+
+  <insert id="insertWebhook">
+    INSERT INTO remit_webhook_deliveries (id, org_id, payment_id, event_id, url, body, next_attempt_at, created_at)
+    VALUES (#{id}, #{orgId}, #{paymentId}, #{eventId}, #{url}, #{body}, #{nextAttemptAt}, #{at})
+  </insert>
+
+  <select id="dueWebhooks" resultType="java.util.LinkedHashMap">
+    SELECT id, url, body, attempts FROM remit_webhook_deliveries
+     WHERE status = 'pending' AND next_attempt_at &lt;= #{now} ORDER BY created_at LIMIT #{limit}
+  </select>
+
+  <update id="webhookDelivered">
+    UPDATE remit_webhook_deliveries SET status = 'delivered', attempts = #{attempts} + 1
+     WHERE id = #{id} AND status = 'pending' AND attempts = #{attempts}
+  </update>
+
+  <update id="webhookRescheduled">
+    UPDATE remit_webhook_deliveries SET attempts = #{attempts} + 1, last_error = #{error}, next_attempt_at = #{nextAttemptAt}
+     WHERE id = #{id} AND status = 'pending' AND attempts = #{attempts}
+  </update>
+
+  <update id="webhookExhausted">
+    UPDATE remit_webhook_deliveries SET status = 'exhausted', attempts = #{attempts} + 1, last_error = #{error}
+     WHERE id = #{id} AND status = 'pending' AND attempts = #{attempts}
+  </update>
+
+  <select id="webhooksOfPayment" resultType="java.util.LinkedHashMap">
+    SELECT id, org_id, payment_id, event_id, url, body, attempts, status, last_error, next_attempt_at, created_at
+      FROM remit_webhook_deliveries WHERE payment_id = #{paymentId} ORDER BY created_at, id
+  </select>
+
+  <!-- ── daily manifests ────────────────────────────────────────────────── -->
+
+  <select id="paymentIdsOfDay" resultType="string">
+    SELECT id FROM remit_payments WHERE org_id = #{orgId} AND substr(created_at, 1, 10) = #{date} ORDER BY created_at
+  </select>
+
+  <insert id="upsertManifest">
+    INSERT INTO remit_manifests (id, org_id, date, manifest, sig, verdict, platform_sig, commitment, attestation_id, created_at)
+    VALUES (#{id}, #{orgId}, #{date}, #{manifest}, #{sig}, #{verdict}, #{platformSig}, #{commitment}, #{attestationId}, #{at}) AS new
+    ON DUPLICATE KEY UPDATE
+      manifest = new.manifest, sig = new.sig, verdict = new.verdict,
+      platform_sig = new.platform_sig, commitment = new.commitment,
+      attestation_id = new.attestation_id, created_at = new.created_at
+  </insert>
+
+  <select id="manifestsOfDay" resultType="java.util.LinkedHashMap">
+    SELECT id, org_id, date, manifest, sig, verdict, platform_sig, commitment, attestation_id, created_at
+      FROM remit_manifests WHERE org_id = #{orgId} AND date = #{date}
+  </select>
+
+  <select id="latestManifests" resultType="java.util.LinkedHashMap">
+    SELECT id, org_id, date, manifest, sig, verdict, platform_sig, commitment, attestation_id, created_at
+      FROM remit_manifests WHERE org_id = #{orgId} ORDER BY date DESC LIMIT 30
+  </select>
+
+  <!-- ── one message, one settlement ────────────────────────────────────── -->
+
+  <select id="sourceRefOfMessage" resultType="java.util.LinkedHashMap">
+    SELECT r.payment_id, r.uetr, r.content, r.sha256, r.idx FROM remit_source_refs r
+     WHERE r.org_id = #{orgId} AND r.sha256 = #{sha256} AND r.idx = #{idx}
+  </select>
+
+  <select id="sourceMatch" resultType="string">
+    SELECT payment_id FROM remit_source_matches WHERE org_id = #{orgId} AND sha256 = #{sha256} AND idx = #{idx}
+  </select>
+
+  <select id="sourceRefOfUetr" resultType="java.util.LinkedHashMap">
+    SELECT r.payment_id, r.uetr, r.content, r.sha256, r.idx FROM remit_source_refs r
+     WHERE r.org_id = #{orgId} AND r.uetr = #{uetr}
+  </select>
+
+  <!-- With a UETR in hand, only a settlement without one can be its twin. And a settlement that another
+       transaction of this same file was recognised as is taken. The oldest of what is left. -->
+  <select id="sourceTwin" resultType="java.util.LinkedHashMap">
+    SELECT r.payment_id, r.uetr, r.content, r.sha256, r.idx FROM remit_source_refs r
+     WHERE r.org_id = #{orgId} AND r.twin_key = #{twinKey} AND r.sha256 &lt;&gt; #{sha256}
+       <if test="withoutUetr">AND r.uetr IS NULL</if>
+       AND NOT EXISTS (SELECT 1 FROM remit_source_matches m
+                        WHERE m.org_id = r.org_id AND m.payment_id = r.payment_id AND m.sha256 = #{sha256})
+     ORDER BY r.created_at, r.payment_id LIMIT 1
+  </select>
+
+  <insert id="insertSourceMatch">
+    INSERT INTO remit_source_matches (org_id, sha256, idx, payment_id, created_at) VALUES (#{orgId}, #{sha256}, #{idx}, #{paymentId}, #{at})
+  </insert>
+
+  <update id="inheritUetr">
+    UPDATE remit_source_refs SET uetr = #{uetr} WHERE payment_id = #{paymentId} AND uetr IS NULL
+  </update>
+
+  <insert id="insertSourceRef">
+    INSERT INTO remit_source_refs (payment_id, org_id, message_type, sha256, idx, uetr, value_date, content, twin_key, created_at)
+    VALUES (#{paymentId}, #{orgId}, #{messageType}, #{sha256}, #{idx}, #{uetr}, #{valueDate}, #{content}, #{twinKey}, #{at})
+  </insert>
+
+  <select id="sourceRef" resultType="java.util.LinkedHashMap">
+    SELECT payment_id, org_id, message_type, sha256, idx, uetr, value_date, content, twin_key, created_at
+      FROM remit_source_refs WHERE payment_id = #{paymentId}
+  </select>
+
+  <!-- ── the ledger ─────────────────────────────────────────────────────── -->
+
+  <!-- One box, every identifier an operator gets handed: the payment id, the quote it came from, the USDC transaction
+       hash, the bank's own reference on the payout completion, the identifiers of the SWIFT message the instruction was
+       made from, the approval reference, the instruction reference of the authorisation. Field by field, never the JSON
+       around them. The statement is MySQL's (JSON_EXTRACT) and is the previous service's, word for word: what it finds
+       is what an operator has always found. -->
+  <sql id="ledgerWhere">
+    org_id = #{orgId}
+    <if test="like != null">
+      AND (UPPER(id) LIKE #{like} ESCAPE '!' OR UPPER(quote_id) LIKE #{like} ESCAPE '!'
+        OR UPPER(COALESCE(chain_tx, '')) LIKE #{like} ESCAPE '!'
+        OR EXISTS (SELECT 1 FROM remit_events e WHERE e.payment_id = remit_payments.id
+                   AND e.type = 'PAYOUT_COMPLETED' AND UPPER(COALESCE(JSON_EXTRACT(e.payload, '$.bank_reference'), '')) LIKE #{like} ESCAPE '!')
+        OR EXISTS (SELECT 1 FROM remit_events e WHERE e.payment_id = remit_payments.id
+                   AND e.type = 'BANK_EVIDENCE_SUBMITTED' AND (UPPER(COALESCE(JSON_EXTRACT(e.payload, '$.bankInstruction.sourceMessage.uetr'), '')) LIKE #{like} ESCAPE '!' OR UPPER(COALESCE(JSON_EXTRACT(e.payload, '$.bankInstruction.sourceMessage.instructionId'), '')) LIKE #{like} ESCAPE '!' OR UPPER(COALESCE(JSON_EXTRACT(e.payload, '$.bankInstruction.sourceMessage.endToEndId'), '')) LIKE #{like} ESCAPE '!' OR UPPER(COALESCE(JSON_EXTRACT(e.payload, '$.bankInstruction.sourceMessage.messageId'), '')) LIKE #{like} ESCAPE '!' OR UPPER(COALESCE(JSON_EXTRACT(e.payload, '$.bankApproval.approvalRef'), '')) LIKE #{like} ESCAPE '!'))
+        OR EXISTS (SELECT 1 FROM remit_events e WHERE e.payment_id = remit_payments.id
+                   AND e.type = 'BANK_AUTHORIZATION_VERIFIED' AND UPPER(COALESCE(JSON_EXTRACT(e.payload, '$.bank_authorization.instruction_ref'), '')) LIKE #{like} ESCAPE '!'))
+    </if>
+    <if test="lookup">
+      AND EXISTS (SELECT 1 FROM remit_source_refs r WHERE r.payment_id = remit_payments.id AND r.org_id = #{orgId}
+        <if test="sourceUetr != null">AND r.uetr = #{sourceUetr}</if>
+        <if test="sourceContent != null">AND r.content = #{sourceContent}</if>
+        <if test="sourceValueDate != null">AND r.value_date = #{sourceValueDate}</if>)
+    </if>
+    <if test="states != null">
+      AND state IN <foreach collection="states" item="s" open="(" separator=", " close=")">#{s}</foreach>
+    </if>
+    <if test="from != null">AND created_at &gt;= #{from}</if>
+    <if test="to != null">AND created_at &lt;= #{to}</if>
+  </sql>
+
+  <select id="searchCount" resultType="long">
+    SELECT COUNT(*) AS n FROM remit_payments WHERE <include refid="ledgerWhere"/>
+  </select>
+
+  <!-- Newest first on (created_at, id); the page starts after the row the cursor names. -->
+  <select id="searchPage" resultType="java.util.LinkedHashMap">
+    SELECT <include refid="paymentColumns"/> FROM remit_payments WHERE <include refid="ledgerWhere"/>
+    <if test="cursorAt != null">
+      AND (created_at &lt; #{cursorAt} OR (created_at = #{cursorAt} AND id &lt; #{cursorId}))
+    </if>
+    ORDER BY created_at DESC, id DESC LIMIT #{limit}
+  </select>
+
+  <select id="orgOfAccount" resultType="string">
+    SELECT org_id FROM accounts WHERE email = #{email} LIMIT 1
+  </select>
+
+  <!-- ── jobs: every time on the database's own clock ───────────────────── -->
+
+  <sql id="jobColumns">
+    id, payment_id, org_id, kind, lane, state, open_slot, attempts, last_error, lease_owner, idempotency_key, input,
+    CAST(next_attempt_at AS CHAR) AS next_attempt_at, CAST(lease_expires_at AS CHAR) AS lease_expires_at,
+    CAST(call_started_at AS CHAR) AS call_started_at, CAST(created_at AS CHAR) AS created_at, CAST(updated_at AS CHAR) AS updated_at,
+    (next_attempt_at &lt;= UTC_TIMESTAMP(3)) AS due,
+    (lease_expires_at IS NOT NULL AND lease_expires_at &lt; UTC_TIMESTAMP(3)) AS lease_expired
+  </sql>
+
+  <select id="job" resultType="java.util.LinkedHashMap">
+    SELECT <include refid="jobColumns"/> FROM remit_jobs WHERE id = #{id}
+  </select>
+
+  <select id="jobsOfPayment" resultType="java.util.LinkedHashMap">
+    SELECT <include refid="jobColumns"/> FROM remit_jobs WHERE payment_id = #{paymentId} ORDER BY id
+  </select>
+
+  <select id="openJob" resultType="java.util.LinkedHashMap">
+    SELECT <include refid="jobColumns"/> FROM remit_jobs WHERE payment_id = #{paymentId} AND lane = #{lane} AND open_slot = 1
+  </select>
+
+  <insert id="insertQueuedJob">
+    INSERT INTO remit_jobs (id, payment_id, org_id, kind, lane, state, open_slot, attempts, next_attempt_at, idempotency_key, input, created_at, updated_at)
+    VALUES (#{id}, #{paymentId}, #{orgId}, #{kind}, #{lane}, 'queued', 1, 0, UTC_TIMESTAMP(3), #{idempotencyKey}, #{input}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
+  </insert>
+
+  <insert id="insertClaimedJob">
+    INSERT INTO remit_jobs (id, payment_id, org_id, kind, lane, state, open_slot, attempts, next_attempt_at, lease_owner, lease_expires_at,
+                            idempotency_key, input, created_at, updated_at)
+    VALUES (#{id}, #{paymentId}, #{orgId}, #{kind}, #{lane}, 'running', 1, 0, UTC_TIMESTAMP(3), #{owner},
+            UTC_TIMESTAMP(3) + INTERVAL #{leaseSeconds} SECOND, #{idempotencyKey}, #{input}, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
+  </insert>
+
+  <update id="claimJob">
+    UPDATE remit_jobs
+       SET state = 'running', lease_owner = #{owner}, lease_expires_at = UTC_TIMESTAMP(3) + INTERVAL #{leaseSeconds} SECOND,
+           updated_at = UTC_TIMESTAMP(3)
+     WHERE id = #{id}
+       AND ((state IN ('queued', 'waiting') AND next_attempt_at &lt;= UTC_TIMESTAMP(3))
+         OR (state = 'running' AND lease_expires_at &lt; UTC_TIMESTAMP(3)))
+  </update>
+
+  <select id="claimableJobs" resultType="java.util.LinkedHashMap">
+    SELECT id, payment_id, kind, lane, state, attempts FROM remit_jobs
+     WHERE (state IN ('queued', 'waiting') AND next_attempt_at &lt;= UTC_TIMESTAMP(3))
+        OR (state = 'running' AND lease_expires_at &lt; UTC_TIMESTAMP(3))
+     ORDER BY id LIMIT #{limit}
+  </select>
+
+  <!-- Whatever a job's holder writes to its row carries the fence: the job is still running, and still this holder's. -->
+
+  <update id="startJob">
+    UPDATE remit_jobs
+       SET attempts = attempts + 1, lease_expires_at = UTC_TIMESTAMP(3) + INTERVAL #{leaseSeconds} SECOND, updated_at = UTC_TIMESTAMP(3)
+     WHERE id = #{id} AND state = 'running' AND lease_owner = #{owner}
+  </update>
+
+  <update id="renewJobLease">
+    UPDATE remit_jobs SET lease_expires_at = UTC_TIMESTAMP(3) + INTERVAL #{leaseSeconds} SECOND, updated_at = UTC_TIMESTAMP(3)
+     WHERE id = #{id} AND state = 'running' AND lease_owner = #{owner}
+  </update>
+
+  <update id="markJobCallStarted">
+    UPDATE remit_jobs
+       SET call_started_at = UTC_TIMESTAMP(3), lease_expires_at = UTC_TIMESTAMP(3) + INTERVAL #{leaseSeconds} SECOND, updated_at = UTC_TIMESTAMP(3)
+     WHERE id = #{id} AND state = 'running' AND lease_owner = #{owner}
+  </update>
+
+  <update id="setJobInput">
+    UPDATE remit_jobs SET input = #{input}, idempotency_key = COALESCE(#{idempotencyKey}, idempotency_key), updated_at = UTC_TIMESTAMP(3)
+     WHERE id = #{id} AND state = 'running' AND lease_owner = #{owner}
+  </update>
+
+  <update id="jobWaits">
+    UPDATE remit_jobs
+       SET state = 'waiting', lease_owner = NULL, lease_expires_at = NULL, last_error = #{error},
+           next_attempt_at = UTC_TIMESTAMP(3) + INTERVAL (#{delayMs} * 1000) MICROSECOND, updated_at = UTC_TIMESTAMP(3)
+     WHERE id = #{id} AND state = 'running' AND lease_owner = #{owner}
+  </update>
+
+  <update id="requeueHeldJob">
+    UPDATE remit_jobs
+       SET state = 'queued', lease_owner = NULL, lease_expires_at = NULL, next_attempt_at = UTC_TIMESTAMP(3), updated_at = UTC_TIMESTAMP(3)
+     WHERE id = #{id} AND state = 'running' AND lease_owner = #{owner}
+  </update>
+
+  <update id="closeHeldJob">
+    UPDATE remit_jobs
+       SET state = #{state}, open_slot = NULL, lease_owner = NULL, lease_expires_at = NULL, last_error = #{error}, updated_at = UTC_TIMESTAMP(3)
+     WHERE id = #{id} AND state = 'running' AND lease_owner = #{owner}
+  </update>
+
+  <!-- No fence: a transition that records a result closes the job whoever holds it by then. -->
+  <update id="closeJob">
+    UPDATE remit_jobs
+       SET state = #{state}, open_slot = NULL, lease_owner = NULL, lease_expires_at = NULL, last_error = #{error}, updated_at = UTC_TIMESTAMP(3)
+     WHERE id = #{id}
+  </update>
+
+  <update id="reopenJob">
+    UPDATE remit_jobs
+       SET state = 'queued', open_slot = 1, attempts = 0, last_error = NULL, lease_owner = NULL, lease_expires_at = NULL,
+           next_attempt_at = UTC_TIMESTAMP(3), updated_at = UTC_TIMESTAMP(3)
+     WHERE id = #{id} AND state = 'attention'
+  </update>
+
+  <select id="unfinishedJobs" resultType="java.util.LinkedHashMap">
+    SELECT id, payment_id, org_id, kind, lane, state, attempts, last_error,
+           CAST(created_at AS CHAR) AS created_at, CAST(updated_at AS CHAR) AS updated_at
+      FROM remit_jobs WHERE open_slot = 1 OR state = 'attention' ORDER BY id
+  </select>
+</mapper>

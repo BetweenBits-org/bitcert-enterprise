@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonehash.attest.core.auth.AuthMapper">
+
+  <select id="apiKeyByHash" resultType="java.util.LinkedHashMap">
+    SELECT id, org_id, key_hash, label FROM api_keys WHERE key_hash = #{hash} AND revoked_at IS NULL
+  </select>
+
+  <insert id="insertApiKey">
+    INSERT INTO api_keys (id, org_id, key_hash, prefix, label, created_at)
+    VALUES (#{id}, #{orgId}, #{keyHash}, #{prefix}, #{label}, #{createdAt})
+  </insert>
+
+  <select id="sessionByHash" resultType="java.util.LinkedHashMap">
+    SELECT account_id, expires_at FROM sessions WHERE token_hash = #{tokenHash}
+  </select>
+
+  <delete id="deleteSession">
+    DELETE FROM sessions WHERE token_hash = #{tokenHash}
+  </delete>
+
+  <select id="accountById" resultType="java.util.LinkedHashMap">
+    SELECT id, email, org_id, created_at, last_login_at, disabled_at FROM accounts WHERE id = #{id}
+  </select>
+
+  <select id="accountByEmail" resultType="java.util.LinkedHashMap">
+    SELECT id, email, password_hash, org_id, created_at, last_login_at, disabled_at FROM accounts WHERE email = #{email}
+  </select>
+
+  <insert id="insertAccount">
+    INSERT INTO accounts (id, email, password_hash, org_id, created_at)
+    VALUES (#{id}, #{email}, #{passwordHash}, #{orgId}, #{createdAt})
+  </insert>
+
+  <update id="recordLogin">
+    UPDATE accounts SET last_login_at = #{at} WHERE id = #{id}
+  </update>
+
+  <insert id="insertSession">
+    INSERT INTO sessions (token_hash, account_id, created_at, expires_at, user_agent)
+    VALUES (#{tokenHash}, #{accountId}, #{createdAt}, #{expiresAt}, #{userAgent})
+  </insert>
+
+  <delete id="deleteOtherSessions">
+    DELETE FROM sessions WHERE account_id = #{accountId} AND token_hash != #{keepTokenHash}
+  </delete>
+
+</mapper>

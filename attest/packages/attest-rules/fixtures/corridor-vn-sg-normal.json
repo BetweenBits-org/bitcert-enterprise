@@ -1,0 +1,142 @@
+{
+  "schemaVersion": "settlement-evidence/0.2",
+  "scenario": "VN→SG import payment · correspondent leg replaced by a stablecoin transfer",
+  "dataMode": "SYNTHETIC",
+  "notRealPayment": true,
+  "settlementId": "VN-SG-20261104-0007",
+  "jurisdiction": {
+    "from": "VN",
+    "to": "SG"
+  },
+  "purpose": "Import payment for goods under INV-2026-001",
+  "elements": {
+    "bankApproval": {
+      "approvalRef": "VN-SG-20261104-0007/FX-APPROVAL",
+      "regulatorReportRef": "SBV-FX-2026-Q1-004412",
+      "approvedByRole": "Trade Finance Reviewer",
+      "approvedAt": "2026-11-04T02:10:00Z",
+      "fxQuote": {
+        "pair": "VND/USD",
+        "rate": "25400.00",
+        "quotedAt": "2026-11-04T02:05:00Z",
+        "validUntil": "2026-11-04T02:35:00Z"
+      },
+      "digest": "9a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9",
+      "digestVerified": true,
+      "signature": {
+        "status": "DEMO_VALID",
+        "keyId": "demo-vn-bank-key-01",
+        "algorithm": "ES256",
+        "issuer": "DEMO_VN_LICENSED_BANK",
+        "trustLevel": "DEMO",
+        "value": "_1FPzO9VT8t-rwF61DJ8jzDZH6NuC4OgaPH40SJMk1f2_AoCNn-aPQyr-7mo9uSc5FRZNxP89wB21VboizkUkw"
+      }
+    },
+    "bankInstruction": {
+      "ref": "VN-SG-20261104-0007",
+      "amount": "50000.00",
+      "currency": "USD",
+      "debtor": "Acme Trading Co., Ltd.",
+      "creditor": "Pacific Supply Pte Ltd",
+      "approvedAt": "2026-11-04T02:10:00Z",
+      "iso20022Fields": [
+        "Dbtr",
+        "Cdtr",
+        "InstdAmt",
+        "Ccy",
+        "RmtInf",
+        "VN-SG-20261104-0007"
+      ],
+      "digest": "3c2d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b",
+      "digestVerified": true,
+      "signature": {
+        "status": "DEMO_VALID",
+        "keyId": "demo-vn-bank-key-01",
+        "algorithm": "ES256",
+        "issuer": "DEMO_VN_LICENSED_BANK",
+        "trustLevel": "DEMO",
+        "value": "7DjvItowENzaGHHiEuYwKIAVOqKeacxaSoxLx4R2zf0Uy13mrOb26a8KOphM8sRFx7xcVl_ARjs8phzoQuNFqA"
+      }
+    },
+    "travelRule": {
+      "protocol": "IVMS101/TRP",
+      "ivms101Digest": "5e4f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d",
+      "originatingVasp": "DEMO_SENDING_VASP",
+      "beneficiaryVasp": "DEMO_RECEIVING_VASP_SG",
+      "approvalStatus": "APPROVED",
+      "approvalDigest": "6f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e",
+      "approvedAt": "2026-11-04T02:14:00Z",
+      "approvedBeneficiaryAddress": "0xSYNTHETIC-PAYEE-0000000000000000000000",
+      "kytRiskScore": 12,
+      "digest": "7071829384a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5",
+      "digestVerified": true,
+      "signature": {
+        "status": "DEMO_VALID",
+        "keyId": "demo-sending-vasp-key-01",
+        "algorithm": "ES256",
+        "issuer": "DEMO_SENDING_VASP",
+        "trustLevel": "DEMO",
+        "value": "JaUnzrpgr5yVl5CPqqvfFCZ_a39AiOtrjl5gKavcfAJTLrKmsgIS312MgpPPnN4iSOxQPdZP2fi4vCEh0orCAQ"
+      }
+    },
+    "chainTransfer": {
+      "chain": "Ethereum",
+      "asset": "USDC",
+      "amount": "50000.00",
+      "currency": "USDC",
+      "fromAddress": "0xSYNTHETIC-TREASURY-000000000000000000",
+      "toAddress": "0xSYNTHETIC-PAYEE-0000000000000000000000",
+      "txRef": "SYNTHETIC-TX-NOT-ON-CHAIN-VN-SG-20261104-0007",
+      "settlementIdMemo": "VN-SG-20261104-0007",
+      "confirmations": 24,
+      "observedAt": "2026-11-04T02:18:00Z",
+      "digest": "1f0c2b9a4e7d6c5b8a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b",
+      "digestVerified": true,
+      "signature": {
+        "status": "ABSENT"
+      }
+    },
+    "payoutReceipts": [
+      {
+        "ref": "VN-SG-20261104-0007/SGD-CREDIT",
+        "amount": "50000.00",
+        "currency": "USD",
+        "paidAt": "2026-11-04T03:40:00Z",
+        "digest": "2b1c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a",
+        "digestVerified": true,
+        "signature": {
+          "status": "DEMO_VALID",
+          "keyId": "demo-provider-key-01",
+          "algorithm": "ES256",
+          "issuer": "DEMO_PROVIDER",
+          "trustLevel": "DEMO",
+          "value": "36raeDHfP0s0AVjDXqxL46Ww4QTxTM1wUdskKEmcQdVNpLsfv6nGsrB1ZWo0Xyy5CH4HaD0pU3zOq9bDkBI-EQ"
+        }
+      }
+    ],
+    "commercialDocs": {
+      "invoiceRef": "INV-2026-001",
+      "amount": "50000.00",
+      "currency": "USD",
+      "buyer": "Acme Trading Corporation",
+      "seller": "Pacific Supply Pte. Ltd.",
+      "attached": [
+        "invoice",
+        "contract",
+        "bill-of-lading",
+        "customs-declaration"
+      ],
+      "citedOnly": [],
+      "digest": "4d3e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c",
+      "digestVerified": true,
+      "signature": {
+        "status": "DEMO_VALID",
+        "keyId": "demo-seller-key-01",
+        "algorithm": "ES256",
+        "issuer": "DEMO_SELLER",
+        "trustLevel": "DEMO",
+        "value": "0UmxXtOv2KwpoDn6zHcQZxqkbr7xzw-0vw6UWT0O6osS6Ar7g-fKa4TXhHaDAl6-v1aUeGlqRx9Kiyktuf_P7g"
+      }
+    }
+  }
+}

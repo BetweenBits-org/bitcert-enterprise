@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>고객사 연동 데모 — 한빛정밀 · OrbitX · 데모은행</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>고객사 연동 데모</b><span>타깃 고객 3유형 × 당사 API·SDK</span></div>
+  <span class="badge-demo">가상 고객사 · 합성 데이터 · StoneHash 샌드박스 연동</span>
+</header>
+
+<nav class="tabs">
+  <button data-tab="docs" class="on" data-accent="docs">🏭 한빛정밀 <small>문서·기록 앵커링</small></button>
+  <button data-tab="exchange" data-accent="exchange">🪙 OrbitX 거래소 <small>준비금 증명(PoR)</small></button>
+  <button data-tab="bank" data-accent="bank">🏦 데모은행 <small>국경간 스테이블코인 정산</small></button>
+</nav>
+
+<main>
+  <!-- ① 한빛정밀 -->
+  <section data-pane="docs" class="pane on accent-docs">
+    <aside>
+      <div class="card">
+        <h2>품질성적서·계약서 앵커링</h2>
+        <p class="hint">서류는 사내 서버에만 저장되고, SHA-256 해시에 발행인 서명을 붙여
+        비트코인에 고정합니다. 받은 증빙 번들은 당사 없이도 검증됩니다.</p>
+        <label class="drop" id="docsDrop"><input type="file" id="docsFile" hidden>
+          <span id="docsDropText">파일을 끌어다 놓거나 클릭</span></label>
+        <button class="primary" id="docsSubmit" disabled>서명하고 체인에 고정</button>
+      </div>
+      <div class="card tech">
+        <h3>이 탭이 쓰는 것</h3>
+        <ul>
+          <li><code>@stonehash/attest-sign</code> — <code>signStatement()</code> 발행인 서명</li>
+          <li><code>POST /v1/attestations/signed</code> · <code>GET …/bundle</code></li>
+          <li><code>@stonehash/attest-verify</code> — <code>verifyBundle()</code> 독립 재검증</li>
+        </ul>
+        <div class="who" id="docsWho"></div>
+      </div>
+    </aside>
+    <div class="feed" id="docsFeed"></div>
+  </section>
+
+  <!-- ② OrbitX -->
+  <section data-pane="exchange" class="pane accent-exchange">
+    <aside>
+      <div class="card">
+        <h2>준비금 증명 스냅샷 발행</h2>
+        <p class="hint">부채 원장은 거래소 서버를 떠나지 않습니다 — 머클 합 트리를 여기서 만들고,
+        서명한 루트·총액 선언문만 제출하면 플랫폼이 서명을 확인하고 앵커링합니다.</p>
+        <label class="fl">고객 수 (합성)
+          <input id="exUsers" inputmode="numeric" value="2000"></label>
+        <button class="primary" id="exSubmit">스냅샷 발행 (서명·제출)</button>
+      </div>
+      <div class="card tech">
+        <h3>이 탭이 쓰는 것</h3>
+        <ul>
+          <li><code>@stonehash/attest-por</code> — <code>buildPorTree</code> · <code>PorClient.publish()</code></li>
+          <li><code>POST /v1/por/snapshots</code> · <code>…/openings</code></li>
+          <li><code>verifyPorInclusion()</code> — 사용자 증명 오프라인 검증</li>
+        </ul>
+        <div class="who" id="exWho"></div>
+      </div>
+    </aside>
+    <div class="feed" id="exFeed"></div>
+  </section>
+
+  <!-- ③ 데모은행 -->
+  <section data-pane="bank" class="pane accent-bank">
+    <aside>
+      <div class="card">
+        <h2>무역대금 국경간 정산 (VN→SG)</h2>
+        <p class="hint">은행 시스템이 이미 만드는 SWIFT 전문을 그대로 넣으면 SDK가 지급지시로 바꿔
+        서명·제출하고, 결과는 SWIFT 상태코드와 pacs.002로 돌려줍니다. 수취측 화면은
+        <a id="bankPartnersLink" target="_blank">:3300</a>.</p>
+        <div class="seg" id="bankMode">
+          <button type="button" data-mode="swift" class="on">SWIFT 전문으로</button>
+          <button type="button" data-mode="amount">금액만 입력</button>
+        </div>
+
+        <div data-modepane="swift">
+          <p class="hint small">표본을 불러오면 매번 새 참조번호(UETR·전문번호)로 채워집니다.
+          같은 전문을 다시 넣으면 같은 지급으로 인식해 새로 만들지 않습니다.</p>
+          <div class="samples" id="bankSamples"></div>
+          <textarea id="bankSwift" spellcheck="false" autocomplete="off"
+            placeholder="MT103 · pacs.008 · pain.001 전문을 붙여 넣으십시오"></textarea>
+          <button class="primary" id="bankSwiftSubmit">전문으로 지급지시 실행</button>
+        </div>
+
+        <div data-modepane="amount" hidden>
+          <label class="fl">무역금액 (USD)
+            <input id="bankAmount" inputmode="decimal" value="1000.00"></label>
+          <p class="hint small">레버: <code>*.13</code> 반환 · <code>*.01</code> 확정 보류 · <code>≥20000</code> 수취측 추가정보 요청</p>
+          <button class="primary" id="bankSubmit">지급지시 실행</button>
+        </div>
+      </div>
+      <div class="card tech">
+        <h3>이 탭이 쓰는 것</h3>
+        <ul>
+          <li><code>@stonehash/attest-remit</code> — <code>RemitClient.submitSwift()</code> 전문 → 지급지시</li>
+          <li><code>commandSigner()</code> — 은행 HSM 서명 (개인키는 HSM 밖으로 나오지 않음)</li>
+          <li><code>POST /v1/quotes</code> · <code>POST /v1/settlements</code> · 상태 추적</li>
+          <li><code>swiftStatus()</code> · <code>statusReport()</code> — 상태를 SWIFT 형식(pacs.002)으로</li>
+          <li><code>verifyEvidencePackage()</code> — 커밋·서명·6축·앵커 재검증</li>
+        </ul>
+        <div class="who" id="bankWho"></div>
+      </div>
+    </aside>
+    <div class="feed" id="bankFeed"></div>
+  </section>
+</main>
+
+<footer>가상의 고객사 포털입니다 — 세 회사 모두 합성 데이터이며, 연동 코드는 공개 API·SDK만 사용합니다.
+은행 탭의 지급은 샌드박스 콘솔 계정 <b>ops@demo-bank.example</b>의 송금 원장에 그대로 보입니다.
+심사·추가정보 응답·일별 대사까지 포함한 은행 업무 전체 데모는 <a id="bankDeepLink" target="_blank">데모은행(:3200)</a>에,
+같은 은행을 Java SDK로 연동한 데모는 <a id="bankJavaLink" target="_blank">Java 백엔드 데모(:3500)</a>에 있습니다.</footer>
+<script src="/app.js"></script>
+</body>
+</html>

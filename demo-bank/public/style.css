@@ -1,0 +1,104 @@
+/* 데모은행 — deliberately NOT StoneHash's visual language: this screen
+   plays the customer, so it dresses like a bank's internal admin tool. */
+* { box-sizing: border-box; margin: 0; }
+body {
+  font: 14px/1.6 "Pretendard", "Malgun Gothic", system-ui, sans-serif;
+  background: #eef1f6; color: #1d2733; min-height: 100vh;
+  display: flex; flex-direction: column;
+}
+.top {
+  background: #123a6d; color: #fff; padding: 14px 28px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.brand { display: flex; align-items: center; gap: 14px; }
+.logo { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+.divider { width: 1px; height: 18px; background: rgba(255,255,255,.35); }
+.system { font-size: 14px; opacity: .92; }
+.demo-badge {
+  font-size: 12px; background: #ffb43a; color: #5b3a00; font-weight: 700;
+  padding: 4px 10px; border-radius: 4px; white-space: nowrap;
+}
+.layout {
+  flex: 1; display: grid; grid-template-columns: 360px 1fr; gap: 20px;
+  width: min(1240px, 100%); margin: 0 auto; padding: 24px 20px;
+}
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+.card {
+  background: #fff; border: 1px solid #dde3ec; border-radius: 10px;
+  padding: 20px; margin-bottom: 16px;
+}
+.card h2 { font-size: 15px; margin-bottom: 10px; color: #123a6d; }
+.hint { font-size: 13px; color: #5a6472; margin-bottom: 12px; }
+.drop {
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  min-height: 92px; padding: 12px; border: 2px dashed #b9c4d6; border-radius: 8px;
+  color: #5a6472; font-size: 13px; cursor: pointer; transition: all .15s;
+}
+.drop.armed, .drop:hover { border-color: #2a62b5; color: #2a62b5; background: #f4f8ff; }
+.primary {
+  width: 100%; margin-top: 12px; padding: 11px; border: 0; border-radius: 8px;
+  background: #1c4f96; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.primary:disabled { background: #b9c4d6; cursor: default; }
+.note { font-size: 12px; color: #7a8494; margin-top: 10px; }
+.kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px 10px; font-size: 13px; }
+.kv dt { color: #7a8494; }
+.kv dd { word-break: break-all; }
+.kv code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.badge {
+  display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px;
+  border-radius: 3px; vertical-align: 1px;
+}
+.badge.green { background: #e2f6e9; color: #156f3a; }
+.badge.grey  { background: #edf0f5; color: #5a6472; }
+.badge.blue  { background: #e7f0fe; color: #1c4f96; }
+.badge.amber { background: #fff3dd; color: #8a5a00; }
+.badge.red   { background: #fdeaea; color: #a02222; }
+.links { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+.links a {
+  font-size: 12px; color: #1c4f96; text-decoration: none;
+  border: 1px solid #c7d4e8; padding: 4px 10px; border-radius: 6px;
+}
+.links a:hover { background: #f4f8ff; }
+.listhead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.listhead h2 { font-size: 16px; color: #123a6d; }
+.muted { color: #7a8494; font-size: 12px; }
+.empty { color: #7a8494; background: #fff; border: 1px dashed #c7d0dd; border-radius: 10px; padding: 40px; text-align: center; }
+
+.rec { background: #fff; border: 1px solid #dde3ec; border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
+.rec-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; flex-wrap: wrap; }
+.rec-name { font-weight: 700; }
+.rec-meta { color: #7a8494; font-size: 12px; }
+.rec-head .spacer { flex: 1; }
+.digest {
+  font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: #445061;
+  background: #f4f6fa; border-top: 1px solid #edf0f5; border-bottom: 1px solid #edf0f5;
+  padding: 7px 18px; word-break: break-all;
+}
+.steps { padding: 12px 18px 6px; }
+.step { display: flex; gap: 10px; padding: 5px 0; align-items: baseline; }
+.step .icon { width: 18px; text-align: center; flex: none; }
+.step.ok .icon { color: #156f3a; }
+.step.fail .icon { color: #a02222; }
+.step.run .icon { color: #1c4f96; animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+.step .title { flex: 1; }
+.step .ms { color: #9aa4b2; font-size: 12px; }
+.step details { font-size: 12px; margin-top: 2px; }
+.step summary { cursor: pointer; color: #1c4f96; }
+.step pre {
+  background: #0f1c2e; color: #cfe3ff; border-radius: 6px; padding: 10px;
+  overflow-x: auto; font-size: 11.5px; line-height: 1.5; margin-top: 6px;
+  max-height: 320px; overflow-y: auto;
+}
+.rec-actions { display: flex; gap: 8px; padding: 10px 18px 16px; flex-wrap: wrap; }
+.rec-actions a, .rec-actions button {
+  font-size: 12px; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+  border: 1px solid #c7d4e8; background: #fff; color: #1c4f96; text-decoration: none;
+}
+.rec-actions .disabled { opacity: .45; pointer-events: none; }
+.error-line { padding: 0 18px 14px; color: #a02222; font-size: 13px; }
+.foot {
+  text-align: center; font-size: 12px; color: #7a8494; padding: 18px;
+  border-top: 1px solid #dde3ec; background: #fff;
+}

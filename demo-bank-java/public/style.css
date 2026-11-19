@@ -1,0 +1,100 @@
+* { box-sizing: border-box; margin: 0; }
+:root { --ink:#1c2730; --dim:#6b7884; --rule:#dfe5ea; --bg:#f2f4f7; --card:#fff;
+  --acc:#39506b; --acc-bg:#eef2f7; }
+.accent-docs { --acc:#39506b; --acc-bg:#eef2f7; }
+.accent-exchange { --acc:#5b4a8a; --acc-bg:#f1eef8; }
+.accent-bank { --acc:#1e6e5c; --acc-bg:#eaf5f1; }
+body { font: 14px/1.65 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  background: var(--bg); color: var(--ink); min-height: 100vh; display: flex; flex-direction: column; }
+.top { background:#141b22; color:#fff; padding: 13px 26px; display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; }
+.brand b { font-size: 17px; } .brand span { margin-left: 12px; font-size: 12.5px; opacity:.7; }
+.badge-demo { font-size: 11.5px; background:#ffb43a; color:#5b3a00; font-weight:700; padding:4px 10px; border-radius:4px; }
+.tabs { display:flex; gap:8px; padding: 14px 26px 0; background:#141b22; }
+.tabs button { border:0; cursor:pointer; border-radius: 9px 9px 0 0; padding: 11px 20px 13px; font-size:14px; font-weight:700;
+  background: rgba(255,255,255,.08); color: rgba(255,255,255,.75); display:flex; flex-direction:column; align-items:flex-start; gap:2px; }
+.tabs button small { font-size: 11px; font-weight: 400; opacity:.75; }
+.tabs button.on { background: var(--bg); color: var(--ink); }
+main { flex:1; width:min(1280px,100%); margin:0 auto; padding: 22px 20px; }
+.pane { display:none; grid-template-columns: 360px 1fr; gap: 18px; }
+.pane.on { display:grid; }
+@media (max-width: 920px){ .pane.on { grid-template-columns: 1fr; } }
+.card { background:var(--card); border:1px solid var(--rule); border-left:4px solid var(--acc);
+  border-radius:10px; padding:18px 20px; margin-bottom:14px; }
+.card h2 { font-size:15.5px; margin-bottom:8px; color:var(--acc); }
+.card h3 { font-size:13px; margin-bottom:8px; color:var(--acc); }
+.hint { font-size: 12.5px; color: var(--dim); margin-bottom: 12px; }
+.hint.small { margin: 6px 0 0; }
+.tech ul { margin:0 0 10px; padding-left: 0; list-style:none; }
+.tech li { font-size:12px; color:var(--dim); padding:3px 0; }
+.tech code { font-family: ui-monospace,Consolas,monospace; font-size:11px; background:var(--acc-bg); border-radius:4px; padding:1px 5px; color:var(--acc); }
+.who { font-size:11.5px; color:var(--dim); border-top:1px dashed var(--rule); padding-top:9px; }
+.who b { color: var(--ink); }
+.drop { display:flex; align-items:center; justify-content:center; min-height: 86px; border:2px dashed #b9c4d0;
+  border-radius:8px; color:var(--dim); font-size:13px; cursor:pointer; text-align:center; padding:10px; }
+.drop.armed, .drop:hover { border-color: var(--acc); color: var(--acc); background: var(--acc-bg); }
+.fl { display:block; font-size:12px; color:var(--dim); margin: 8px 0; }
+.fl input { display:block; width:100%; margin-top:4px; padding:9px 11px; font-size:14px; border:1px solid #c6d0da; border-radius:7px; }
+.primary { width:100%; margin-top:10px; padding:11px; border:0; border-radius:8px; background:var(--acc); color:#fff;
+  font-size:14px; font-weight:700; cursor:pointer; }
+.primary:disabled { opacity:.45; cursor:default; }
+.feed .rec { background:var(--card); border:1px solid var(--rule); border-radius:10px; margin-bottom:12px; padding: 14px 18px; }
+.rec-head { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+.rec-head b { font-size: 14px; }
+.mono { font-family: ui-monospace,Consolas,monospace; font-size: 11.5px; color:#4b5a66; word-break:break-all; }
+.chip { font-size:11px; font-weight:700; border-radius:10px; padding:2px 9px; }
+.chip.run { background:#fff3dd; color:#8a5a00; } .chip.ok { background:#e2f6e9; color:#156f3a; }
+.chip.bad { background:#fdeaea; color:#a02222; } .chip.hold { background:#eef0f3; color:#5a6472; }
+.steps { margin-top: 9px; border-top:1px dashed var(--rule); padding-top: 8px; }
+.steps div { font-size:12.5px; padding:3px 0; display:flex; gap:9px; }
+.steps time { color:#9aa6b0; font-family:ui-monospace,monospace; font-size:11px; flex:none; }
+.acts { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
+.acts a, .acts span.linkish { font-size:12px; border:1px solid #c6d0da; border-radius:6px; padding:5px 11px; color:var(--acc); text-decoration:none; }
+.empty { color:var(--dim); background:var(--card); border:1px dashed #c6d0da; border-radius:10px; padding: 34px; text-align:center; }
+footer { text-align:center; font-size:12px; color:var(--dim); padding: 16px; background:var(--card); border-top:1px solid var(--rule); }
+footer a { color: #39506b; }
+
+/* 은행 탭: 입력 방식 전환 · 전문 입력 · 변환 내역 */
+.seg { display:flex; gap:0; margin: 4px 0 12px; border:1px solid #c6d0da; border-radius:8px; overflow:hidden; }
+.seg button { flex:1; border:0; background:#fff; padding:9px 8px; font-size:13px; font-weight:700; color:var(--dim); cursor:pointer; }
+.seg button + button { border-left:1px solid #c6d0da; }
+.seg button.on { background:var(--acc); color:#fff; }
+.samples { display:flex; flex-wrap:wrap; gap:6px; margin: 8px 0; }
+.samples button { border:1px solid #c6d0da; background:#fff; border-radius:6px; padding:5px 9px; font-size:11.5px; color:var(--acc); cursor:pointer; }
+.samples button:hover { background:var(--acc-bg); border-color:var(--acc); }
+#bankSwift { display:block; width:100%; min-height: 210px; resize:vertical; padding:10px 11px; border:1px solid #c6d0da; border-radius:7px;
+  font: 11.5px/1.5 ui-monospace,Consolas,monospace; color:#22303a; white-space:pre; overflow:auto; }
+.refs { margin-top:6px; }
+.chip.swift { background:#e7eefb; color:#1f4f9c; }
+details.map { margin-top:9px; border-top:1px dashed var(--rule); padding-top:8px; }
+details.map summary { cursor:pointer; font-size:12.5px; color:var(--acc); font-weight:700; }
+.maptable { width:100%; border-collapse:collapse; margin-top:8px; }
+.maptable td { font-size:11.5px; padding:4px 6px; border-bottom:1px solid #eef1f4; vertical-align:top; word-break:break-word; }
+.maptable td.k { font-family:ui-monospace,Consolas,monospace; color:#22303a; white-space:nowrap; }
+.maptable td.src { color:var(--dim); }
+.basis { font-size:10.5px; font-weight:700; border-radius:8px; padding:1px 7px; white-space:nowrap; }
+.basis.stated { background:#e2f6e9; color:#156f3a; } .basis.supplied { background:#e7eefb; color:#1f4f9c; } .basis.inferred { background:#fff3dd; color:#8a5a00; }
+.maplist { margin:8px 0 0; padding-left:16px; } .maplist li { font-size:11.5px; color:var(--dim); padding:2px 0; }
+.err { color:#a02222; font-size:12.5px; margin-top:8px; }
+
+/* 데모은행 Java 백엔드 — 고객사이트 데모(:3400)의 은행 탭과 같은 모양, 색만 따로. */
+.accent-java { --acc:#8a4b1e; --acc-bg:#f8f0e8; }
+.page { display:grid; grid-template-columns: 380px minmax(0, 1fr); gap: 18px; }
+.page > * { min-width: 0; }
+.steps span, .checks span { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 920px){ .page { grid-template-columns: minmax(0, 1fr); } }
+pre.code { margin: 0; padding: 12px 14px; border-radius: 8px; background:#141b22; color:#e6edf3; overflow-x:auto;
+  font: 11.5px/1.65 ui-monospace,Consolas,monospace; white-space: pre; }
+pre.code .c { color:#8b98a5; }
+.checks { margin-top: 9px; border-top:1px dashed var(--rule); padding-top: 8px; }
+.checks div { font-size:12.5px; padding:2px 0; display:flex; gap:8px; align-items:baseline; }
+.checks .st { flex:none; font: 700 10.5px/1.5 ui-monospace,Consolas,monospace; border-radius:4px; padding:0 6px; }
+.checks .PASS { background:#e2f6e9; color:#156f3a; } .checks .FAIL { background:#fdeaea; color:#a02222; }
+.checks .NOT_RUN { background:#eef0f3; color:#5a6472; }
+.checks small { color: var(--dim); }
+.err { margin-top:8px; font-size:12.5px; color:#a02222; }
+.top a { color:#fff; opacity:.8; font-size:12.5px; }
+#swift { display:block; width:100%; min-height: 210px; resize:vertical; padding:10px 11px; border:1px solid #c6d0da; border-radius:7px;
+  font: 11.5px/1.5 ui-monospace,Consolas,monospace; color:#22303a; white-space:pre; overflow:auto; }
+.tech .uses { margin-top: 10px; }
+.tablescroll { overflow-x: auto; }
+.rec-head .chip { flex: none; }

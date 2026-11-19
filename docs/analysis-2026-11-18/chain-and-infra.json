@@ -1,0 +1,823 @@
+{
+ "layer": "Blockchain anchoring and infrastructure (Bitcoin anchor path, EVM chain dependency, deployment topology, design intent). Paths: core/src = /home/ubuntu/bitcert-attest/attest/apps/core/src; deploy = attest/deploy; docs = /home/ubuntu/bitcert-attest/docs.",
+ "summary": "The chain layer is a thin seam. The AnchorBackend interface has one implementation, which sends a 53-byte BC01 payload to a bitcoind wallet over JSON-RPC: create, then fund at a hard-coded 1 sat/vB, then sign, then send. Each anchor transaction is about 174 vB however many leaves the batch holds. One in-process timer (3 s live) seals at most one batch per tick, from one organisation. It then anchors that batch, mines a block (regtest only), and polls every unconfirmed anchor with one gettransaction call each. An anchor counts as confirmed after one block. The inscription path runs inside the HTTP request: 7 bitcoind RPCs plus pure-JS BigInt Schnorr signing, at a hard-coded 2 sat/vB. Core only reads the EVM side, which is anvil running in memory: settlement status (4 RPCs, 5 s timeouts) and PoR reserve balances (one sequential eth_call per entry). Everything runs on one shared 4-vCPU box: pm2 fork mode with one instance per service, the core on 0.0.0.0:8787 over plain HTTP with no proxy or TLS, MySQL on the same host with no backup tooling, a Bitcoin node borrowed from another project's regtest stack, and no metrics or alerting. It works on regtest because every anchor is mined at once. Its mainnet gaps stay hidden: no fee estimation or bumping, no UTXO or mempool-chain management, 1-confirmation finality with no reorg handling, and an unencrypted hot wallet. Worst of all, a failed anchor is never retried, so its batch stays stuck for good. Capacity: the batcher tops out at 1,024 leaves per 3 s tick (about 341/s), so T3 is out of reach without restructuring. With many tenants the number of Bitcoin transactions follows the tick rate, not the volume: 5,760 to 28,800 per day, about 0.2 to 1.0 BTC/day at 20 sat/vB. The design allows combining all organisations into one anchor per block, which would cut chain cost to about 144 transactions a day at any tier. The design docs list hot wallet, fee/RBF policy, reorg procedure, KMS/HSM and node operations as required before a mainnet service, and none of them exists in code. The docs give no throughput, SLA, availability or recovery targets.",
+ "components": [
+  {
+   "name": "Anchor backend seam",
+   "role": "Chain-agnostic contract: submit a payload, poll its state, health probe; network is 'regtest' or 'mainnet' only",
+   "files": [
+    "attest/apps/core/src/anchor/backend.ts"
+   ],
+   "tech": "TypeScript interface",
+   "notes": "The docs' backend ladder (OTS, signet, mainnet) collapsed to regtest+mainnet in code; no signet/testnet staging backend."
+  },
+  {
+   "name": "BitcoindAnchorBackend + RPC client",
+   "role": "Builds the OP_RETURN anchor, has the bitcoind wallet fund/sign it, broadcasts, polls gettransaction, checks chain name; regtest-only generate()",
+   "files": [
+    "attest/apps/core/src/anchor/bitcoind.ts",
+    "attest/apps/core/src/anchor/rpc.ts"
+   ],
+   "tech": "JSON-RPC over node:http/https, Basic auth, 15 s timeout, no retry",
+   "notes": "fee_rate fixed at 1 sat/vB; coin selection, change and signing delegated to the wallet (BITCOIND_WALLET, default 'attest'); script cross-checked before broadcast."
+  },
+  {
+   "name": "BC01 payload and transaction serialisation",
+   "role": "53-byte payload (magic, version, root, batch id), OP_RETURN script, legacy serialisation, txid",
+   "files": [
+    "attest/apps/core/src/btc/bc01.ts",
+    "attest/apps/core/src/btc/tx.ts",
+    "attest/apps/core/src/btc/varint.ts"
+   ],
+   "tech": "node:crypto SHA-256",
+   "notes": "OP_RETURN script 55 bytes; anchor tx about 174 vB (1 P2WPKH in, OP_RETURN, P2WPKH change), matching the docs' estimate of about 200 vB."
+  },
+  {
+   "name": "Inscriber (commit/reveal)",
+   "role": "Puts the original document into a taproot witness: wallet-funded commit to a NUMS-keyed tapscript, reveal signed in-process with an ephemeral key",
+   "files": [
+    "attest/apps/core/src/anchor/inscribe.ts",
+    "attest/apps/core/src/btc/inscription.ts",
+    "attest/apps/core/src/btc/taproot.ts",
+    "attest/apps/core/src/btc/secp256k1.ts"
+   ],
+   "tech": "Pure-JS BigInt secp256k1/BIP340 (affine coordinates, Fermat inversion), zero dependencies",
+   "notes": "Runs synchronously inside POST /v1/attestations/inscribe and the console inscribe; 2 sat/vB fixed; default cap 100 KB, clamp 3.5 MB."
+  },
+  {
+   "name": "Batch worker",
+   "role": "Timer in the API process: seal one organisation's batch per tick, anchor it, mine a block on regtest, refresh confirmations, hourly free-tier purge",
+   "files": [
+    "attest/apps/core/src/worker.ts",
+    "attest/apps/core/src/service.ts (sealBatch 460-510, anchorBatch 513-536, refreshConfirmations 539-581)"
+   ],
+   "tech": "setInterval (WORKER_TICK_MS, 3,000 ms live), per-process overlap guard",
+   "notes": "Global trigger (pending >= 1,024 or 15 s since the last seal); no re-selection of sealed-but-unanchored batches."
+  },
+  {
+   "name": "Process entry and configuration",
+   "role": "Wires DB, anchor backend, inscriber, remit rail, HTTP server and both workers into one Node process; all settings from the environment",
+   "files": [
+    "attest/apps/core/src/main.ts",
+    "attest/apps/core/src/config.ts",
+    "attest/apps/core/.env.example"
+   ],
+   "tech": "Node 22 type stripping, no build step",
+   "notes": ".env.example still describes SQLite and HOST=127.0.0.1 behind a reverse proxy; the live process logs MySQL and host 0.0.0.0. Refuses live+regtest unless ALLOW_REGTEST_IN_LIVE=1."
+  },
+  {
+   "name": "Chain reads on request paths",
+   "role": "Console Bitcoin tx lookup, /readyz node probe, settlement-transfer status on the EVM chain, PoR reserve balance measurement",
+   "files": [
+    "attest/apps/core/src/http/console.ts (lookupTx 84-125, tx 465-485)",
+    "attest/apps/core/src/http/routes.ts (/readyz 166-178)",
+    "attest/apps/core/src/remit/chain-status.ts",
+    "attest/apps/core/src/remit/routes.ts (503-514)",
+    "attest/apps/core/src/por/reserves.ts",
+    "attest/apps/core/src/por/routes.ts (235-257)"
+   ],
+   "tech": "bitcoind JSON-RPC; fetch with AbortSignal.timeout(5,000) for EVM",
+   "notes": "No caching; EVM calls are sequential; reserve reads at block 'latest'."
+  },
+  {
+   "name": "Bitcoin node (external)",
+   "role": "Holds the 'attest' wallet; funds, signs and relays anchors; mines on demand",
+   "files": [
+    "attest/deploy/regtest-node.sh",
+    "attest/deploy/switch-to-explorer-node.sh"
+   ],
+   "tech": "bitcoind regtest in docker (regtest-bitcoind-1, :18443), defined in another project's stack (network regtest_default)",
+   "notes": "Shared chain with zero block subsidy (past height 9,000); attest wallet funded once by hand from another stack's wallet; RPC published on 0.0.0.0 and [::]; a second, older regtest chain on :18556."
+  },
+  {
+   "name": "EVM settlement chain (sandbox)",
+   "role": "USDC (MockUSDC) leg of remit, and reserve balances for PoR",
+   "files": [
+    "attest/deploy/ecosystem.config.cjs (stonehash-anvil)",
+    "demo-partners/chain/client.mjs"
+   ],
+   "tech": "anvil chain 31337 on 127.0.0.1:8545, in memory, automine; writes via unlocked dev accounts in demo-partners",
+   "notes": "Core only reads it. Production per the docs is a real chain with the settlement entity's custody stack; no specific chain is named."
+  },
+  {
+   "name": "EVM explorer",
+   "role": "Public explorer for the sandbox settlement chain",
+   "files": [
+    "evm-explorer/gateway.mjs",
+    "evm-explorer/serve.mjs",
+    "evm-explorer/up.sh",
+    "evm-explorer/nginx.conf"
+   ],
+   "tech": "Otterscan docker (otterscan:latest, host network, :5106 HTTP) + read-only JSON-RPC allow-list gateway on 127.0.0.1:5107",
+   "notes": "1,200 calls/min per client, no global cap; shares the one anvil with the live settlement rail."
+  },
+  {
+   "name": "Process supervision and ops scripts",
+   "role": "Start, reset, smoke and seed",
+   "files": [
+    "attest/deploy/ecosystem.config.cjs",
+    "attest/deploy/run-core.sh",
+    "attest/deploy/_env.sh",
+    "attest/deploy/run-partners.sh",
+    "attest/deploy/reset-sandbox.sh",
+    "attest/deploy/smoke.sh",
+    "attest/deploy/smoke-remit.mjs",
+    "attest/deploy/smoke-por.mjs",
+    "attest/deploy/smoke-exceptions.mjs",
+    "attest/deploy/seed-remit-volume.mjs",
+    "attest/deploy/make-sample-anchor.sh"
+   ],
+   "tech": "pm2 fork mode, one instance per app, .env captured at pm2 start",
+   "notes": "max_restarts 5; no backup/replication scripts, no log rotation module, no metrics or alerting; smoke.sh and make-sample-anchor.sh are stale against the async MySQL API; reset-sandbox drops the MySQL schema and restarts anvil."
+  },
+  {
+   "name": "Host",
+   "role": "Runs everything",
+   "files": [
+    "/proc/net/tcp (read-only)",
+    "~/.pm2/logs/stonehash-attest-core-out.log"
+   ],
+   "tech": "EC2 with 4 vCPU, 16 GB RAM (about 6 GB free), 968 GB disk (42% used), shared with k3s, Redis, Postgres, NATS and other demos",
+   "notes": "Core on 0.0.0.0:8787, MySQL 127.0.0.1:3306, anvil 127.0.0.1:8545, bitcoind 0.0.0.0:18443; nothing listens on :80 or :443. 116 core boots since 11-04; 272 batches anchored in total."
+  },
+  {
+   "name": "Design intent (docs)",
+   "role": "Target production topology",
+   "files": [
+    "docs/DESIGN.md",
+    "docs/SANDBOX-STRATEGY.md",
+    "docs/REVIEW-PACKAGE.md",
+    "docs/REMIT-POR-DESIGN.md"
+   ],
+   "notes": "Separate hosts app/api (live, mainnet) vs app-sandbox/api-sandbox; separate attest_test/attest_live schemas; same code. 'Postgres 1 + 2 processes, no NATS/Kong/K8s' (code: one process, MySQL, node:http). A mainnet anchoring service only after a paying subscriber (P3); it then needs a hot wallet, fee/RBF policy, a reorg procedure, KMS/HSM and node operations. Remit is a synthetic stage-0 'Evidence Lab' with mTLS assumed for banks. No volume, SLA, availability or RPO/RTO targets anywhere."
+  }
+ ],
+ "flows": [
+  {
+   "name": "Digest attestation to Bitcoin anchor",
+   "sync_or_async": "async (worker tick, WORKER_TICK_MS=3,000 live)",
+   "steps": [
+    "API stores an attestation with batch_id NULL (backend layer).",
+    "core/src/worker.ts:71-73: global COUNT of pending rows; proceed if pending >= BATCH_MAX_LEAVES (1,024) or >= BATCH_FLUSH_INTERVAL_MS (15 s live) since the last seal.",
+    "core/src/service.ts:474-483: the oldest pending row picks the org; take <= 1,024 of that org's rows.",
+    "core/src/service.ts:486-508: build the Merkle tree; one DB transaction: INSERT batches, then per leaf UPDATE attestations + INSERT merkle_proofs, sequentially awaited.",
+    "core/src/service.ts:522: encode BC01 (53 B). core/src/anchor/bitcoind.ts:63-89: createrawtransaction, fundrawtransaction(fee_rate 1), signrawtransactionwithwallet, script check, sendrawtransaction.",
+    "core/src/service.ts:526-534: INSERT anchor_txs (pending); batch and attestations become 'submitted'.",
+    "Regtest only, core/src/main.ts:139-141: generate(1), i.e. getnewaddress + generatetoaddress, so the anchor confirms within the same tick.",
+    "On a submit error, core/src/worker.ts:93-96 logs 'anchor failed, will retry'. The batch stays 'sealed' and nothing ever picks it up again."
+   ]
+  },
+  {
+   "name": "Confirmation refresh",
+   "sync_or_async": "async (same tick, after sealing)",
+   "steps": [
+    "core/src/service.ts:540-543: SELECT all anchor_txs with status != 'confirmed' (no LIMIT).",
+    "For each row in sequence, core/src/anchor/bitcoind.ts:93-102: gettransaction(txid, true, true) on the wallet.",
+    "At confirmations >= 1, core/src/service.ts:551-558: one transaction updates anchor_txs (height, hash, confirmations frozen), the batch and its attestations to 'confirmed'.",
+    "core/src/service.ts:564-578: the same for unconfirmed inscriptions (one RPC each, then an UPDATE).",
+    "Confirmed rows are never polled again: no reorg handling, no deeper confirmation count.",
+    "Remit: core/src/remit/orchestrator.ts:743-757 promoteAnchored on the remit worker tick (2 s) moves settlements to EVIDENCE_ANCHORED."
+   ]
+  },
+  {
+   "name": "Inscription of an original document",
+   "sync_or_async": "sync (inside the HTTP request)",
+   "steps": [
+    "core/src/http/routes.ts:281-290 (and console.ts:447-460): buffer the raw body, up to INSCRIPTION_MAX_BYTES + 64 KiB.",
+    "core/src/service.ts:211-217: SHA-256 of the body; SELECT for a duplicate (org, leaf).",
+    "core/src/anchor/inscribe.ts:99-107: ephemeral key and taproot tweak (pure-JS scalar multiplications).",
+    "inscribe.ts:111-121: getnewaddress(bech32m) and getaddressinfo; measure the reveal size; fee = size x 2 sat/vB.",
+    "inscribe.ts:130-147: fundrawtransaction(fee_rate 2), signrawtransactionwithwallet, decoderawtransaction, sendrawtransaction (commit).",
+    "inscribe.ts:154-167: TapSighash and Schnorr sign in process; sendrawtransaction (reveal spends the unconfirmed commit); txid cross-check.",
+    "core/src/service.ts:225-233: INSERT attestation 'submitted', then 201. The confirmation flow polls the reveal. On regtest it confirms only when the next batch anchor mines a block."
+   ]
+  },
+  {
+   "name": "PoR snapshot: reserve measurement and anchoring",
+   "sync_or_async": "sync measurement, async anchoring",
+   "steps": [
+    "core/src/por/routes.ts:235-257 anchorAndMeasure: if reserves are declared, core/src/por/reserves.ts:57-77 makes one sequential eth_call balanceOf per local-chain entry (5 s timeout, block 'latest'). Entries on other chains are marked DECLARED_ONLY.",
+    "svc.issue(commitment, product 'por') goes into the digest batch path.",
+    "smoke-por expects anchor 'confirmed' only because regtest mines immediately."
+   ]
+  },
+  {
+   "name": "Settlement transfer status lookup",
+   "sync_or_async": "sync",
+   "steps": [
+    "core/src/remit/routes.ts:503-511: auth, then load the settlement for the org.",
+    "core/src/remit/chain-status.ts:67-73: eth_getTransactionByHash, then eth_getTransactionReceipt and eth_blockNumber in parallel, then eth_getBlockByNumber. 5 s timeout each; errors become 'unreachable'."
+   ]
+  },
+  {
+   "name": "Boot, restart and shutdown",
+   "sync_or_async": "lifecycle",
+   "steps": [
+    "pm2 (deploy/ecosystem.config.cjs) runs node src/main.ts with the .env captured at pm2 start.",
+    "core/src/main.ts:34: openDb (MySQL). Any error is fatal and exits; pm2 restarts at most 5 times within min_uptime 10 s, then leaves the process stopped.",
+    "main.ts:78-85: load or create the platform remit PEM in the data dir; upsert it as the STONEHASH registry key.",
+    "main.ts:125-126: backend.health() is only logged. main.ts:131-145 starts the BatchWorker and RemitWorker (both off when WORKER_TICK_MS=0).",
+    "SIGTERM, main.ts:147-154: clear the timers, close the server, then the DB pool; hard exit after 5 s. An in-flight tick is not awaited."
+   ]
+  }
+ ],
+ "per_txn_costs": [
+  {
+   "operation": "Seal + anchor one batch (worker tick; N <= 1,024 records of one org)",
+   "db_reads": "4 per tick: global COUNT(*) pending, SELECT oldest-pending org, SELECT <= N pending rows of that org, SELECT batch by id",
+   "db_writes": "2N+4 statements: seal transaction = 1 INSERT batches + N UPDATE attestations + N INSERT merkle_proofs (each awaited in sequence); anchor transaction = INSERT anchor_txs + UPDATE batches + UPDATE attestations (N rows). N=1,024 gives 2,052 statements, about 2 per attestation",
+   "external_calls": "4 bitcoind wallet RPCs (createrawtransaction, fundrawtransaction, signrawtransactionwithwallet, sendrawtransaction), 15 s timeout each; regtest adds 2 (getnewaddress, generatetoaddress); amortised 4/N RPC per attestation",
+   "crypto_ops": "About 2N SHA-256 for the tree, N proofs of log2(N) siblings; transaction signing happens inside bitcoind (one signature per input)",
+   "sync_cpu_notes": "Tree build and N JSON.stringify calls on the event loop: small at 1,024, linear in BATCH_MAX_LEAVES. On chain: one tx of about 174 vB regardless of N.",
+   "evidence": [
+    "core/src/worker.ts:71-82",
+    "core/src/service.ts:474-508",
+    "core/src/service.ts:522-534",
+    "core/src/anchor/bitcoind.ts:63-89"
+   ]
+  },
+  {
+   "operation": "Confirmation tracking of one anchor (every tick until the first confirmation)",
+   "db_reads": "Per tick, shared by all anchors: 1 SELECT of all non-confirmed anchor_txs (no LIMIT) + 1 SELECT of unconfirmed inscriptions",
+   "db_writes": "At promotion: 1 transaction with 3 UPDATEs (anchor_txs, batches, attestations with N rows)",
+   "external_calls": "1 gettransaction (verbose) per unconfirmed anchor per 3 s tick. Regtest: 1 in total (mined in the same tick). Mainnet: about 200 per anchor per 10-minute block, unbounded while stuck",
+   "crypto_ops": "none in process",
+   "sync_cpu_notes": "Sequential awaits; tick length is roughly U x RPC latency, and it delays the next seal.",
+   "evidence": [
+    "core/src/service.ts:539-558",
+    "core/src/anchor/bitcoind.ts:93-102",
+    "core/src/worker.ts:68,99"
+   ]
+  },
+  {
+   "operation": "Inscribe one document (POST /v1/attestations/inscribe, synchronous)",
+   "db_reads": "2 (duplicate-check SELECT, SELECT of the new row) plus auth reads owned by the backend layer",
+   "db_writes": "1 INSERT attestations; later 1 UPDATE at confirmation",
+   "external_calls": "7 sequential bitcoind RPCs (getnewaddress, getaddressinfo, fundrawtransaction, signrawtransactionwithwallet, decoderawtransaction, sendrawtransaction x2), then 1 gettransaction per tick until confirmed",
+   "crypto_ops": "SHA-256 of the body (<= 100 KB default); 4 pure-JS secp256k1 scalar multiplications + 1 lift_x + tagged hashes; 1 BIP340 signature over a TapSighash",
+   "sync_cpu_notes": "Estimated 0.1-0.5 s of event-loop blocking for the BigInt EC math (not measured); body buffered in memory. On chain: 2 txs, about body/4 + 330 vB.",
+   "evidence": [
+    "core/src/http/routes.ts:281-290",
+    "core/src/service.ts:211-233",
+    "core/src/anchor/inscribe.ts:99-160",
+    "core/src/btc/secp256k1.ts:63-114"
+   ]
+  },
+  {
+   "operation": "Console Bitcoin tx lookup (GET /v1/console/tx/:txid, on click)",
+   "db_reads": "1 SELECT on attestations with an IN-subquery on anchor_txs (ownership check) plus account/session reads",
+   "db_writes": "0 in this layer",
+   "external_calls": "1-2 bitcoind RPCs (getmempoolentry, then gettransaction), 5 s timeout each",
+   "crypto_ops": "none",
+   "evidence": [
+    "core/src/http/console.ts:84-125",
+    "core/src/http/console.ts:465-485",
+    "attest/apps/console/src/app.ts:3575-3584 (called per click, not per row)"
+   ]
+  },
+  {
+   "operation": "Settlement chain status (GET /v1/settlements/:id/chain)",
+   "db_reads": "1 settlement read (store.getForOrg) plus auth",
+   "db_writes": "0",
+   "external_calls": "Up to 4 EVM JSON-RPC calls in 3 sequential rounds, 5 s timeout each (worst case 15 s), no cache",
+   "crypto_ops": "none",
+   "evidence": [
+    "core/src/remit/routes.ts:503-511",
+    "core/src/remit/chain-status.ts:45-100"
+   ]
+  },
+  {
+   "operation": "PoR snapshot reserve measurement (inside POST /v1/por/snapshots)",
+   "db_reads": "owned by the PoR layer",
+   "db_writes": "The commitment then goes through svc.issue into the batch path (costs above)",
+   "external_calls": "E sequential eth_call balanceOf (one per declared local-chain reserve entry), 5 s timeout each; no cap on E except the body size",
+   "crypto_ops": "none in this step",
+   "evidence": [
+    "core/src/por/routes.ts:249-250",
+    "core/src/por/reserves.ts:41-77"
+   ]
+  },
+  {
+   "operation": "Readiness probe (GET /readyz)",
+   "external_calls": "1 getblockchaininfo (15 s timeout); 503 when bitcoind is unreachable",
+   "evidence": [
+    "core/src/http/routes.ts:166-178",
+    "core/src/anchor/bitcoind.ts:105-115"
+   ]
+  }
+ ],
+ "capacity_findings": [
+  {
+   "id": "CH-01",
+   "title": "A failed anchor is never retried: its batch is stranded for good",
+   "severity": "blocker",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "anchorBatch runs only for the batch sealed in the same tick. If submit throws (node down, insufficient funds, mempool min fee not met, too-long-mempool-chain, 15 s RPC timeout), the batch stays 'sealed'. Its records already have batch_id set, so they are no longer pending, and no code ever selects 'sealed' batches again. The code comments say the opposite. This has never fired on regtest (0 'anchor failed' lines in the core log since 11-04). On mainnet it is where most of the other findings end up.",
+   "evidence": [
+    "core/src/worker.ts:77-82 `const batchId = await this.svc.sealBatch(); ... const txid = await this.svc.anchorBatch(batchId);` is the only production caller (grep of src, deploy, tests)",
+    "core/src/worker.ts:93-95 `// The batch stays sealed and the next tick retries it.` logs 'anchor failed, will retry', yet grep for 'sealed' finds only service.ts:493,517 and db.ts:48; no query re-selects sealed batches",
+    "core/src/service.ts:430-431 pendingCount = `SELECT COUNT(*) ... WHERE batch_id IS NULL`: sealed records never re-enter the queue",
+    "core/src/worker.ts:10-12 `they simply stay accepted until the chain is reachable again` is false: sealBatch needs no chain, so each flush during an outage seals and strands a batch"
+   ],
+   "quantification": "During a node outage of D seconds with work pending: D/15 batches stranded (flush-gated) or D/3 (>= 1,024 pending), each up to 1,024 records. A 10-minute bitcoind restart strands 40-200 batches.",
+   "fix": "Each tick, re-anchor the oldest 'sealed' batches first (bounded per tick), then seal new work; pair with CH-10 so a retry can never broadcast twice.",
+   "affects": "Every digest attestation, remit evidence commitment and PoR snapshot (all use the batch path)."
+  },
+  {
+   "id": "CH-02",
+   "title": "Batcher ceiling: one batch of <= 1,024 leaves per 3 s tick (about 341 attestations/s system-wide)",
+   "severity": "blocker",
+   "kind": "structural",
+   "bites_at_tier": "T3",
+   "confidence": "high",
+   "claim": "The worker seals exactly one batch per tick, from one organisation, anchors it and refreshes confirmations, all in one loop with an overlap guard. Throughput is capped at BATCH_MAX_LEAVES per tick whatever the hardware. Tenants are served oldest-first, so the k-th waiting tenant waits about k ticks (or k flush intervals). The figures match the lead's own isolated measurement from 11-18 (memory note); nothing was re-measured here.",
+   "evidence": [
+    "core/src/worker.ts:73-77 `if (pending > 0 && (pending >= this.opts.maxLeaves || due)) { // One batch per tick, and a batch is now one organisation's records`",
+    "core/src/service.ts:480-483 `WHERE batch_id IS NULL AND org_id = ? ORDER BY created_at ASC, ${ord} ASC LIMIT ?` (BATCH_MAX_LEAVES, config.ts:332 default 1024)",
+    "core/src/service.ts:503-507 per leaf, inside one transaction: `await upd.run(batchId, i, r.id); await ins.run(r.id, batchId, i, ...)`, i.e. 2N+1 sequential statements",
+    "core/src/worker.ts:68 `if (this.running) return; // a slow chain must not overlap ticks`: a tick longer than 3 s skips the next one"
+   ],
+   "quantification": "1,024 per 3 s = 341/s theoretical. T3 (1,000/s sustained, 10,000/s peaks) grows the backlog by >= 659/s (about 57M/day). Raising BATCH_MAX_LEAVES lengthens the seal transaction linearly (2 statements per leaf) until ticks overrun. Wait before sealing for K tenants: K x 3 s with >= 1,024 pending globally, K x 15 s below that (1,000 tenants: 50 min or 4.2 h).",
+   "fix": "Decouple sealing from anchoring; seal all due orgs per tick, or run partitioned sealers (SELECT ... FOR UPDATE SKIP LOCKED); bulk writes; build big trees in worker threads; anchor one top-level root over many org roots (CH-03)."
+  },
+  {
+   "id": "CH-03",
+   "title": "The number of anchor transactions follows the tick rate, not the volume: 5,760-28,800 mainnet transactions a day",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "Three rules combine: batches are per org, the trigger counts pending records across all orgs, and the flush interval is 15 s. So the worker emits a Bitcoin transaction every 15 s whenever anything is pending, and every 3 s once 1,024 records are pending across tenants, even if each batch holds only a few records. Cost per anchor is fixed, so thin batches make each attestation expensive. The privacy reason for per-org batches applies to issuer statements carried in a witness, which batch anchors do not carry today (they put only the root in OP_RETURN). Combining organisations therefore fits the design if each tenant's records form a subtree under one top-level root.",
+   "evidence": [
+    "core/src/worker.ts:71-73 `const pending = await this.svc.pendingCount(); const due = Date.now() - this.lastFlush >= this.opts.flushIntervalMs;`: pending is the global count",
+    "core/src/service.ts:450-458 `That stops being true the moment a batch carries issuer statements in its witness ... the grouping follows the privacy boundary rather than the cost one.`",
+    "core/src/anchor/bitcoind.ts:63-65 the anchor carries only `createrawtransaction [[], [{ data: bytesToHex(payload) }]]`, a 53-byte BC01 OP_RETURN (bc01.ts:24)",
+    "Live settings (task context): BATCH_FLUSH_INTERVAL_MS=15000, WORKER_TICK_MS=3000, BATCH_MAX_LEAVES=1024"
+   ],
+   "quantification": "About 174 vB per anchor. Per tx at 1 (coded)/5/20/100 sat/vB: 174/870/3,480/17,400 sat. 5,760 tx/day (15 s cadence) costs 0.05/0.20/1.0 BTC/day at 5/20/100 sat/vB. 28,800 tx/day (3 s cadence) costs 0.25/1.0/5.0 BTC/day and takes about 3.5% of all block space. T1 with 1,000 tenants: about 3 records per tx, about 1,160 sat per attestation at 20 sat/vB. One combined anchor per block: 144 tx/day, about 0.005 BTC/day at 20 sat/vB at any tier (5.8 sat per attestation at T1, 0.006 at T3).",
+   "fix": "Anchor once per block interval (or at a size cap) with per-org subtrees under one root; trigger each org on its own count; set the flush interval per network (15 s is a regtest UX value)."
+  },
+  {
+   "id": "CH-04",
+   "title": "Fixed fee rate, no estimation, no fee bumping: time to confirm has no upper bound on mainnet",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "Anchors are funded at a hard-coded 1 sat/vB and inscriptions at 2 sat/vB. There is no estimatesmartfee, conf_target, bumpfee, CPFP or abandontransaction. If the node's mempool minimum fee rises above 1 sat/vB, sendrawtransaction is rejected and the batch is stranded (CH-01). If the transaction is accepted but outbid, it can wait hours or days and is polled every tick forever. The design's own mainnet checklist marks fee policy (batch cadence, RBF) as required.",
+   "evidence": [
+    "core/src/anchor/bitcoind.ts:66-68 `rpc<FundResult>(this.rpcOpts, 'fundrawtransaction', [unfunded, { fee_rate: 1 }], this.wallet,)`",
+    "core/src/anchor/inscribe.ts:52-53 `/** regtest and a quiet mempool; the same knob as the hash anchor's fee_rate. */ const FEE_RATE_SAT_VB = 2;`",
+    "grep of attest/ (core, deploy) for estimatesmartfee|bumpfee|psbt|abandontransaction|replaceable|conf_target: no matches",
+    "core/src/anchor/bitcoind.ts:97-98 `if (confirmations <= 0) return { status: 'pending', confirmations: 0 };`: conflicted (negative) or evicted txs stay pending forever",
+    "docs/REVIEW-PACKAGE.md D4 checklist row 3: '수수료 정책 (배치 주기·RBF)' marked 필요 (required) for the mainnet service"
+   ],
+   "quantification": "No upper bound on time to the first confirmation; 1 sat/vB is the lowest priority in any fee spike. Each stuck anchor costs one RPC per 3 s tick (CH-07).",
+   "fix": "estimatesmartfee with configured floor and ceiling per network; RBF bump (or CPFP on change) after N blocks; treat min-fee rejection as retryable; alert on unconfirmed age."
+  },
+  {
+   "id": "CH-05",
+   "title": "One hot wallet with no UTXO management: anchors chain on unconfirmed change and hit the 25-transaction mempool limit",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "medium",
+   "claim": "Coin selection is left entirely to bitcoind: no coin control, lockunspent or UTXO pool. Once confirmed coins run out, the wallet spends the unconfirmed change of the previous anchor (wallet default). A wallet with one or a few large UTXOs can therefore make about 25 chained anchors per confirmation cycle before funding fails, and each failure strands a batch (CH-01). Regtest never shows this, because a block is mined after every anchor. fundrawtransaction does not lock the inputs it picks, so concurrent inscription requests and the worker can pick the same coin, and one broadcast fails.",
+   "evidence": [
+    "core/src/anchor/bitcoind.ts:8-10 `createrawtransaction → fundrawtransaction → signrawtransactionwithwallet → sendrawtransaction. bitcoind picks the inputs, computes the fee, adds change and signs.`",
+    "core/src/main.ts:139-141 `...(backend.network === 'regtest' ? { afterAnchor: async () => { await backend.generate(1); } } : {})`: each regtest anchor is mined before the next",
+    "core/src/anchor/inscribe.ts:130-131 `'fundrawtransaction', [skeleton, { fee_rate: FEE_RATE_SAT_VB }]` without lockUnspents, called from HTTP handlers concurrently with the worker",
+    "deploy/switch-to-explorer-node.sh:33,51 the live wallet was funded by one sendtoaddress of FUND_BTC (default 10)"
+   ],
+   "quantification": "With one confirmed UTXO: <= 25 chained anchors per confirmation cycle. At the 3 s cadence (1,200/h, 200 per 10-minute block) the limit is reached in about 75 s; at the 15 s cadence in about 6 min, inside most block intervals; sooner relative to confirmation at 1 sat/vB. Sustaining 200 anchors per block needs about 200 confirmed UTXOs refilled every block, or combining to about 1 anchor per block (CH-03).",
+   "fix": "Combine to about 1 anchor per block; keep a pre-split pool of confirmed UTXOs; route every wallet spend through one anchor service; lock inputs between fund and send."
+  },
+  {
+   "id": "CH-06",
+   "title": "One confirmation counts as final, no reorg handling, and the stored confirmation count never changes",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "An anchor becomes 'confirmed' at its first confirmation and is never polled again. After a reorg, rows stay 'confirmed' with a stale block hash and height, and bundles exported later still show the count stored at promotion (normally 1). Remit EVIDENCE_ANCHORED and PoR 'anchor confirmed' inherit this one-block decision. The design said the confirmation worker would handle reorgs.",
+   "evidence": [
+    "core/src/service.ts:540-543 `SELECT txid, batch_id, raw_tx_hex, payload_hex FROM anchor_txs WHERE status != 'confirmed'`: confirmed rows leave the polling set for good",
+    "core/src/service.ts:551-555 `UPDATE anchor_txs SET status = 'confirmed', block_height = ?, block_hash = ?, confirmations = ?, confirmed_at = ? WHERE txid = ?` with no later update",
+    "core/src/service.ts:696-703 bundle `confirmed: { ... blockHash: anchor.block_hash ..., confirmations: anchor.confirmations }` uses the value stored at promotion",
+    "docs/REVIEW-PACKAGE.md D2: 'worker/confirm | 확정 감시 · 상태 전이 · reorg 처리' (confirmation watch, transitions, reorg handling)"
+   ],
+   "fix": "Track to a configurable depth (for example 6), re-checking the block hash until then; roll back status on a reorg; read the depth from the node at export time."
+  },
+  {
+   "id": "CH-07",
+   "title": "Confirmation polling makes one RPC per unconfirmed anchor every 3 s, in sequence, in the same loop as sealing",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "claim": "Every tick re-reads all unconfirmed anchors (no LIMIT) and awaits one gettransaction per row in sequence, then scans unconfirmed inscriptions the same way. Nothing is triggered by new blocks (no ZMQ, blocknotify or best-block check). On mainnet each anchor is polled about 200 times per 10-minute block. A backlog of stuck anchors makes the tick longer, and because of the overlap guard that delays sealing and anchoring for everyone.",
+   "evidence": [
+    "core/src/service.ts:546-549 `for (const r of unconfirmed) { const state = await this.backend.poll({ txid: r.txid, ... });`",
+    "core/src/service.ts:564-568 `... FROM attestations WHERE kind = 'inscription' AND status != 'confirmed' AND reveal_txid IS NOT NULL`, every tick",
+    "core/src/worker.ts:99 `const promoted = await this.svc.refreshConfirmations();` runs inside the tick after seal and anchor; worker.ts:68 overlap guard",
+    "core/src/anchor/bitcoind.ts:94-96 `'gettransaction', [handle.txid, true, true], this.wallet` (verbose decode on every call)"
+   ],
+   "quantification": "U unconfirmed anchors means U sequential RPCs every 3 s (about U/3 RPC/s). At the 3 s anchor cadence U is about 200 in steady state (about 67 RPC/s). A day of stuck 1 sat/vB anchors gives U of about 28,800 and ticks of tens of seconds with no sealing.",
+   "fix": "Poll once per new block (getbestblockhash or ZMQ hashblock) with listsinceblock; cap work per tick; give confirmation tracking its own timer."
+  },
+  {
+   "id": "CH-08",
+   "title": "Inscription runs inside the HTTP request, with pure-JS secp256k1 on the event loop",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "medium",
+   "claim": "POST /v1/attestations/inscribe (and the console version) buffers the document, then waits for 7 sequential bitcoind RPCs and 4 scalar multiplications before responding. The multiplications are affine double-and-add in BigInt with a Fermat inversion per point operation. That CPU time blocks the single Node process that serves every API call and runs both workers.",
+   "evidence": [
+    "core/src/http/routes.ts:281-290 `r.post('/v1/attestations/inscribe' ... const body = await ctx.raw(MAX_INSCRIPTION_UPLOAD); ... await d.svc.inscribe(orgId, new Uint8Array(body), contentType);`",
+    "core/src/service.ts:219-222 `// Broadcast first. ... const r = await this.inscriber(body, contentType);`",
+    "core/src/anchor/inscribe.ts:111-160: getnewaddress, getaddressinfo, fundrawtransaction, signrawtransactionwithwallet, decoderawtransaction, sendrawtransaction (commit), sendrawtransaction (reveal)",
+    "core/src/btc/secp256k1.ts:63-65,103-112 `return power(mod(a, m), m - 2n, m);` on every add and double; pointMul called 4x (inscribe.ts:100, taproot.ts:92, secp256k1.ts:203,216)"
+   ],
+   "quantification": "Each scalar multiplication is about 384 inversions x about 500 BigInt mul-mods, roughly 190k operations. Four per inscription gives an estimated 0.1-0.5 s of event-loop blocking (estimated, not measured under the read-only rule). Each RPC can wait up to 15 s (rpc.ts:49).",
+   "fix": "Queue inscriptions as background jobs (return 202 + id); use a vetted native or projective-coordinate secp256k1; route wallet use through one anchor service."
+  },
+  {
+   "id": "CH-09",
+   "title": "Inscription volume is limited by Bitcoin block space",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "An inscription is a commit plus a reveal whose witness carries the whole document at quarter weight per byte. Even a modest stream would fill global block capacity, so inscription can only be a low-volume premium feature at any tier.",
+   "evidence": [
+    "core/src/btc/inscription.ts:88-90 `STANDARD_RELAY_MAX_BODY_BYTES = 390_000; HARD_CEILING_BYTES = 3_500_000; DEFAULT_SOFT_CAP_BYTES = 100_000;`",
+    "core/src/anchor/inscribe.ts:83-87 revealVsize: `const weight = base * 3 + total; return Math.ceil(weight / 4);` (body in the witness)",
+    "core/src/btc/inscription.ts:42,97-102 body split into 520-byte pushes (taproot.ts:55 PUSHDATA2, 3 bytes overhead each)"
+   ],
+   "quantification": "Reveal is about body/4 + 180 vB (+0.15% for chunking); commit about 153 vB. A 1 KB document is about 590 vB in total (about 11.7k sat at 20 sat/vB). A 100 KB document is about 25.5k vB: about 51k sat at the coded 2 sat/vB, 127k at 5, 510k at 20, 2.55M at 100. A block (about 1M vB) fits at most about 39 x 100 KB or about 1,700 x 1 KB inscriptions using all of it. T1 (1/s, 600 per block) is impossible for 100 KB documents and would take 35% of all block space for 1 KB documents.",
+   "fix": "Treat it as a premium feature with a per-org cap and its own pricing, queued with a fee policy; push volume to digest anchoring."
+  },
+  {
+   "id": "CH-10",
+   "title": "Anchoring is not idempotent: the broadcast happens before anything is recorded, and shutdown does not drain the tick",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "anchorBatch writes anchor_txs only after sendrawtransaction returns. A crash, a deploy restart, or a 15 s RPC timeout after the node accepted the tx leaves a paid on-chain anchor with no DB row. A naive retry (CH-01) would then broadcast a second time. Shutdown clears the timer, closes the server and then the pool, and exits after 5 s without waiting for a running tick. Inscription has the same gap, plus a duplicate check that reads then acts with no lock.",
+   "evidence": [
+    "core/src/service.ts:523-530 `const handle = await this.backend.submit(payload); ... await this.db.tx(async (tx) => { await tx.prepare(... INSERT INTO anchor_txs ...`",
+    "core/src/main.ts:149-153 `worker.stop(); remitWorker?.stop(); server.close(() => { void db.close().finally(() => process.exit(0)); }); setTimeout(() => process.exit(0), 5_000).unref();`",
+    "core/src/service.ts:212-225 SELECT duplicate (org_id, leaf_bytes), then broadcast, then INSERT; nothing reserved before the broadcast",
+    "core/src/anchor/rpc.ts:68 `req.on('timeout', () => { req.destroy(new Error('bitcoind rpc timeout')); });`: a timed-out send may still have been accepted"
+   ],
+   "fix": "Persist the signed raw tx and its txid (state 'signed') before sending, mark 'broadcast' afterwards, and rebroadcast or reconcile on boot; wait for the tick on SIGTERM; reserve a unique (org_id, leaf_bytes) before any inscription broadcast."
+  },
+  {
+   "id": "CH-11",
+   "title": "Inscription can lose funds for good: crash window, and a size limit that ignores mainnet relay rules",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "The reveal is signed with an ephemeral key held only in memory, and the commit output has no key path (NUMS internal key). If the process dies, or the reveal is rejected, after the commit is broadcast, the commit output can never be spent. The configured cap is clamped to the 3.5 MB regtest ceiling, not to the 390 KB standard-relay limit. A mainnet deployment set above 390 KB would broadcast a commit whose reveal no node will relay.",
+   "evidence": [
+    "core/src/anchor/inscribe.ts:99 `const secret = ephemeralSecret(() => new Uint8Array(randomBytes(32)));` is never persisted; commit sent at :146-147, before the reveal at :159-160",
+    "core/src/btc/inscription.ts:59-61 NUMS internal key: `With NUMS the only way to spend the commit output is the script path`",
+    "core/src/config.ts:338-341 `Math.min(Math.max(int('INSCRIPTION_MAX_BYTES', DEFAULT_SOFT_CAP_BYTES), 1), HARD_CEILING_BYTES)` has no mainnet clamp to STANDARD_RELAY_MAX_BODY_BYTES"
+   ],
+   "quantification": "Loss per incident = 1,000 sat + reveal fee: about 51k sat for 100 KB at 2 sat/vB, about 507k sat at 20 sat/vB; a 500 KB mainnet attempt at 2 sat/vB loses about 250k sat.",
+   "fix": "Sign the reveal before broadcasting the commit; persist both raw txs (or the key) first; testmempoolaccept the pair; clamp to 390,000 bytes when network=mainnet."
+  },
+  {
+   "id": "CH-12",
+   "title": "One shared box, one instance per service, no TLS, no backups, no monitoring",
+   "severity": "major",
+   "kind": "operational",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "Everything runs on one 4-vCPU/16 GB host shared with unrelated stacks: pm2 fork mode with one process each, MySQL on the same host, anvil in memory. The core listens on 0.0.0.0:8787 over plain HTTP. Nothing listens on :80 or :443 and the host has no nginx or caddy, while .env.example says the service should sit on 127.0.0.1 behind a reverse proxy. The repo has no backup or replication tooling, no metrics and no alerting. Logs are pm2 files with no rotation module. Every component is a single point of failure.",
+   "evidence": [
+    "deploy/ecosystem.config.cjs:36-46 `name: 'stonehash-attest-core', script: 'src/main.ts', interpreter: 'node', ... autorestart: true, max_restarts: 5,`: no instances or exec_mode (fork, 1 process)",
+    "/proc/net/tcp (read 11-18): LISTEN 0.0.0.0:8787, 0.0.0.0:18443, 0.0.0.0:5106, 127.0.0.1:3306, 127.0.0.1:8545; nothing on :80/:443. Core log 2026-11-17T10:19:38Z: host 0.0.0.0, db mysql(stonehash_attest)",
+    "attest/apps/core/.env.example: `# 127.0.0.1 keeps the service behind a reverse proxy. Only widen this deliberately` / `HOST=127.0.0.1`",
+    "grep over the repo: no mysqldump, xtrabackup, replica or failover tooling; no prometheus, metrics, sentry or alert code; ~/.pm2/modules empty (no pm2-logrotate)"
+   ],
+   "fix": "TLS-terminating reverse proxy or LB; MySQL on its own host (managed, multi-AZ, PITR backups); alerts on oldest-unanchored age, stranded batches, unconfirmed age, wallet balance and UTXO count, RPC errors; log shipping and rotation; dedicated hosts."
+  },
+  {
+   "id": "CH-13",
+   "title": "Mainnet custody: an unencrypted hot wallet inside the node, no HSM/PSBT split, no balance monitoring",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "All anchor and inscription funding and signing happens in a bitcoind wallet reached over RPC with basic auth. The wallet is created without a passphrase. No code unlocks it, splits signing (PSBT/HSM) or watches the balance; funding is a manual script. A low balance shows up only as an RPC error: stranded batches (CH-01) or failed inscription requests. The design's mainnet checklist requires hot-wallet setup, KMS/HSM custody and node operations, and none exists. On the box today, the regtest node's RPC port is published on all interfaces and a deploy script hard-codes its credentials.",
+   "evidence": [
+    "deploy/regtest-node.sh:47 `-named createwallet wallet_name=$WALLET` (no passphrase); grep walletpassphrase|encryptwallet|psbt|getbalance in core/src: none",
+    "docs/REVIEW-PACKAGE.md D4 checklist rows 2, 5, 6 (핫월렛 생성·자금 투입, 키 보관 (KMS/HSM), 비트코인 노드 운영) all marked 필요 (required) for the mainnet service",
+    "deploy/switch-to-explorer-node.sh:36-37,64-70 hard-code the node's RPC user and password (values not reproduced) and write them into .env; /proc shows 0.0.0.0:18443 and [::]:18443"
+   ],
+   "fix": "Watch-only node plus a PSBT signer on HSM/KMS (or a dedicated signing service); small hot float topped up from cold storage; balance and UTXO alerts; RPC on a private network only."
+  },
+  {
+   "id": "CH-14",
+   "title": "The crash-loop policy leaves the core stopped after 5 fast restarts, and a DB outage at boot is fatal",
+   "severity": "moderate",
+   "kind": "operational",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "pm2 gives up after 5 restarts that each die within 10 s, and main() exits on any boot error, including MySQL being unreachable. This happened on 11-04: 5 fatal exits 2 s apart. With no alerting, the API and both workers stay down until someone notices.",
+   "evidence": [
+    "deploy/ecosystem.config.cjs:44-48 `// A crash loop should surface as a stopped process ... max_restarts: 5, min_uptime: '10s', restart_delay: 2000,`",
+    "core/src/main.ts:34 `const db = await openDb(cfg.dbUrl || cfg.dbPath, log);` and :159-161 `main().catch(... log('fatal', ...); process.exit(1);`",
+    "~/.pm2/logs/stonehash-attest-core-out.log line 27 on: five 'fatal' lines 2026-11-04T09:00:05-09:00:14; 8 runtime tick failures 'connect ECONNREFUSED 127.0.0.1:3306'"
+   ],
+   "fix": "Exponential-backoff restarts (or systemd Restart=always with backoff); retry the DB connection at boot; alert when the process is down."
+  },
+  {
+   "id": "CH-15",
+   "title": "API and worker can be split by configuration, with four caveats",
+   "severity": "moderate",
+   "kind": "configuration",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "claim": "WORKER_TICK_MS=0 turns off both the batch worker and the remit worker. Many API-only processes behind a load balancer therefore need no code change, which matches the design's API + worker split. Caveats: (1) only one worker may run. There is no leader lock, the overlap guard is per process, and there is no worker-only mode (the worker process also serves HTTP). (2) The remit platform signing key is a PEM created per data directory and written to the registry at boot, so instances that do not share the file overwrite each other's key. (3) Rate limiters are in memory per process. (4) /readyz returns 503 whenever bitcoind is unreachable, so a load balancer probing it would drop every API instance during a node outage. Each process opens up to 10 MySQL connections. Inscriptions served by API instances share the wallet with the worker without coordination (CH-05).",
+   "evidence": [
+    "core/src/worker.ts:51-53 `if (this.opts.tickMs <= 0) { this.log('worker disabled (WORKER_TICK_MS=0)'); return; }`; main.ts:102 `new RemitWorker(orchestrator, outbox, cfg.workerTickMs > 0 ? 2_000 : 0, log)`",
+    "core/src/main.ts:78-82 `loadOrCreatePlatformKey(cfg.remit.platformKeyPath); ... registry.upsert({ id: 'STONEHASH', ... signing_spki: platform.publicSpkiBase64` and registry.ts:81 `signing_spki = COALESCE(?, signing_spki)`: the last instance to boot wins",
+    "core/src/http/routes.ts:166-178 `/readyz`: `const chain = await d.backend.health(); ... return new HttpResult(chain.ok ? 200 : 503, body);`",
+    "core/src/http/ratelimit.ts:20-21 `private readonly hits = new Map<...>()`; db.ts:943 `connectionLimit: 10`; docs/SANDBOX-STRATEGY.md §4.3 'Postgres 1개 + 프로세스 2개' (code: 1 process)"
+   ],
+   "fix": "Mount one platform key from a secret store into every instance; point LB health checks at /healthz; hold the worker under a MySQL GET_LOCK lease; use a shared rate-limit store; give wallet use to a single anchor service."
+  },
+  {
+   "id": "CH-16",
+   "title": "EVM reads on request paths: uncached, sequential, 5 s timeouts; PoR reserve reads have no entry cap and no pinned block",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "claim": "The settlement status lookup makes up to 4 JSON-RPC calls in 3 sequential rounds. PoR snapshot submission measures reserves with one sequential eth_call per declared local-chain entry, at block 'latest', inside the request, with no limit on entries other than the body size. POR_CHAIN_RPC defaults to the local anvil URL even when STONEHASH_ENV=live, while REMIT_CHAIN_RPC defaults to empty in live.",
+   "evidence": [
+    "core/src/remit/chain-status.ts:46-50 `fetch(url, { ... signal: AbortSignal.timeout(5_000) })`; :67-73 getTransactionByHash, then Promise.all(receipt, blockNumber), then getBlockByNumber",
+    "core/src/por/reserves.ts:60-68 `for (const e of entries) { ... const bal = await erc20BalanceOf(rpcUrl, e.token_contract, e.address);` with params [..., 'latest'] and a 5 s timeout (:47-50)",
+    "core/src/por/routes.ts:249-250 `if (statement.reserves?.entries?.length) { const measurements = await measureReserves(...)` inside the snapshot request",
+    "core/src/config.ts:389 `rpcUrl('REMIT_CHAIN_RPC', env === 'test' ? 'http://127.0.0.1:8545' : '')` vs :393 `rpcUrl('POR_CHAIN_RPC', 'http://127.0.0.1:8545')`"
+   ],
+   "quantification": "Status lookup: worst case 15 s. Reserve measurement: E x RTT, worst case E x 5 s (100 entries against a dead node is about 8 min in one request). Balances read at 'latest' do not all come from the same block.",
+   "fix": "Pin one block number per snapshot plus a finality depth; bounded parallel reads; cache status per tx per block; require POR_CHAIN_RPC in live; redundant RPC providers."
+  },
+  {
+   "id": "CH-17",
+   "title": "The settlement chain is an in-memory anvil, shared with a public explorer",
+   "severity": "minor",
+   "kind": "sandbox-only",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "anvil runs under pm2 with no state file and autorestart on, so any crash or restart silently produces a fresh chain: earlier tx hashes become not_found and balances reset. The public explorer gateway forwards heavy calls (eth_getLogs, trace_*) to the same anvil at up to 1,200 calls/min per client with no global cap. The partners simulator signs from one unlocked treasury account and waits at most 10 s for a receipt. This is a deliberate sandbox stand-in. Production swaps in a real chain and the settlement entity's custody stack, which will need a finality depth, nonce handling for a single hot sender, and redundant RPC. The docs do not name that chain.",
+   "evidence": [
+    "deploy/ecosystem.config.cjs:58-63 `name: 'stonehash-anvil', ... args: '--port 8545 --chain-id 31337 --silent', ... autorestart: true,` with no --state or --dump-state",
+    "evm-explorer/gateway.mjs:94 `rate = { windowMs: 60_000, max: 1200 }` per X-Forwarded-For client; READ_METHODS includes eth_getLogs, trace_block, trace_replayBlockTransactions",
+    "demo-partners/chain/client.mjs:85-93 `for (let i = 0; i < 50; i++) { ... setTimeout(ok, 200) } throw new Error(... not mined in time)`",
+    "docs/REMIT-POR-DESIGN.md header guardrail: all money movement is synthetic (local chain, mock ledgers), stage 0 Evidence Lab"
+   ],
+   "fix": "Production: real chain RPC providers, a finality policy, a custody signer, explorer links via REMIT_EXPLORER_TX_URL. Sandbox: anvil --state for persistence and a global gateway limit."
+  },
+  {
+   "id": "CH-18",
+   "title": "Regtest shortcuts hide every mainnet failure mode, and the docs set no targets",
+   "severity": "moderate",
+   "kind": "sandbox-only",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "On regtest a block is generated after each anchor, so anchors confirm within the tick, change is always confirmed, fees never matter and reorgs never happen. Inscriptions confirm only when the next batch mines a block. The live node is a regtest chain owned by another project's docker stack, with zero block subsidy, funded once by hand. The code supports only regtest and mainnet, so there is no signet or testnet stage with real block timing and fee markets before mainnet. 'Switching is one environment variable' holds for code paths, not for operation. None of the four design docs gives throughput, latency, availability or RPO/RTO targets.",
+   "evidence": [
+    "core/src/main.ts:136-141 `// On a private chain nothing mines on its own ... afterAnchor: async () => { await backend.generate(1); }`",
+    "deploy/switch-to-explorer-node.sh:5,23-27 `There are two regtest nodes on this host and they are different chains` ... `the block subsidy on that chain is already zero ... The only funded wallet there is beecert`",
+    "core/src/config.ts:299-302 `if (backend !== 'regtest' && backend !== 'mainnet') { throw new Error(... ANCHOR_BACKEND must be ...`",
+    "docs/REVIEW-PACKAGE.md D4 '전환은 환경변수 1개입니다' (switching is one env var), while the same section's mainnet service checklist marks items 2-6 필요 (required)"
+   ],
+   "fix": "Add a signet/testnet4 backend and run the anchor service there at the target cadence before mainnet; write down volume, latency, SLA and RPO/RTO targets."
+  },
+  {
+   "id": "CH-19",
+   "title": "No load-test tooling, and the anchor-path smoke scripts are out of date",
+   "severity": "minor",
+   "kind": "operational",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "smoke.sh and make-sample-anchor.sh still call openDb and sealBatch synchronously against the SQLite path. openDb is now async and production is MySQL, so their seal/anchor step cannot work. The largest volume script seeds 36 settlements at concurrency 6. Nothing exercises anchor cadence, fee pressure or confirmation lag.",
+   "evidence": [
+    "deploy/smoke.sh:48-49 `const svc = new AttestService(openDb(cfg.dbPath), backend, cfg.batch.maxLeaves); const batch = svc.sealBatch();` (same in make-sample-anchor.sh:31,38)",
+    "core/src/db.ts:1014 `export async function openDb(target: string, log?: Log): Promise<Db> {`",
+    "deploy/seed-remit-volume.mjs:19-20 `const COUNT = Number(a.count ?? '36'); const POOL = Number(a.concurrency ?? '6');`"
+   ],
+   "fix": "Port the smoke scripts to the async MySQL API. Propose (do not start unasked) a soak test on signet, or on regtest with auto-mining off, to observe chaining, fee and backlog behaviour."
+  },
+  {
+   "id": "CH-S1",
+   "title": "Chain cost per anchor is constant: a 53-byte root behind a clean backend seam",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "Batching, Merkle proofs and bundles sit above a three-method AnchorBackend. The chain sees only a fixed 53-byte payload (about 174 vB per tx) whatever the leaf count, and the Merkle tree has no size cap in code (linear build, logarithmic proofs). Once batches are combined, Bitcoin cost and block-space use stay constant per anchor interval at every tier, so the chain is not the bottleneck for digest anchoring.",
+   "evidence": [
+    "core/src/anchor/backend.ts:31-41 `interface AnchorBackend { readonly network: 'regtest' | 'mainnet'; ... submit(payload: Uint8Array): Promise<AnchorHandle>; poll(handle: AnchorHandle): Promise<AnchorState>; health()...`",
+    "core/src/btc/bc01.ts:2-11 magic 4 + version 1 + merkle_root 32 + batch_id 16 = 53 bytes; tx.ts:32-35 `A BC01 payload is 53 bytes ... the whole output script is 55 bytes.`",
+    "core/src/merkle/tree.ts:83-94 level-by-level build with duplicate-last pairing; :109-127 one sibling per level"
+   ],
+   "quantification": "144 anchors/day x 174 vB is about 25 kvB/day, about 0.005 BTC/day at 20 sat/vB, whether the day holds 86k or 86M attestations."
+  },
+  {
+   "id": "CH-S2",
+   "title": "Keys stay in the node, the output is checked before broadcast, and boot guards the network",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "No wallet key enters the API process for digest anchors. The signed transaction must contain exactly the expected OP_RETURN script before it is broadcast. The service refuses to start live against regtest, and the health probe checks the chain name.",
+   "evidence": [
+    "core/src/anchor/bitcoind.ts:81-86 `if (!signed.hex.includes(want)) { throw new Error(... refusing to broadcast.`",
+    "core/src/config.ts:306-311 `if (env === 'live' && backend === 'regtest' && str('ALLOW_REGTEST_IN_LIVE', '') !== '1') { throw new Error('refusing to start: ...`",
+    "core/src/anchor/bitcoind.ts:105-111 health() compares getblockchaininfo.chain with the expected network"
+   ]
+  },
+  {
+   "id": "CH-S3",
+   "title": "Worker state lives in the database, the API outlives node failures, and the worker can be switched off per process",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "medium",
+   "claim": "The worker holds no in-memory queue and re-reads state each tick. Errors are caught, so the API keeps serving when bitcoind or MySQL hiccups; ticks never overlap; WORKER_TICK_MS=0 gives API-only processes. That is the right base for splitting API and worker. One correction: the header's claim that every transition is committed before it is acted on does not hold for the broadcast step (CH-10).",
+   "evidence": [
+    "core/src/worker.ts:6-8 `If the process restarts mid-cycle the next tick picks up from the database, because every transition is committed before it is acted on`",
+    "core/src/worker.ts:109-113 `} catch (e) { this.log('worker tick failed', ...); } finally { this.running = false; }`",
+    "core/src/main.ts:123-126 `// Reported, not enforced: an unreachable node must not stop the API from accepting attestations.`"
+   ]
+  }
+ ],
+ "hard_limits": [
+  {
+   "name": "BATCH_MAX_LEAVES",
+   "value": "1,024 (default and live); no upper bound in code",
+   "where": "core/src/config.ts:332",
+   "configurable": "env"
+  },
+  {
+   "name": "BATCH_FLUSH_INTERVAL_MS",
+   "value": "10,000 ms default; 15,000 ms live",
+   "where": "core/src/config.ts:333",
+   "configurable": "env"
+  },
+  {
+   "name": "WORKER_TICK_MS",
+   "value": "2,000 ms default; 3,000 ms live; 0 turns off the batch and remit workers",
+   "where": "core/src/config.ts:342, worker.ts:51-53, main.ts:102",
+   "configurable": "env"
+  },
+  {
+   "name": "Batches sealed per tick",
+   "value": "1 (one organisation)",
+   "where": "core/src/worker.ts:74-77",
+   "configurable": "no (code)"
+  },
+  {
+   "name": "Remit worker tick",
+   "value": "2,000 ms, fixed, when WORKER_TICK_MS > 0",
+   "where": "core/src/main.ts:102",
+   "configurable": "no"
+  },
+  {
+   "name": "Anchor fee rate",
+   "value": "1 sat/vB",
+   "where": "core/src/anchor/bitcoind.ts:67",
+   "configurable": "no (code)"
+  },
+  {
+   "name": "Inscription fee rate",
+   "value": "2 sat/vB (FEE_RATE_SAT_VB)",
+   "where": "core/src/anchor/inscribe.ts:53",
+   "configurable": "no"
+  },
+  {
+   "name": "REVEAL_OUTPUT_SATS",
+   "value": "1,000 sat",
+   "where": "core/src/anchor/inscribe.ts:51",
+   "configurable": "no"
+  },
+  {
+   "name": "Confirmation threshold",
+   "value": "1 confirmation; never re-polled afterwards",
+   "where": "core/src/anchor/bitcoind.ts:97-99, service.ts:540-557",
+   "configurable": "no"
+  },
+  {
+   "name": "bitcoind RPC timeout",
+   "value": "15,000 ms default; 5,000 ms for console lookups; no retry",
+   "where": "core/src/anchor/rpc.ts:49, http/console.ts:87",
+   "configurable": "no"
+  },
+  {
+   "name": "BC01 payload / anchor size",
+   "value": "53 bytes; OP_RETURN script 55 bytes; anchor tx about 174 vB (derived)",
+   "where": "core/src/btc/bc01.ts:24, btc/tx.ts:32-41",
+   "configurable": "no"
+  },
+  {
+   "name": "INSCRIPTION_MAX_BYTES",
+   "value": "default 100,000; clamped to HARD_CEILING_BYTES 3,500,000; STANDARD_RELAY_MAX_BODY_BYTES 390,000 is not enforced per network",
+   "where": "core/src/btc/inscription.ts:88-90, config.ts:338-341",
+   "configurable": "env (clamped)"
+  },
+  {
+   "name": "Inscription upload body cap",
+   "value": "INSCRIPTION_MAX_BYTES + 64 KiB, buffered in memory",
+   "where": "core/src/http/routes.ts:225,285",
+   "configurable": "derived"
+  },
+  {
+   "name": "MAX_PUSH",
+   "value": "520 bytes per script push",
+   "where": "core/src/btc/inscription.ts:42",
+   "configurable": "consensus"
+  },
+  {
+   "name": "EVM JSON-RPC timeout (core)",
+   "value": "5,000 ms per call",
+   "where": "core/src/remit/chain-status.ts:50, por/reserves.ts:50",
+   "configurable": "no"
+  },
+  {
+   "name": "EVM explorer gateway",
+   "value": "1,200 calls per 60 s per client, 100 calls per batch, 256 KiB body, 10,000 ms upstream timeout; nginx proxy_read_timeout 15 s",
+   "where": "evm-explorer/gateway.mjs:43,94,127; evm-explorer/nginx.conf",
+   "configurable": "code arguments"
+  },
+  {
+   "name": "Partners receipt wait",
+   "value": "50 x 200 ms = 10 s",
+   "where": "demo-partners/chain/client.mjs:85-93",
+   "configurable": "no"
+  },
+  {
+   "name": "pm2 restart policy (core)",
+   "value": "max_restarts 5, min_uptime 10 s, restart_delay 2,000 ms, kill_timeout 6,000 ms; fork mode, 1 instance",
+   "where": "deploy/ecosystem.config.cjs:43-49",
+   "configurable": "config file"
+  },
+  {
+   "name": "Shutdown hard exit",
+   "value": "5,000 ms; in-flight tick not awaited",
+   "where": "core/src/main.ts:153",
+   "configurable": "no"
+  },
+  {
+   "name": "MySQL pool",
+   "value": "10 connections per process",
+   "where": "core/src/db.ts:943",
+   "configurable": "no (code)"
+  },
+  {
+   "name": "Free-tier anchoring",
+   "value": "10/h per IP, 500/h global; 30-day retention; sweep hourly",
+   "where": "core/src/config.ts:363-371, worker.ts:104",
+   "configurable": "env"
+  },
+  {
+   "name": "Sandbox monthly quota",
+   "value": "1,000 attestations per org per month",
+   "where": "core/src/config.ts:350",
+   "configurable": "env"
+  },
+  {
+   "name": "Mempool chain limit (external)",
+   "value": "25 unconfirmed ancestors/descendants (Bitcoin Core default policy)",
+   "where": "bitcoind policy, not in this repo",
+   "configurable": "node config"
+  },
+  {
+   "name": "Standard tx weight (external)",
+   "value": "400,000 WU, about 390 KB of inscription body",
+   "where": "documented in core/src/btc/inscription.ts:71-76",
+   "configurable": "relay policy"
+  }
+ ],
+ "scale_path": "Before any mainnet traffic (needed even at T1):\n1. Make anchoring recoverable: re-anchor 'sealed' batches every tick; save the signed tx before broadcasting and reconcile on boot; drain the tick on shutdown (CH-01, CH-10).\n2. Fee policy: estimatesmartfee with a floor and ceiling; RBF bump or CPFP for stuck anchors; treat min-fee rejection as retryable (CH-04).\n3. Combine organisations: one anchor per block interval with per-org subtrees under one root; trigger each org on its own count; flush interval set per network. This cuts 5,760-28,800 tx/day to about 144 and removes the 25-chain problem, but keep a pre-split UTXO pool anyway (CH-03, CH-05).\n4. Track confirmations from new blocks, to N confirmations, with reorg rollback (CH-06, CH-07).\n5. Move inscriptions to background jobs with a pre-signed, saved commit/reveal pair, a native secp256k1 and a mainnet size clamp; route wallet use through one service (CH-08, CH-11).\n6. Custody: watch-only node plus a PSBT/HSM signer, a small hot float, balance and UTXO alerts, private RPC (CH-13).\n7. A signet/testnet4 stage (CH-18).\n\nFor T2:\n8. TLS reverse proxy or LB that probes /healthz.\n9. Several API-only processes with WORKER_TICK_MS=0. The code tolerates this today once the platform key is shared and rate limits move to a shared store. Exactly one worker, under a MySQL GET_LOCK lease (CH-15).\n10. MySQL off the box, managed and replicated, with PITR backups.\n11. Metrics and alerts: oldest-unanchored age, stranded batches, unconfirmed age, wallet balance, RPC errors; log shipping and rotation; dedicated hosts (CH-12).\n12. Process supervision with backoff and DB retry at boot (CH-14).\n13. EVM: real chain RPC with redundancy, cached status, pinned-block reserve reads, POR_CHAIN_RPC required in live (CH-16).\n\nFor T3:\n14. Replace the single 3 s loop (at most 1,024 leaves per tick, about 341/s) with partitioned sealers (SKIP LOCKED by org or hash range) feeding one anchor service. Use bulk writes and build trees in worker threads; each block-interval anchor holds about 600k leaves at 86M/day (CH-02).\n15. A durable intake queue between the API and the sealers.\n16. An HA anchor service (active/standby with a lease) and redundant bitcoind nodes.\n17. Rethink one merkle_proofs row per leaf (86M rows/day): store tree levels per batch and derive proofs on demand (DB layer).\n\nOnce anchors are combined, Bitcoin cost stays about 0.005 BTC/day at 20 sat/vB at T1, T2 and T3. Inscriptions stay limited by block space at every tier.",
+ "open_questions": [
+  "Which Bitcoin Core version runs in regtest-bitcoind-1, and which is planned for mainnet? It decides the RBF signalling default, full-RBF, mempool package limits and OP_RETURN policy. The node is defined in another project's docker stack (network regtest_default), not in this repo.",
+  "Does anything outside the box (AWS ALB, CloudFront, security group) terminate TLS or restrict :8787, :5106 or :18443? Nothing on the host listens on :80 or :443.",
+  "Which real EVM chain, custody stack and finality depth are planned for the USDC leg and for PoR reserve reads? The docs name only the anvil chain (eip155:31337).",
+  "What mainnet anchor cadence and confirmation depth are intended, and are there any volume, latency, availability or RPO/RTO targets? None appear in DESIGN, SANDBOX-STRATEGY, REMIT-POR-DESIGN or REVIEW-PACKAGE.",
+  "Do the bundle schema and attest-verify accept a longer Merkle path from a two-level (cross-org) tree unchanged? Probably, since proofs are sibling lists, but the verifier's owner should confirm.",
+  "The inscription CPU cost is estimated from the algorithm, not measured. A micro-benchmark should run only if the owner asks (owner on 11-18: no unprompted load tests).",
+  "Live .env values were not read (off-limits): TRUST_PROXY, COOKIE_SECURE, INSCRIPTION_MAX_BYTES, POR_CHAIN_RPC.",
+  "The batcher limits derived here (at most 1,024 leaves per 3 s tick; the k-th tenant waits k flush intervals) match the lead's own isolated 11-18 measurement in memory note attest-capacity-baseline-1118. That note says to hold measured figures until the owner asks, so whether to quote them is the lead's call.",
+  "Who runs the shared regtest node, and with what uptime? Attest's generate(1) after each anchor also mines blocks for the other projects on that chain."
+ ]
+}

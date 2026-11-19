@@ -1,0 +1,6655 @@
+{
+ "about": "Each case is one RemitClient against one stand-in platform, its steps in order: submitSwift(message, options) → expect.outcome; how many settlements and quotes had been posted after the step; what the ledger was asked for (`searched`: the query of each GET /v1/settlements, without limit and cursor); and, for a step that posted, what was posted. A step that posted and was refused still counts in `posts`.",
+ "client": {
+  "core": "http://platform.test",
+  "apiKey": "sk_test_x",
+  "institutionId": "VN-BANK-T1",
+  "institutionName": "Test Bank",
+  "key": "testKey of signing.json"
+ },
+ "platform": {
+  "quote": {
+   "quote_id": "QT-test",
+   "corridor": {
+    "origin": "VN",
+    "destination": "SG"
+   },
+   "trade": {
+    "currency": "USD",
+    "amount": "12500.00"
+   },
+   "settlement": {
+    "asset": "USDC",
+    "amount": "12500.00",
+    "chain": "eip155:31337"
+   },
+   "collect": {
+    "currency": "VND",
+    "amount": "322537500",
+    "rate": "25803",
+    "rate_pair": "USD/VND"
+   },
+   "payout": {
+    "currency": "SGD",
+    "amount": "16687.50",
+    "rate": "1.3350",
+    "rate_pair": "USD/SGD"
+   },
+   "fees": [
+    {
+     "type": "platform",
+     "currency": "USD",
+     "amount": "0.50"
+    }
+   ],
+   "quoted_at": "2026-11-17T00:00:00.000Z",
+   "expires_at": "2026-11-17T00:10:00.000Z",
+   "required_travel_rule_fields": [
+    "originator.name",
+    "originator.country",
+    "originator.address",
+    "originator.registration_number",
+    "beneficiary.name",
+    "beneficiary.country",
+    "beneficiary.account",
+    "beneficiary.bank"
+   ]
+  },
+  "rules": [
+   "POST /v1/quotes answers the quote above, its trade amount the one asked for, written with two decimals.",
+   "One message, one settlement — the platform's own rule (apps/core/src/remit/store.ts: sourceRefOf, sourceConflict, createFromMessage, backfillSourceRefs), which this stand-in runs unchanged. A settlement whose events[..BANK_EVIDENCE_SUBMITTED].payload.bankInstruction.sourceMessage is there takes that message's place: a row { paymentId, sha256, index (0 when absent), uetr, valueDate, content, twinKey }. sha256, uetr and content are compared in lower case; instructionId, endToEndId and messageId are trimmed, and an endToEndId that is NOTPROVIDED, NONREF or NOREF (any case) counts as none. twinKey: none without content; with an instructionId or an endToEndId it is [instructionId, endToEndId, valueDate or \"\", content]; with neither but a messageId it is [type, messageId, index, valueDate or \"\", content]; otherwise none. A reference that is not well formed (no type, sha256 not 64 hex, index not an integer 0..1000000, uetr not a UUID, content not 64 hex, valueDate not a calendar day YYYY-MM-DD, an identifier that is not text of at most 256 characters) is answered 400 invalid_source_message.",
+   "A new row N conflicts — checked in this order, the first that applies decides: (1) a row of the same sha256 and index → duplicate_source_message, ground \"message\"; (2) a recognition recorded earlier for N's (sha256, index) → duplicate_source_message, ground \"twin\", the settlement recorded; (3) N has a uetr and a row holds it → reference_reused (ground \"uetr\") when that row is another transaction of N's file (same sha256, other index) or both state content and it differs, else duplicate_source_message ground \"uetr\" and the recognition (N.sha256, N.index) → that settlement is recorded; (4) N has a twinKey: among the rows with that twinKey and another sha256 — only rows without a uetr when N has one — leaving out any settlement that a recognition of N's file (same sha256, any index) already points at, the oldest → duplicate_source_message: ground \"twin_undated\" when N states no valueDate (nothing is recorded), otherwise ground \"twin\", the recognition (N.sha256, N.index) → that settlement is recorded and, when N has a uetr, that row takes N's uetr. No conflict: the settlement is kept and takes its place.",
+   "The ledger's settlements are on the platform before the first step, as settlements from before the rule: each takes its place in the order given — those in state CANCELLED, RETURNED or EXCEPTION after the others — by the same rule, its reference read leniently (whatever identifies it is kept; a sha256 that cannot be read is replaced by one of the settlement's own). One that conflicts takes no place.",
+   "POST /v1/settlements: with `race: { taken }` that settlement is first judged like a POST of its own, and kept unless it is refused. A payment_id the platform already holds is answered 409 { error: \"duplicate_payment\", message: \"exists\" }. A conflict is answered 409 { existing_payment_id, ground, error, message } and nothing is kept; the messages are \"UETR <uetr> is already on settlement <id>, which is a different payment\", \"this message's payment is already settlement <id> — the same transaction of the same message\", \"… — the same UETR\", \"… — the same payment in another message\" and \"this payment cannot be told from settlement <id>: the message states no value date\". Otherwise the settlement is kept under its payment_id — state BANK_AUTHORIZED, events [REQUEST_ACCEPTED, BANK_EVIDENCE_SUBMITTED with payload = the posted evidence_elements] — and answered 202 { payment_id, state }; with `race: \"<error>\"` it is kept and answered 409 with that error and the message \"another request for this payment was taken a moment earlier\".",
+   "GET /v1/settlements lists settlements newest first (the one taken last comes first), `limit` rows a page (default 25, at most 100) with page.next_cursor for the next. With source_uetr, or source_content (and source_value_date), only those that hold a place with that uetr (the one a row took from its other rendering included), or that content (and valueDate). A source_uetr that is not a UUID, a source_content that is not 64 hex characters, or a source_value_date without source_content or not YYYY-MM-DD is answered 400 invalid_source_lookup.",
+   "GET /v1/settlements/{id} answers the settlement, or 404 not_found. POST /v1/settlements/{id}/cancel sets it CANCELLED."
+  ]
+ },
+ "cases": [
+  {
+   "name": "one-message-one-settlement",
+   "note": "however many times it is handed over; a different payment forced onto its id, or carrying its UETR, is refused",
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-3f1c9a52-175c822e37",
+       "payment_id": "PAY-3f1c9a52-175c822e37",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "eae81c7fb20a731f54d197d0da598de78d47d490801a2709271172e053e25c55",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/reformatted"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pain001"
+     },
+     "options": {
+      "paymentId": "PAY-3f1c9a52-175c822e37"
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "payment_id_conflict",
+        "message": "PAY-3f1c9a52-175c822e37 already names a settlement made from a different message; give this payment an id of its own",
+        "status": 409,
+        "existingPaymentId": "PAY-3f1c9a52-175c822e37"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/other-amount"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-3f1c9a52-175c822e37 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-3f1c9a52-175c822e37"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/other-creditor-name"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-3f1c9a52-175c822e37 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-3f1c9a52-175c822e37"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "a-reused-reference-is-never-a-repeat",
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008-as-text"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-3f1c9a52-175c822e37",
+       "payment_id": "PAY-3f1c9a52-175c822e37",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "eae81c7fb20a731f54d197d0da598de78d47d490801a2709271172e053e25c55",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/other-invoice"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-3f1c9a52-175c822e37 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-3f1c9a52-175c822e37"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/other-creditor-account"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-3f1c9a52-175c822e37 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-3f1c9a52-175c822e37"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/other-identifiers"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-3f1c9a52-175c822e37 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-3f1c9a52-175c822e37"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/two-invoices-one-uetr"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-77777777-f1c74a3d06",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [
+       "source_uetr=77777777-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-77777777-f1c74a3d06",
+       "payment_id": "PAY-77777777-f1c74a3d06",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "bc9d19ad8b04c195d5994712a0d18666ab6868d01c3398e0fe8bf1af08257bbd",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "index": 0,
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "77777777-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "77777777-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/two-invoices-one-uetr"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 77777777-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-77777777-f1c74a3d06 (BANK_AUTHORIZED), which is a different payment — the same reference appears on two transactions of this file, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-77777777-f1c74a3d06"
+       }
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/one-transaction-twice"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-88888888-4f20f5bb43",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": [
+       "source_uetr=88888888-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-88888888-4f20f5bb43",
+       "payment_id": "PAY-88888888-4f20f5bb43",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "9929e5b34a2539561751109587e269e6723e0f451db224ae190c3bb7457f2cea",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "index": 0,
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "88888888-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "88888888-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/one-transaction-twice"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 88888888-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-88888888-4f20f5bb43 (BANK_AUTHORIZED), which is a different payment — the same reference appears on two transactions of this file, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-88888888-4f20f5bb43"
+       }
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pain001-as-text"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-bd0b1ec2-6e51d4c846",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-bd0b1ec2-6e51d4c846",
+       "payment_id": "PAY-bd0b1ec2-6e51d4c846",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "4fc04ccec498accd32f3d130ca568b84d0068b4c37580f9902a112eaa174c8b0",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-reformatted"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-bd0b1ec2-6e51d4c846",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-other-invoice"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference is already on settlement PAY-bd0b1ec2-6e51d4c846 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one a reference of its own, or pass an explicit paymentId if it is meant as a payment of its own",
+        "status": 409,
+        "existingPaymentId": "PAY-bd0b1ec2-6e51d4c846"
+       }
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-later-day"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-5153fab2-a6737141d0",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 5,
+      "quotes": 5,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-5153fab2-a6737141d0",
+       "payment_id": "PAY-5153fab2-a6737141d0",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "6e75227bb75803f6913e095d513132c377097ccbc233b16586571adc462d2029",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-12-01",
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/other-invoice"
+     },
+     "options": {
+      "paymentId": "PAY-OWN-0001"
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-3f1c9a52-175c822e37 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-3f1c9a52-175c822e37"
+       }
+      },
+      "posts": 5,
+      "quotes": 5,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "the-same-payment-written-out-again",
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008-as-text"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-3f1c9a52-175c822e37",
+       "payment_id": "PAY-3f1c9a52-175c822e37",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "eae81c7fb20a731f54d197d0da598de78d47d490801a2709271172e053e25c55",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/exported-next-day"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/uetr-99999999"
+     },
+     "options": {
+      "paymentId": "BANK-TX-2026-000777"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "BANK-TX-2026-000777",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [
+       "source_uetr=99999999-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-BANK-TX-2026-000777",
+       "payment_id": "BANK-TX-2026-000777",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "0da042da87f71bc60c960113c687f0f99db88cf8c1aa3268bffd7b428984a8f1",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "99999999-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "99999999-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/uetr-99999999-reformatted"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "BANK-TX-2026-000777",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [
+       "source_uetr=99999999-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ]
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/mt103-structured-as-text"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "986abb2579a371143c7a57f804bbb9b215b4e95b0d3be6da7e5244e3b3a81cf6",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000126",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-without-headers"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-8b316821-54d8f3b28a",
+       "payment_id": "PAY-8b316821-54d8f3b28a",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "8cfafb43e94529742f48fb2e795f751481cb514844c1c707323fc345e9eeb3a8",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126"
+       },
+       "instruction_ref": "OUT2026000126"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-127-without-headers"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-0ba0fa89-97049a9c7b",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 5,
+      "quotes": 5,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-0ba0fa89-97049a9c7b",
+       "payment_id": "PAY-0ba0fa89-97049a9c7b",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "825e803a989263f13fb1e187efe5342c158b6d53d95d9de70129324dbdb9feb6",
+        "content": "687587cee7f9b5dad7b086aba056cdda0b673165e626d887fe8bb77b4f51f92b",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000127",
+        "instructionId": "OUT2026000127"
+       },
+       "instruction_ref": "OUT2026000127"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-127"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-0ba0fa89-97049a9c7b",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 6,
+      "quotes": 6,
+      "searched": [
+       "source_uetr=aaaaaaaa-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-aaaaaaaa-8be0306cbb",
+       "payment_id": "PAY-aaaaaaaa-8be0306cbb",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "96965e194fbb15a380463689ef6f3931c433ac7f502569c4f1eb5f1156314659",
+        "content": "687587cee7f9b5dad7b086aba056cdda0b673165e626d887fe8bb77b4f51f92b",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000127",
+        "instructionId": "OUT2026000127",
+        "uetr": "aaaaaaaa-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000127",
+       "uetr": "aaaaaaaa-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-127-without-headers-next-day"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-0a7d47fe-aa9c43ddac",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 7,
+      "quotes": 7,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-0a7d47fe-aa9c43ddac",
+       "payment_id": "PAY-0a7d47fe-aa9c43ddac",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "9aca9f8b293d8ea729bca79c5d17098440e7482010dcc44eb34309c131361353",
+        "content": "687587cee7f9b5dad7b086aba056cdda0b673165e626d887fe8bb77b4f51f92b",
+        "valueDate": "2026-11-18",
+        "messageId": "OUT2026000127",
+        "instructionId": "OUT2026000127"
+       },
+       "instruction_ref": "OUT2026000127"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-other-uetr-other-amount"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-bbbbbbbb-045999e458",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 8,
+      "quotes": 8,
+      "searched": [
+       "source_uetr=bbbbbbbb-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-bbbbbbbb-045999e458",
+       "payment_id": "PAY-bbbbbbbb-045999e458",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "a1d066208c8e1da4ba8a8417d858cd17fa854d691b94ed6c8da17fcd300b34ed",
+        "content": "728dd341c31a94d9874c44a71ac5239cfa5f4ee0cc65ea0836682b67aed95d74",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126",
+        "uetr": "bbbbbbbb-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000126",
+       "uetr": "bbbbbbbb-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "an-incomplete-message-is-refused-before-a-quote",
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/mt103-free-format"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "SwiftMappingError",
+        "message": "the message cannot be turned into a settlement instruction — 1 thing(s) missing: debtor.registration_number (field 50F party identifier or line 6/ 7/)"
+       }
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/mt103-free-format"
+     },
+     "options": {
+      "supplementByAccount": {
+       "VN-ACC-000777": {
+        "debtor": {
+         "registration_number": "0312345678"
+        }
+       }
+      }
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-b4d9e7a1-8be4fa6b84",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-b4d9e7a1-8be4fa6b84",
+       "payment_id": "PAY-b4d9e7a1-8be4fa6b84",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "ca17a154aed32c4132916d475bd1db7f529e7000e85dbc0738c7384f5fa75339",
+        "content": "e437c1a69ab6a13083964b70b88921d6a17b4c7eb91c1d2fb4f86ade64f48675",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000125",
+        "instructionId": "OUT2026000125",
+        "endToEndId": "PO-7811",
+        "uetr": "b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57"
+       },
+       "instruction_ref": "OUT2026000125",
+       "uetr": "b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "the-same-field-20-on-two-days",
+   "note": "the folder adapter test",
+   "steps": [
+    {
+     "message": {
+      "parse": "mt/structured-without-headers"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8b316821-54d8f3b28a",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-8b316821-54d8f3b28a",
+       "payment_id": "PAY-8b316821-54d8f3b28a",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "8cfafb43e94529742f48fb2e795f751481cb514844c1c707323fc345e9eeb3a8",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126"
+       },
+       "instruction_ref": "OUT2026000126"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-without-headers-next-day"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-d244c929-bcbca43764",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-d244c929-bcbca43764",
+       "payment_id": "PAY-d244c929-bcbca43764",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "8b92318759f79d15bc16db581bbaef6bafbf77a4b252819f034d28183a4ba070",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-18",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126"
+       },
+       "instruction_ref": "OUT2026000126"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "bytes-then-text",
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-3f1c9a52-175c822e37",
+       "payment_id": "PAY-3f1c9a52-175c822e37",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "eae81c7fb20a731f54d197d0da598de78d47d490801a2709271172e053e25c55",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pacs008-as-text"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/utf8-bom"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/utf16le-bom"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/crlf-line-ends"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/mt103-structured"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "986abb2579a371143c7a57f804bbb9b215b4e95b0d3be6da7e5244e3b3a81cf6",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000126",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/mt103-structured-as-text"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "latin1-bytes-then-the-text-they-decode-to",
+   "steps": [
+    {
+     "message": {
+      "parse": "xml/latin1-declared"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-3f1c9a52-175c822e37",
+       "payment_id": "PAY-3f1c9a52-175c822e37",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "78797d4a877bf0a8ad42803f4ff922c18d7daf73924b5cdb4a59fb9f0374991e",
+        "content": "669536f01143fb2c487753e013667b2763334c5bb1ed4f9627a72e494ec7915d",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/latin1-declared-as-text"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "with-then-without-header-blocks",
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/mt103-free-format"
+     },
+     "options": {
+      "supplementByAccount": {
+       "VN-ACC-000777": {
+        "debtor": {
+         "registration_number": "0312345678"
+        }
+       }
+      }
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-b4d9e7a1-8be4fa6b84",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-b4d9e7a1-8be4fa6b84",
+       "payment_id": "PAY-b4d9e7a1-8be4fa6b84",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "ca17a154aed32c4132916d475bd1db7f529e7000e85dbc0738c7384f5fa75339",
+        "content": "e437c1a69ab6a13083964b70b88921d6a17b4c7eb91c1d2fb4f86ade64f48675",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000125",
+        "instructionId": "OUT2026000125",
+        "endToEndId": "PO-7811",
+        "uetr": "b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57"
+       },
+       "instruction_ref": "OUT2026000125",
+       "uetr": "b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/field-lines-only"
+     },
+     "options": {
+      "supplementByAccount": {
+       "VN-ACC-000777": {
+        "debtor": {
+         "registration_number": "0312345678"
+        }
+       }
+      }
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-b4d9e7a1-8be4fa6b84",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e323f460-f10dbd47de",
+       "payment_id": "PAY-e323f460-f10dbd47de",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "7d445e9980cd88812357fecd99b93bcb80a6323c5d0cd5054b6d32c7f4ccf17f",
+        "content": "e437c1a69ab6a13083964b70b88921d6a17b4c7eb91c1d2fb4f86ade64f48675",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000125",
+        "instructionId": "OUT2026000125",
+        "endToEndId": "PO-7811"
+       },
+       "instruction_ref": "OUT2026000125"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/text-block-alone"
+     },
+     "options": {
+      "supplementByAccount": {
+       "VN-ACC-000777": {
+        "debtor": {
+         "registration_number": "0312345678"
+        }
+       }
+      }
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-b4d9e7a1-8be4fa6b84",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e323f460-f10dbd47de",
+       "payment_id": "PAY-e323f460-f10dbd47de",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "8962802b22bcecf640d7af09b6a599334066c16eb990c73e7f5d3a03eb47a7a8",
+        "content": "e437c1a69ab6a13083964b70b88921d6a17b4c7eb91c1d2fb4f86ade64f48675",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000125",
+        "instructionId": "OUT2026000125",
+        "endToEndId": "PO-7811"
+       },
+       "instruction_ref": "OUT2026000125"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/free-format-without-headers"
+     },
+     "options": {
+      "supplementByAccount": {
+       "VN-ACC-000777": {
+        "debtor": {
+         "registration_number": "0312345678"
+        }
+       }
+      }
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-b4d9e7a1-8be4fa6b84",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e323f460-f10dbd47de",
+       "payment_id": "PAY-e323f460-f10dbd47de",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "9a6cf45e2cce92357f2427aeb788fe5c7cc4d43ce84d822e7f69b9b2c2724363",
+        "content": "e437c1a69ab6a13083964b70b88921d6a17b4c7eb91c1d2fb4f86ade64f48675",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000125",
+        "instructionId": "OUT2026000125",
+        "endToEndId": "PO-7811"
+       },
+       "instruction_ref": "OUT2026000125"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/crlf"
+     },
+     "options": {
+      "supplementByAccount": {
+       "VN-ACC-000777": {
+        "debtor": {
+         "registration_number": "0312345678"
+        }
+       }
+      }
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-b4d9e7a1-8be4fa6b84",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/cr-only-line-ends"
+     },
+     "options": {
+      "supplementByAccount": {
+       "VN-ACC-000777": {
+        "debtor": {
+         "registration_number": "0312345678"
+        }
+       }
+      }
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-b4d9e7a1-8be4fa6b84",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/unicode-spaces-before-block-1"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 5,
+      "quotes": 5,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "7b94a647cf7abcf32e6c3aceb0c30114cb0bc71f5bdfcb00751b20701a0e6452",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000126",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "without-then-with-header-blocks",
+   "steps": [
+    {
+     "message": {
+      "parse": "mt/structured-field-lines-only"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8b316821-54d8f3b28a",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-8b316821-54d8f3b28a",
+       "payment_id": "PAY-8b316821-54d8f3b28a",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "d2840ec6004399dd981409e9ca785bb198a6a49d3bb361df8d4c5a70b9b8403f",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126"
+       },
+       "instruction_ref": "OUT2026000126"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/mt103-structured"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8b316821-54d8f3b28a",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "986abb2579a371143c7a57f804bbb9b215b4e95b0d3be6da7e5244e3b3a81cf6",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000126",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-text-block-alone"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8b316821-54d8f3b28a",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "a-short-field-20-without-then-with-headers",
+   "note": "a reference of two characters: the instruction is sent, the platform recognises the settlement's other rendering and names it, and that is the answer — nothing is paid twice",
+   "steps": [
+    {
+     "message": {
+      "parse": "mt/short-reference-without-headers"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-f670db5e-504cb3caf1",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-f670db5e-504cb3caf1",
+       "payment_id": "PAY-f670db5e-504cb3caf1",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "d682413dd6f588eeb32c811db204ee5b34e00f207c055b1680386b40595bf0fd",
+        "content": "daf66cbfc1e8fac39d387b5c82a6cf753bb32b479dd37f20c80e4ec36f41c0a5",
+        "valueDate": "2026-11-17",
+        "messageId": "R1",
+        "instructionId": "R1"
+       },
+       "instruction_ref": "R1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/short-reference"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-f670db5e-504cb3caf1",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "e53321d17f8962eff76d60568af42cba4eb9b3c506b6d7a9cfd7f6ddec4ae15c",
+        "content": "daf66cbfc1e8fac39d387b5c82a6cf753bb32b479dd37f20c80e4ec36f41c0a5",
+        "valueDate": "2026-11-17",
+        "messageId": "R1",
+        "instructionId": "R1",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "R1",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "a-short-field-20-with-then-without-headers",
+   "steps": [
+    {
+     "message": {
+      "parse": "mt/short-reference"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "e53321d17f8962eff76d60568af42cba4eb9b3c506b6d7a9cfd7f6ddec4ae15c",
+        "content": "daf66cbfc1e8fac39d387b5c82a6cf753bb32b479dd37f20c80e4ec36f41c0a5",
+        "valueDate": "2026-11-17",
+        "messageId": "R1",
+        "instructionId": "R1",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "R1",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/short-reference-without-headers"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-f670db5e-504cb3caf1",
+       "payment_id": "PAY-f670db5e-504cb3caf1",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "d682413dd6f588eeb32c811db204ee5b34e00f207c055b1680386b40595bf0fd",
+        "content": "daf66cbfc1e8fac39d387b5c82a6cf753bb32b479dd37f20c80e4ec36f41c0a5",
+        "valueDate": "2026-11-17",
+        "messageId": "R1",
+        "instructionId": "R1"
+       },
+       "instruction_ref": "R1"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "mt-batch-then-alone",
+   "steps": [
+    {
+     "message": {
+      "parse": "mt/two-messages"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "2526df57bfa6a0bcd8e51510718ca2c065ec3845bde53ff765bf6acf9917d859",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "index": 0,
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000126",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/two-messages"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-0b5f6c1e-5ed75136bf",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [
+       "source_uetr=0b5f6c1e-2a47-4c3d-9e8f-7a6b5c4d3e2f"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-0b5f6c1e-5ed75136bf",
+       "payment_id": "PAY-0b5f6c1e-5ed75136bf",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "2526df57bfa6a0bcd8e51510718ca2c065ec3845bde53ff765bf6acf9917d859",
+        "content": "687587cee7f9b5dad7b086aba056cdda0b673165e626d887fe8bb77b4f51f92b",
+        "valueDate": "2026-11-17",
+        "index": 1,
+        "messageId": "OUT2026000127",
+        "instructionId": "OUT2026000127",
+        "uetr": "0b5f6c1e-2a47-4c3d-9e8f-7a6b5c4d3e2f"
+       },
+       "instruction_ref": "OUT2026000127",
+       "uetr": "0b5f6c1e-2a47-4c3d-9e8f-7a6b5c4d3e2f"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/two-messages"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "SwiftMessageError",
+        "code": "multiple_transactions",
+        "message": "the message carries 2 transactions — pass { index } to choose one, or use parseSwiftMessages() to take each in turn"
+       }
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/two-messages"
+     },
+     "options": {
+      "index": 2
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "SwiftMessageError",
+        "code": "invalid_field",
+        "message": "the message carries 2 transaction(s); there is no transaction at index 2"
+       }
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/mt103-structured"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-second"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-0b5f6c1e-5ed75136bf",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "mt-batch-without-uetr-then-alone",
+   "steps": [
+    {
+     "message": {
+      "parse": "mt/two-messages-without-uetr"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-0ba0fa89-97049a9c7b",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-0ba0fa89-97049a9c7b",
+       "payment_id": "PAY-0ba0fa89-97049a9c7b",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "afc9b76cebf8b173e6ef4aa9b8d72e85bae63fd68178a97070853e235f6ffc6d",
+        "content": "687587cee7f9b5dad7b086aba056cdda0b673165e626d887fe8bb77b4f51f92b",
+        "valueDate": "2026-11-17",
+        "index": 1,
+        "messageId": "OUT2026000127",
+        "instructionId": "OUT2026000127"
+       },
+       "instruction_ref": "OUT2026000127"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-second-without-uetr"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-0ba0fa89-97049a9c7b",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/two-messages-without-uetr"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8b316821-54d8f3b28a",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-8b316821-54d8f3b28a",
+       "payment_id": "PAY-8b316821-54d8f3b28a",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "afc9b76cebf8b173e6ef4aa9b8d72e85bae63fd68178a97070853e235f6ffc6d",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "index": 0,
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126"
+       },
+       "instruction_ref": "OUT2026000126"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-field-lines-only"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8b316821-54d8f3b28a",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "xml-batch-then-alone",
+   "steps": [
+    {
+     "message": {
+      "parse": "xml/two-transactions"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-7c2d8e4f-a5b9adc1e6",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=7c2d8e4f-1a3b-4c5d-8e9f-0a1b2c3d4e5f"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-7c2d8e4f-a5b9adc1e6",
+       "payment_id": "PAY-7c2d8e4f-a5b9adc1e6",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "941543c82492caa15ecaf89905510117f457c9752b859671f199254a43f68055",
+        "content": "de7c23d38d52710144de3ae4e12cbd9b169bf434b2bb32c12fa845e43a5db2fb",
+        "valueDate": "2026-11-17",
+        "index": 1,
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000124",
+        "endToEndId": "PO-7781",
+        "uetr": "7c2d8e4f-1a3b-4c5d-8e9f-0a1b2c3d4e5f"
+       },
+       "instruction_ref": "OUT-2026-000124",
+       "uetr": "7c2d8e4f-1a3b-4c5d-8e9f-0a1b2c3d4e5f"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/two-transactions-second-alone"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-7c2d8e4f-a5b9adc1e6",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/two-transactions"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-3f1c9a52-175c822e37",
+       "payment_id": "PAY-3f1c9a52-175c822e37",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "941543c82492caa15ecaf89905510117f457c9752b859671f199254a43f68055",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "index": 0,
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "pain001-batch-then-alone",
+   "steps": [
+    {
+     "message": {
+      "parse": "xml/pain001-two-blocks"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-59199ae7-25a4be1dc9",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-59199ae7-25a4be1dc9",
+       "payment_id": "PAY-59199ae7-25a4be1dc9",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "7e537996b6bfeeaa83c4c5de336069cca2b42f183e279dd5289bf9dae442e81f",
+        "content": "9321c9255eb128190fb3a0fffa2928cd8e59105fb6c946345ba07b54b101c6a8",
+        "valueDate": "2026-11-17",
+        "index": 1,
+        "paymentInfoId": "VINATRD-PMT-0032",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "VINATRD-INS-0032-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0032-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-second-block-alone"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-59199ae7-25a4be1dc9",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pain001"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-bd0b1ec2-6e51d4c846",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-bd0b1ec2-6e51d4c846",
+       "payment_id": "PAY-bd0b1ec2-6e51d4c846",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "4fc04ccec498accd32f3d130ca568b84d0068b4c37580f9902a112eaa174c8b0",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-two-blocks"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-bd0b1ec2-6e51d4c846",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "one-file-two-transactions-whose-ids-contain-each-other",
+   "steps": [
+    {
+     "message": {
+      "parse": "xml/pain001-contained-instruction-ids"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-639f01c0-85a4a1feb7",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-639f01c0-85a4a1feb7",
+       "payment_id": "PAY-639f01c0-85a4a1feb7",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "5c8a13513b98814e1f0378100ae87a341ac1935cac15184a4ea1521774619297",
+        "content": "89b8a33195c82e11908514e7f1109d574f8a097b50f7bccd88838571a1a7a2ca",
+        "valueDate": "2026-11-17",
+        "index": 1,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "INSTR-00012",
+        "endToEndId": "PO-7804"
+       },
+       "instruction_ref": "INSTR-00012"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-contained-instruction-ids"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-ad4009b4-c9eb7c1960",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-ad4009b4-c9eb7c1960",
+       "payment_id": "PAY-ad4009b4-c9eb7c1960",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "5c8a13513b98814e1f0378100ae87a341ac1935cac15184a4ea1521774619297",
+        "content": "a708059279a61795e147e8a51e37e3ce4bec7d591d9eda19dfd4feeaa268c658",
+        "valueDate": "2026-11-17",
+        "index": 0,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "INSTR-0001",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "INSTR-0001"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "one-file-the-same-ids-twice-without-uetr",
+   "steps": [
+    {
+     "message": {
+      "parse": "xml/pain001-same-ids"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8f3f9e8f-be66d9be83",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-8f3f9e8f-be66d9be83",
+       "payment_id": "PAY-8f3f9e8f-be66d9be83",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "7034bc5aed78d9a4d757c21591bfa038fdb213984558fb03a3db18a82929fa9a",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "index": 0,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-same-ids"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-5cd088d9-5244758738",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-5cd088d9-5244758738",
+       "payment_id": "PAY-5cd088d9-5244758738",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "7034bc5aed78d9a4d757c21591bfa038fdb213984558fb03a3db18a82929fa9a",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "index": 1,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-same-ids"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8f3f9e8f-be66d9be83",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "mt-file-the-same-message-twice",
+   "steps": [
+    {
+     "message": {
+      "parse": "mt/same-ids-twice"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "e2b478ba7ce7f8eaf4ae208f93847b892d4b4b9b2fba6f488887d00b76b6cc77",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "index": 0,
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000126",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/same-ids-twice"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28) is already on settlement PAY-e2a8c5f0-f5b8b68864 (BANK_AUTHORIZED), which is a different payment — the same reference appears on two transactions of this file, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-e2a8c5f0-f5b8b68864"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "exported-again",
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-3f1c9a52-175c822e37",
+       "payment_id": "PAY-3f1c9a52-175c822e37",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "eae81c7fb20a731f54d197d0da598de78d47d490801a2709271172e053e25c55",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/created-next-day-in-another-offset"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/created-day-before-in-utc"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/exported-next-day"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pain001"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-bd0b1ec2-6e51d4c846",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-bd0b1ec2-6e51d4c846",
+       "payment_id": "PAY-bd0b1ec2-6e51d4c846",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "4fc04ccec498accd32f3d130ca568b84d0068b4c37580f9902a112eaa174c8b0",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-created-later"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-bd0b1ec2-6e51d4c846",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-new-message-id"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-bd0b1ec2-6e51d4c846",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-4d58e3c4-d83fba8613",
+       "payment_id": "PAY-4d58e3c4-d83fba8613",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "72a0fcfe3ea572e42dd26d7a701ea15ca0416fb19bc0fb4d359000700f30bde9",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261118-0001",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/mt103-structured"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "986abb2579a371143c7a57f804bbb9b215b4e95b0d3be6da7e5244e3b3a81cf6",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000126",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-sent-again"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-possible-duplicate"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/envelope-no-uetr"
+     },
+     "options": {
+      "supplementByAccount": {
+       "VN-ACC-000812": {
+        "debtor": {
+         "registration_number": "0309876543"
+        }
+       }
+      }
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e602c713-536a6727c1",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 5,
+      "quotes": 5,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e602c713-536a6727c1",
+       "payment_id": "PAY-e602c713-536a6727c1",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "d1067cd7683c546c2b6eaddb82529932307d14c5f9136ea9a3214349923558e3",
+        "content": "e254bc4cbb866873050642b4c139426f1eec49a1dd957b9f49132935c38fdf05",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000124",
+        "instructionId": "OUT-2026-000124"
+       },
+       "instruction_ref": "OUT-2026-000124"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/envelope-no-uetr-new-message-id"
+     },
+     "options": {
+      "supplementByAccount": {
+       "VN-ACC-000812": {
+        "debtor": {
+         "registration_number": "0309876543"
+        }
+       }
+      }
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e602c713-536a6727c1",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 6,
+      "quotes": 6,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-2eb43732-ec3740c5a7",
+       "payment_id": "PAY-2eb43732-ec3740c5a7",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "f004c99a7e6b6341be2e6547996bc8b3780f029b4da81fcc0316256d422abf1f",
+        "content": "e254bc4cbb866873050642b4c139426f1eec49a1dd957b9f49132935c38fdf05",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261118000002",
+        "instructionId": "OUT-2026-000124"
+       },
+       "instruction_ref": "OUT-2026-000124"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "no-uetr-and-no-value-date",
+   "note": "without a date the SDK does not call it the same payment, and sends it; the platform cannot tell the two apart either and refuses the second — the refusal is passed on, with the settlement it names",
+   "steps": [
+    {
+     "message": {
+      "parse": "xml/no-uetr-no-date"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-671118c4-3982e8c2f2",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-671118c4-3982e8c2f2",
+       "payment_id": "PAY-671118c4-3982e8c2f2",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "f61310928d485af133d011951336f125a93dde9595a1bf60173c56b46615371e",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781"
+       },
+       "instruction_ref": "OUT-2026-000123"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/no-uetr-no-date-new-message-id"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "duplicate_source_message",
+        "message": "this payment cannot be told from settlement PAY-671118c4-3982e8c2f2: the message states no value date",
+        "status": 409,
+        "existingPaymentId": "PAY-671118c4-3982e8c2f2",
+        "ground": "twin_undated"
+       }
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-2b5a6c31-2301aba5f9",
+       "payment_id": "PAY-2b5a6c31-2301aba5f9",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "8d36a82cdf5ff4fd2810e0b7029970ffe04b71d1af3f8829bac1b0ba660590e1",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "messageId": "DEMOVNVX20261118000009",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781"
+       },
+       "instruction_ref": "OUT-2026-000123"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/no-uetr-no-date-reformatted"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-671118c4-3982e8c2f2",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "same-uetr-other-payment",
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-3f1c9a52-175c822e37",
+       "payment_id": "PAY-3f1c9a52-175c822e37",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "eae81c7fb20a731f54d197d0da598de78d47d490801a2709271172e053e25c55",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/other-amount"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-3f1c9a52-175c822e37 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-3f1c9a52-175c822e37"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/other-creditor-name"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-3f1c9a52-175c822e37 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-3f1c9a52-175c822e37"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/other-creditor-account"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-3f1c9a52-175c822e37 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-3f1c9a52-175c822e37"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/other-invoice"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-3f1c9a52-175c822e37 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-3f1c9a52-175c822e37"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/other-identifiers"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-3f1c9a52-175c822e37 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-3f1c9a52-175c822e37"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/settled-less-than-instructed"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-3f1c9a52-175c822e37 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-3f1c9a52-175c822e37"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/foreign-name-beside-creditor-name"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/unicode-spaces-around-values"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/uetr-upper-case"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/mt103-structured"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "986abb2579a371143c7a57f804bbb9b215b4e95b0d3be6da7e5244e3b3a81cf6",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000126",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-other-amount"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28) is already on settlement PAY-e2a8c5f0-f5b8b68864 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-e2a8c5f0-f5b8b68864"
+       }
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-crts"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "no-uetr-same-ids-same-and-other-day",
+   "steps": [
+    {
+     "message": {
+      "parse": "xml/no-uetr"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-4eb61666-ceb6509152",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-4eb61666-ceb6509152",
+       "payment_id": "PAY-4eb61666-ceb6509152",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "0a534654ac1dd8bac180b7af06141fc4056278d472671221692c7c174d02de79",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781"
+       },
+       "instruction_ref": "OUT-2026-000123"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/no-uetr-next-day"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-43ebab41-d3eeb5f5f5",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-43ebab41-d3eeb5f5f5",
+       "payment_id": "PAY-43ebab41-d3eeb5f5f5",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "9be5e405743a9580c16b821fedf7da1c5f0018c92751a0d4b701e1841ce0335d",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-18",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781"
+       },
+       "instruction_ref": "OUT-2026-000123"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/no-uetr-other-amount"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference is already on settlement PAY-4eb61666-ceb6509152 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one a reference of its own, or pass an explicit paymentId if it is meant as a payment of its own",
+        "status": 409,
+        "existingPaymentId": "PAY-4eb61666-ceb6509152"
+       }
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/no-uetr-reformatted"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-4eb61666-ceb6509152",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/no-uetr"
+     },
+     "options": {
+      "supplementByAccount": {
+       "VN-ACC-000777": {
+        "debtor": {
+         "registration_number": "0312345678"
+        }
+       }
+      }
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e323f460-f10dbd47de",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e323f460-f10dbd47de",
+       "payment_id": "PAY-e323f460-f10dbd47de",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "31b39787eb0161b129c05f87ef6a5fb668661ca76975541c15e49dfd7ae7b5d3",
+        "content": "e437c1a69ab6a13083964b70b88921d6a17b4c7eb91c1d2fb4f86ade64f48675",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000125",
+        "instructionId": "OUT2026000125",
+        "endToEndId": "PO-7811"
+       },
+       "instruction_ref": "OUT2026000125"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/no-uetr-next-day"
+     },
+     "options": {
+      "supplementByAccount": {
+       "VN-ACC-000777": {
+        "debtor": {
+         "registration_number": "0312345678"
+        }
+       }
+      }
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e04d4a5c-a5377eb703",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e04d4a5c-a5377eb703",
+       "payment_id": "PAY-e04d4a5c-a5377eb703",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "161be5343ea404f1760525f8b4a4f4aa9477f1e836290e1a5020f96a16304612",
+        "content": "e437c1a69ab6a13083964b70b88921d6a17b4c7eb91c1d2fb4f86ade64f48675",
+        "valueDate": "2026-11-18",
+        "messageId": "OUT2026000125",
+        "instructionId": "OUT2026000125",
+        "endToEndId": "PO-7811"
+       },
+       "instruction_ref": "OUT2026000125"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/no-uetr-other-amount"
+     },
+     "options": {
+      "supplementByAccount": {
+       "VN-ACC-000777": {
+        "debtor": {
+         "registration_number": "0312345678"
+        }
+       }
+      }
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference is already on settlement PAY-e323f460-f10dbd47de (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one a reference of its own, or pass an explicit paymentId if it is meant as a payment of its own",
+        "status": 409,
+        "existingPaymentId": "PAY-e323f460-f10dbd47de"
+       }
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "a-forced-payment-id",
+   "note": "an explicit id names the settlement and nothing more: a message that already has one is answered with it, whatever id is passed; a UETR is not put on a second payment; without a UETR, a reference used again under an id of its own is a payment of its own",
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-3f1c9a52-175c822e37",
+       "payment_id": "PAY-3f1c9a52-175c822e37",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "eae81c7fb20a731f54d197d0da598de78d47d490801a2709271172e053e25c55",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pain001"
+     },
+     "options": {
+      "paymentId": "PAY-3f1c9a52-175c822e37"
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "payment_id_conflict",
+        "message": "PAY-3f1c9a52-175c822e37 already names a settlement made from a different message; give this payment an id of its own",
+        "status": 409,
+        "existingPaymentId": "PAY-3f1c9a52-175c822e37"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {
+      "paymentId": "PAY-3f1c9a52-175c822e37"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {
+      "paymentId": "PAY-MANUAL-0001"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/other-amount"
+     },
+     "options": {
+      "paymentId": "PAY-MANUAL-0002"
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-3f1c9a52-175c822e37 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-3f1c9a52-175c822e37"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ]
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/uetr-99999999"
+     },
+     "options": {
+      "paymentId": "PAY-MANUAL-0001"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-MANUAL-0001",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [
+       "source_uetr=99999999-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-MANUAL-0001",
+       "payment_id": "PAY-MANUAL-0001",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "0da042da87f71bc60c960113c687f0f99db88cf8c1aa3268bffd7b428984a8f1",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "99999999-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "99999999-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/short-reference"
+     },
+     "options": {
+      "paymentId": "BANK-RETRY-0001"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "BANK-RETRY-0001",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-BANK-RETRY-0001",
+       "payment_id": "BANK-RETRY-0001",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "e53321d17f8962eff76d60568af42cba4eb9b3c506b6d7a9cfd7f6ddec4ae15c",
+        "content": "daf66cbfc1e8fac39d387b5c82a6cf753bb32b479dd37f20c80e4ec36f41c0a5",
+        "valueDate": "2026-11-17",
+        "messageId": "R1",
+        "instructionId": "R1",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "R1",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/short-reference-without-headers"
+     },
+     "options": {
+      "paymentId": "BANK-RETRY-0002"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "BANK-RETRY-0001",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-BANK-RETRY-0002",
+       "payment_id": "BANK-RETRY-0002",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "d682413dd6f588eeb32c811db204ee5b34e00f207c055b1680386b40595bf0fd",
+        "content": "daf66cbfc1e8fac39d387b5c82a6cf753bb32b479dd37f20c80e4ec36f41c0a5",
+        "valueDate": "2026-11-17",
+        "messageId": "R1",
+        "instructionId": "R1"
+       },
+       "instruction_ref": "R1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pain001"
+     },
+     "options": {
+      "paymentId": "BANK-RETRY-0003"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "BANK-RETRY-0003",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 5,
+      "quotes": 5,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-BANK-RETRY-0003",
+       "payment_id": "BANK-RETRY-0003",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "4fc04ccec498accd32f3d130ca568b84d0068b4c37580f9902a112eaa174c8b0",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-other-invoice"
+     },
+     "options": {
+      "paymentId": "BANK-RETRY-0004"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "BANK-RETRY-0004",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 6,
+      "quotes": 6,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-BANK-RETRY-0004",
+       "payment_id": "BANK-RETRY-0004",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "a28e238afc6cfba522cc4b8cd10de78f047c36d7fe126e7dbe317c977abdfecb",
+        "content": "811cd2a305e193dab068f74a2e4b29bfc5468d2203388010f6dfb5cfcadfda56",
+        "valueDate": "2026-11-17",
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "instruction-ids-collide",
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pain001"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-bd0b1ec2-6e51d4c846",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-bd0b1ec2-6e51d4c846",
+       "payment_id": "PAY-bd0b1ec2-6e51d4c846",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "4fc04ccec498accd32f3d130ca568b84d0068b4c37580f9902a112eaa174c8b0",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-other-company-same-ids"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-6ff81ecd-2eea38a2dd",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-6ff81ecd-2eea38a2dd",
+       "payment_id": "PAY-6ff81ecd-2eea38a2dd",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "78990e6c8e31abb4aa3ee2959f442f94a35fbba41f78b417989097e06a60e548",
+        "content": "8cce6aec96e1d4c5f17c76724e3b8fd3639bcd471a32865e6a798ce1f709ed1b",
+        "valueDate": "2026-11-17",
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "OTHERCO-20261117-0001",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-field-lines-only"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8b316821-54d8f3b28a",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-8b316821-54d8f3b28a",
+       "payment_id": "PAY-8b316821-54d8f3b28a",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "d2840ec6004399dd981409e9ca785bb198a6a49d3bb361df8d4c5a70b9b8403f",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126"
+       },
+       "instruction_ref": "OUT2026000126"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-field-lines-only-other-payment"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference is already on settlement PAY-8b316821-54d8f3b28a (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one a reference of its own, or pass an explicit paymentId if it is meant as a payment of its own",
+        "status": 409,
+        "existingPaymentId": "PAY-8b316821-54d8f3b28a"
+       }
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-3f1c9a52-175c822e37",
+       "payment_id": "PAY-3f1c9a52-175c822e37",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "eae81c7fb20a731f54d197d0da598de78d47d490801a2709271172e053e25c55",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/other-uetr-same-ids"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-14141414-c60a3bfa3f",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 5,
+      "quotes": 5,
+      "searched": [
+       "source_uetr=14141414-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-14141414-c60a3bfa3f",
+       "payment_id": "PAY-14141414-c60a3bfa3f",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "25085ae87981c2f56928f9579870bfddf8a74c01abd2353c2be3666fbc801043",
+        "content": "b0d014344da1e3ade7e829fc4501c2a04a6f149a1385581747db120ead61f99f",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "14141414-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "14141414-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "made-by-an-older-sdk-from-the-same-bytes",
+   "ledger": [
+    {
+     "payment_id": "PAY-20261117-0a1b2c3d4e",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-20261117-0a1b2c3d4e",
+         "amount": "12500.00",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd",
+         "sourceMessage": {
+          "type": "pacs.008.001.08",
+          "messageId": "DEMOVNVX20261117000123",
+          "instructionId": "OUT-2026-000123",
+          "endToEndId": "PO-7781",
+          "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10",
+          "valueDate": "2026-11-17",
+          "sha256": "eae81c7fb20a731f54d197d0da598de78d47d490801a2709271172e053e25c55"
+         }
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0457",
+         "amount": "12500.00",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-20261117-0a1b2c3d4e",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "made-by-an-older-sdk-from-another-export",
+   "note": "no content digest stored: amount, names, invoice and identifiers decide",
+   "ledger": [
+    {
+     "payment_id": "PAY-20261117-0a1b2c3d4e",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-20261117-0a1b2c3d4e",
+         "amount": "12500.00",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd",
+         "sourceMessage": {
+          "type": "pacs.008.001.08",
+          "messageId": "DEMOVNVX20261117000123",
+          "instructionId": "OUT-2026-000123",
+          "endToEndId": "PO-7781",
+          "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10",
+          "valueDate": "2026-11-17",
+          "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+         }
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0457",
+         "amount": "12500.00",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-20261117-0a1b2c3d4e",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ]
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/other-amount"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-20261117-0a1b2c3d4e (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-20261117-0a1b2c3d4e"
+       }
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "made-by-an-older-sdk-another-amount",
+   "ledger": [
+    {
+     "payment_id": "PAY-20261117-0a1b2c3d4e",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-20261117-0a1b2c3d4e",
+         "amount": "9900.00",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd",
+         "sourceMessage": {
+          "type": "pacs.008.001.08",
+          "messageId": "DEMOVNVX20261117000123",
+          "instructionId": "OUT-2026-000123",
+          "endToEndId": "PO-7781",
+          "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10",
+          "valueDate": "2026-11-17",
+          "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+         }
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0457",
+         "amount": "9900.00",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-20261117-0a1b2c3d4e (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-20261117-0a1b2c3d4e"
+       }
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "made-by-an-older-sdk-another-invoice",
+   "ledger": [
+    {
+     "payment_id": "PAY-20261117-0a1b2c3d4e",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-20261117-0a1b2c3d4e",
+         "amount": "12500.00",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd",
+         "sourceMessage": {
+          "type": "pacs.008.001.08",
+          "messageId": "DEMOVNVX20261117000123",
+          "instructionId": "OUT-2026-000123",
+          "endToEndId": "PO-7781",
+          "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10",
+          "valueDate": "2026-11-17",
+          "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+         }
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0999",
+         "amount": "12500.00",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-20261117-0a1b2c3d4e (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-20261117-0a1b2c3d4e"
+       }
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "made-by-an-older-sdk-without-commercial-documents",
+   "ledger": [
+    {
+     "payment_id": "PAY-20261117-0a1b2c3d4e",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-20261117-0a1b2c3d4e",
+         "amount": "12500.00",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd",
+         "sourceMessage": {
+          "type": "pacs.008.001.08",
+          "messageId": "DEMOVNVX20261117000123",
+          "instructionId": "OUT-2026-000123",
+          "endToEndId": "PO-7781",
+          "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10",
+          "valueDate": "2026-11-17",
+          "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+         }
+        }
+       },
+       "sig": null
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-20261117-0a1b2c3d4e",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "made-by-an-older-sdk-with-the-content-digest",
+   "ledger": [
+    {
+     "payment_id": "PAY-20261117-0a1b2c3d4e",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-20261117-0a1b2c3d4e",
+         "amount": "12500.00",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd",
+         "sourceMessage": {
+          "type": "pacs.008.001.08",
+          "messageId": "DEMOVNVX20261117000123",
+          "instructionId": "OUT-2026-000123",
+          "endToEndId": "PO-7781",
+          "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10",
+          "valueDate": "2026-11-17",
+          "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811"
+         }
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0457",
+         "amount": "12500.00",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-20261117-0a1b2c3d4e",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "made-by-an-older-sdk-with-another-content-digest",
+   "note": "a stored content digest decides; amount and names are not consulted",
+   "ledger": [
+    {
+     "payment_id": "PAY-20261117-0a1b2c3d4e",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-20261117-0a1b2c3d4e",
+         "amount": "12500.00",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd",
+         "sourceMessage": {
+          "type": "pacs.008.001.08",
+          "messageId": "DEMOVNVX20261117000123",
+          "instructionId": "OUT-2026-000123",
+          "endToEndId": "PO-7781",
+          "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10",
+          "valueDate": "2026-11-17",
+          "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "content": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+         }
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0457",
+         "amount": "12500.00",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-20261117-0a1b2c3d4e (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-20261117-0a1b2c3d4e"
+       }
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "made-by-an-older-sdk-mt103",
+   "note": "the trade amount 6150 is compared as 6150.00",
+   "ledger": [
+    {
+     "payment_id": "PAY-20261117-1b2c3d4e5f",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-20261117-1b2c3d4e5f",
+         "amount": "6150.00",
+         "currency": "USD",
+         "debtor": "VINA TRADING CO LTD",
+         "creditor": "PACIFIC SUPPLY PTE LTD",
+         "sourceMessage": {
+          "type": "MT103",
+          "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "messageId": "OUT2026000125",
+          "instructionId": "OUT2026000125",
+          "endToEndId": "PO-7811",
+          "uetr": "b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57",
+          "valueDate": "2026-11-17"
+         }
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0475",
+         "amount": "6150.00",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/mt103-free-format"
+     },
+     "options": {
+      "supplementByAccount": {
+       "VN-ACC-000777": {
+        "debtor": {
+         "registration_number": "0312345678"
+        }
+       }
+      }
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-20261117-1b2c3d4e5f",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": [
+       "source_uetr=b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "made-by-an-older-sdk-mt103-amount-without-decimals",
+   "ledger": [
+    {
+     "payment_id": "PAY-20261117-1b2c3d4e5f",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-20261117-1b2c3d4e5f",
+         "amount": "6150",
+         "currency": "USD",
+         "debtor": "VINA TRADING CO LTD",
+         "creditor": "PACIFIC SUPPLY PTE LTD",
+         "sourceMessage": {
+          "type": "MT103",
+          "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "messageId": "OUT2026000125",
+          "instructionId": "OUT2026000125",
+          "endToEndId": "PO-7811",
+          "uetr": "b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57",
+          "valueDate": "2026-11-17"
+         }
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0475",
+         "amount": "6150",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/mt103-free-format"
+     },
+     "options": {
+      "supplementByAccount": {
+       "VN-ACC-000777": {
+        "debtor": {
+         "registration_number": "0312345678"
+        }
+       }
+      }
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57) is already on settlement PAY-20261117-1b2c3d4e5f (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-20261117-1b2c3d4e5f"
+       }
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": [
+       "source_uetr=b4d9e7a1-5c36-4f82-a1d0-6e9f3c2b8a57"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "a-reuse-and-a-repeat-in-the-ledger",
+   "note": "the same payment anywhere in the ledger wins over a reference re-used on another: the UETR stands on another payment, and the payment itself is there from a message without one",
+   "ledger": [
+    {
+     "payment_id": "PAY-20261116-0000000001",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-20261116-0000000001",
+         "amount": "9900.00",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd",
+         "sourceMessage": {
+          "type": "pacs.008.001.08",
+          "messageId": "DEMOVNVX20261117000123",
+          "instructionId": "OUT-2026-000123",
+          "endToEndId": "PO-7781",
+          "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10",
+          "valueDate": "2026-11-17",
+          "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+         }
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0457",
+         "amount": "9900.00",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    },
+    {
+     "payment_id": "PAY-20261116-0000000002",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-20261116-0000000002",
+         "amount": "12500.00",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd",
+         "sourceMessage": {
+          "type": "pacs.008.001.08",
+          "messageId": "DEMOVNVX20261117000123",
+          "instructionId": "OUT-2026-000123",
+          "endToEndId": "PO-7781",
+          "valueDate": "2026-11-17",
+          "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811"
+         }
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0457",
+         "amount": "12500.00",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement PAY-20261116-0000000001 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "PAY-20261116-0000000001"
+       }
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "a-settlement-not-made-from-a-message",
+   "note": "found by its id: a conflict; a settlement not made from a message holds no place and is never the answer to a lookup",
+   "ledger": [
+    {
+     "payment_id": "PAY-OWN-1",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-OWN-1",
+         "amount": "12500.00",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd"
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0457",
+         "amount": "12500.00",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    },
+    {
+     "payment_id": "PAY-3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10-manual",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10-manual",
+         "amount": "12500.00",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd"
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0457",
+         "amount": "12500.00",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {
+      "paymentId": "PAY-OWN-1"
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "payment_id_conflict",
+        "message": "PAY-OWN-1 already names a settlement made from a different message; give this payment an id of its own",
+        "status": 409,
+        "existingPaymentId": "PAY-OWN-1"
+       }
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-3f1c9a52-175c822e37",
+       "payment_id": "PAY-3f1c9a52-175c822e37",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "eae81c7fb20a731f54d197d0da598de78d47d490801a2709271172e053e25c55",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "the-lookups-are-exact",
+   "note": "a longer reference that contains this one, and the same field 20 without a UETR and with other content: neither is this payment, and neither is returned",
+   "ledger": [
+    {
+     "payment_id": "PAY-20261116-0000000003",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-20261116-0000000003",
+         "amount": "12500.00",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd",
+         "sourceMessage": {
+          "type": "pacs.008.001.08",
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "instructionId": "OUT2026000126-B",
+          "uetr": "12345678-1234-4234-8234-123456789012",
+          "valueDate": "2026-11-17"
+         }
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0457",
+         "amount": "12500.00",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    },
+    {
+     "payment_id": "PAY-20261116-0000000004",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-20261116-0000000004",
+         "amount": "990.75",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd",
+         "sourceMessage": {
+          "type": "MT103",
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "messageId": "OUT2026000126",
+          "instructionId": "OUT2026000126",
+          "valueDate": "2026-11-17",
+          "content": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+         }
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0457",
+         "amount": "990.75",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/mt103-structured"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "986abb2579a371143c7a57f804bbb9b215b4e95b0d3be6da7e5244e3b3a81cf6",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000126",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "the-header-stripped-twin-in-the-ledger",
+   "ledger": [
+    {
+     "payment_id": "PAY-20261116-0000000005",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-20261116-0000000005",
+         "amount": "990.75",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd",
+         "sourceMessage": {
+          "type": "MT103",
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "messageId": "OUT2026000126",
+          "instructionId": "OUT2026000126",
+          "valueDate": "2026-11-17",
+          "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee"
+         }
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0457",
+         "amount": "990.75",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/mt103-structured"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-20261116-0000000005",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "986abb2579a371143c7a57f804bbb9b215b4e95b0d3be6da7e5244e3b3a81cf6",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000126",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "two-instalments-and-the-file-again",
+   "note": "only the first instalment went through before the file was written out again: the re-export's second transaction is the instalment that was never sent — a payment, not \"already\" — and afterwards each transaction keeps its own settlement",
+   "steps": [
+    {
+     "message": {
+      "parse": "xml/pain001-same-ids"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8f3f9e8f-be66d9be83",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-8f3f9e8f-be66d9be83",
+       "payment_id": "PAY-8f3f9e8f-be66d9be83",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "7034bc5aed78d9a4d757c21591bfa038fdb213984558fb03a3db18a82929fa9a",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "index": 0,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-same-ids-exported-again"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8f3f9e8f-be66d9be83",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-52690c0e-9c99ad9210",
+       "payment_id": "PAY-52690c0e-9c99ad9210",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "82c558c793c5e42c53ad680edf2b90decd1bbf545543c0e849e9e093f1ae4668",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "index": 0,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261118-0002",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-same-ids-exported-again"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-11d68866-89c85e3cfb",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-11d68866-89c85e3cfb",
+       "payment_id": "PAY-11d68866-89c85e3cfb",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "82c558c793c5e42c53ad680edf2b90decd1bbf545543c0e849e9e093f1ae4668",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "index": 1,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261118-0002",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-same-ids"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-11d68866-89c85e3cfb",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-5cd088d9-5244758738",
+       "payment_id": "PAY-5cd088d9-5244758738",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "7034bc5aed78d9a4d757c21591bfa038fdb213984558fb03a3db18a82929fa9a",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "index": 1,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-same-ids-exported-again"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-11d68866-89c85e3cfb",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-same-ids-exported-again"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8f3f9e8f-be66d9be83",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 5,
+      "quotes": 5,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-52690c0e-9c99ad9210",
+       "payment_id": "PAY-52690c0e-9c99ad9210",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "82c558c793c5e42c53ad680edf2b90decd1bbf545543c0e849e9e093f1ae4668",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "index": 0,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261118-0002",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-same-ids"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8f3f9e8f-be66d9be83",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 5,
+      "quotes": 5,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "both-instalments-then-the-file-again",
+   "note": "each transaction of the re-export is ONE of the two settlements, not both the same one",
+   "steps": [
+    {
+     "message": {
+      "parse": "xml/pain001-same-ids"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8f3f9e8f-be66d9be83",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-8f3f9e8f-be66d9be83",
+       "payment_id": "PAY-8f3f9e8f-be66d9be83",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "7034bc5aed78d9a4d757c21591bfa038fdb213984558fb03a3db18a82929fa9a",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "index": 0,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-same-ids"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-5cd088d9-5244758738",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-5cd088d9-5244758738",
+       "payment_id": "PAY-5cd088d9-5244758738",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "7034bc5aed78d9a4d757c21591bfa038fdb213984558fb03a3db18a82929fa9a",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "index": 1,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-same-ids-exported-again"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8f3f9e8f-be66d9be83",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-11d68866-89c85e3cfb",
+       "payment_id": "PAY-11d68866-89c85e3cfb",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "82c558c793c5e42c53ad680edf2b90decd1bbf545543c0e849e9e093f1ae4668",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "index": 1,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261118-0002",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-same-ids-exported-again"
+     },
+     "options": {
+      "index": 0
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-5cd088d9-5244758738",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 4,
+      "quotes": 4,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-52690c0e-9c99ad9210",
+       "payment_id": "PAY-52690c0e-9c99ad9210",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "82c558c793c5e42c53ad680edf2b90decd1bbf545543c0e849e9e093f1ae4668",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "index": 0,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261118-0002",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "no-identifier-of-its-own",
+   "note": "no UETR, no instruction id, NOTPROVIDED: the same message id, position, value date and content is the same payment, under any payment id; under another message id nothing says so, and it is a new one",
+   "steps": [
+    {
+     "message": {
+      "parse": "xml/pain001-no-identifiers"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-0905bbed-52a9fde839",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-0905bbed-52a9fde839",
+       "payment_id": "PAY-0905bbed-52a9fde839",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "39208b47a99b106c52e4da75e75c88a7e0bfe51d82f36ffbe9ae00514d9c3a7a",
+        "content": "850b728071122a26d1915ae2334bb4efd806f97f4057322ddc5bec2fb0825522",
+        "valueDate": "2026-11-17",
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031"
+       },
+       "instruction_ref": "VINATRD-PMT-0031"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-no-identifiers-exported-again"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-0905bbed-52a9fde839",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-no-identifiers-exported-again"
+     },
+     "options": {
+      "paymentId": "BANK-RETRY-0002"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-0905bbed-52a9fde839",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-no-identifiers-other-message-id"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-7b205069-496ce5a017",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-7b205069-496ce5a017",
+       "payment_id": "PAY-7b205069-496ce5a017",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "9cdb23fd14c55d5a6dede5b44aaa44eb1815bf9bd65817d501e9d07668e6612f",
+        "content": "850b728071122a26d1915ae2334bb4efd806f97f4057322ddc5bec2fb0825522",
+        "valueDate": "2026-11-17",
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0099"
+       },
+       "instruction_ref": "VINATRD-PMT-0031"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "without-a-uetr-then-two-that-read-alike",
+   "note": "the settlement without a UETR takes the UETR of the rendering it is recognised in; a payment that reads alike under another UETR is then a payment of its own, and each UETR finds its own settlement",
+   "steps": [
+    {
+     "message": {
+      "parse": "mt/structured-without-headers"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8b316821-54d8f3b28a",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-8b316821-54d8f3b28a",
+       "payment_id": "PAY-8b316821-54d8f3b28a",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "8cfafb43e94529742f48fb2e795f751481cb514844c1c707323fc345e9eeb3a8",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126"
+       },
+       "instruction_ref": "OUT2026000126"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/mt103-structured"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8b316821-54d8f3b28a",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "986abb2579a371143c7a57f804bbb9b215b4e95b0d3be6da7e5244e3b3a81cf6",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000126",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-other-uetr"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-cccccccc-8825fbbf3d",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": [
+       "source_uetr=cccccccc-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-cccccccc-8825fbbf3d",
+       "payment_id": "PAY-cccccccc-8825fbbf3d",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "10c47354ebc63b701296fddfaa1a0f5be3e4eac50b5a9cc2eda349d519deba21",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126",
+        "uetr": "cccccccc-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000126",
+       "uetr": "cccccccc-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/mt103-structured"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8b316821-54d8f3b28a",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ]
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-other-uetr"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-cccccccc-8825fbbf3d",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/structured-field-lines-only"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-8b316821-54d8f3b28a",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "an-own-id-on-another-payment-with-the-same-identifiers",
+   "note": "an id the caller chose says nothing about the message: the same identifiers with other content under it are another payment under a taken id (payment_id_conflict), not a reference used twice; the same payment under it is found; under an id of its own the other payment is made",
+   "steps": [
+    {
+     "message": {
+      "parse": "xml/no-uetr"
+     },
+     "options": {
+      "paymentId": "BANK-0007"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "BANK-0007",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-BANK-0007",
+       "payment_id": "BANK-0007",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "0a534654ac1dd8bac180b7af06141fc4056278d472671221692c7c174d02de79",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781"
+       },
+       "instruction_ref": "OUT-2026-000123"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/no-uetr-other-amount"
+     },
+     "options": {
+      "paymentId": "BANK-0007"
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "payment_id_conflict",
+        "message": "BANK-0007 already names a settlement made from a different message; give this payment an id of its own",
+        "status": 409,
+        "existingPaymentId": "BANK-0007"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/no-uetr-reformatted"
+     },
+     "options": {
+      "paymentId": "BANK-0007"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "BANK-0007",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/no-uetr-other-amount"
+     },
+     "options": {
+      "paymentId": "BANK-0008"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "BANK-0008",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-BANK-0008",
+       "payment_id": "BANK-0008",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "d4861b7c7af726f5d91642a5448394643050b507f051571b6374b90e1fad6c3c",
+        "content": "0d74cf82122f345449f28d6b58215eac9fb5c7c971a304e1e22957b6a8719788",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781"
+       },
+       "instruction_ref": "OUT-2026-000123"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "an-own-id-and-a-payment-known-by-its-message-id",
+   "note": "with neither identifier, the settlement under the id is this payment only at the same position of the same message id: the file exported again is found at index 0; index 1 under the same id is another payment under a taken id",
+   "steps": [
+    {
+     "message": {
+      "parse": "xml/pain001-no-identifiers-two"
+     },
+     "options": {
+      "index": 0,
+      "paymentId": "BANK-N-1"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "BANK-N-1",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-BANK-N-1",
+       "payment_id": "BANK-N-1",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "b880c05da2b0608d55c18f4f7fb68883e39a71a821a8277233e14aa5124887ae",
+        "content": "850b728071122a26d1915ae2334bb4efd806f97f4057322ddc5bec2fb0825522",
+        "valueDate": "2026-11-17",
+        "index": 0,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031"
+       },
+       "instruction_ref": "VINATRD-PMT-0031"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-no-identifiers-two-exported-again"
+     },
+     "options": {
+      "index": 0,
+      "paymentId": "BANK-N-1"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "BANK-N-1",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-no-identifiers-two-exported-again"
+     },
+     "options": {
+      "index": 1,
+      "paymentId": "BANK-N-1"
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "payment_id_conflict",
+        "message": "BANK-N-1 already names a settlement made from a different message; give this payment an id of its own",
+        "status": 409,
+        "existingPaymentId": "BANK-N-1"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-no-identifiers-two-exported-again"
+     },
+     "options": {
+      "index": 1,
+      "paymentId": "BANK-N-2"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "BANK-N-2",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-BANK-N-2",
+       "payment_id": "BANK-N-2",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "d09e35a32c45e1aad3f231da1c96b142644b18b1320ec3f2464c5406336c1a04",
+        "content": "850b728071122a26d1915ae2334bb4efd806f97f4057322ddc5bec2fb0825522",
+        "valueDate": "2026-11-17",
+        "index": 1,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031"
+       },
+       "instruction_ref": "VINATRD-PMT-0031"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/pain001-no-identifiers-two"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "BANK-N-2",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 3,
+      "quotes": 3,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-ceb0bca7-406ccb8073",
+       "payment_id": "PAY-ceb0bca7-406ccb8073",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "b880c05da2b0608d55c18f4f7fb68883e39a71a821a8277233e14aa5124887ae",
+        "content": "850b728071122a26d1915ae2334bb4efd806f97f4057322ddc5bec2fb0825522",
+        "valueDate": "2026-11-17",
+        "index": 1,
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031"
+       },
+       "instruction_ref": "VINATRD-PMT-0031"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "the-derived-id-holds-the-same-identifiers-on-another-day",
+   "note": "the reference-and-date rule: the same identifiers on another value date are not \"the same reference\" — the id is taken by another payment",
+   "ledger": [
+    {
+     "payment_id": "PAY-4eb61666-ceb6509152",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-4eb61666-ceb6509152",
+         "amount": "12500.00",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd",
+         "sourceMessage": {
+          "type": "pacs.008.001.08",
+          "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "messageId": "DEMOVNVX20261117000123",
+          "instructionId": "OUT-2026-000123",
+          "endToEndId": "PO-7781",
+          "valueDate": "2026-11-18",
+          "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811"
+         }
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0457",
+         "amount": "12500.00",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "message": {
+      "parse": "xml/no-uetr"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "payment_id_conflict",
+        "message": "PAY-4eb61666-ceb6509152 already names a settlement made from a different message; give this payment an id of its own",
+        "status": 409,
+        "existingPaymentId": "PAY-4eb61666-ceb6509152"
+       }
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "made-before-content-digests-under-another-id",
+   "note": "nothing the SDK can look up finds it; the platform knows the file, names the settlement, and that is the answer",
+   "ledger": [
+    {
+     "payment_id": "PAY-20261117-9z8y7x6w5v",
+     "state": "BANK_AUTHORIZED",
+     "evidence_level": null,
+     "evidence_available": false,
+     "chain_tx": null,
+     "attestation": null,
+     "events": [
+      {
+       "seq": 0,
+       "type": "REQUEST_ACCEPTED",
+       "issuer": "STONEHASH",
+       "at": "2026-11-16T00:00:00.000Z",
+       "payload": {},
+       "sig": null
+      },
+      {
+       "seq": 1,
+       "type": "BANK_EVIDENCE_SUBMITTED",
+       "issuer": "VN-BANK-T1",
+       "at": "2026-11-16T00:00:00.100Z",
+       "payload": {
+        "bankInstruction": {
+         "ref": "PAY-20261117-9z8y7x6w5v",
+         "amount": "4300.00",
+         "currency": "USD",
+         "debtor": "Vina Trading Co., Ltd.",
+         "creditor": "Pacific Supply Pte Ltd",
+         "sourceMessage": {
+          "type": "pain.001.001.09",
+          "sha256": "39208b47a99b106c52e4da75e75c88a7e0bfe51d82f36ffbe9ae00514d9c3a7a",
+          "messageId": "VINATRD-20261117-0031"
+         }
+        },
+        "commercialDocs": {
+         "invoiceRef": "INV-2026-0470",
+         "amount": "4300.00",
+         "currency": "USD"
+        }
+       },
+       "sig": null
+      }
+     ]
+    }
+   ],
+   "steps": [
+    {
+     "message": {
+      "parse": "xml/pain001-no-identifiers"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-20261117-9z8y7x6w5v",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-0905bbed-52a9fde839",
+       "payment_id": "PAY-0905bbed-52a9fde839",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "39208b47a99b106c52e4da75e75c88a7e0bfe51d82f36ffbe9ae00514d9c3a7a",
+        "content": "850b728071122a26d1915ae2334bb4efd806f97f4057322ddc5bec2fb0825522",
+        "valueDate": "2026-11-17",
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031"
+       },
+       "instruction_ref": "VINATRD-PMT-0031"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "another-process-got-there-first",
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "race": "duplicate_payment",
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-3f1c9a52-175c822e37",
+       "payment_id": "PAY-3f1c9a52-175c822e37",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "eae81c7fb20a731f54d197d0da598de78d47d490801a2709271172e053e25c55",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pain001"
+     },
+     "options": {},
+     "race": "idempotency_conflict",
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-bd0b1ec2-6e51d4c846",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-bd0b1ec2-6e51d4c846",
+       "payment_id": "PAY-bd0b1ec2-6e51d4c846",
+       "sourceMessage": {
+        "type": "pain.001.001.09",
+        "sha256": "4fc04ccec498accd32f3d130ca568b84d0068b4c37580f9902a112eaa174c8b0",
+        "content": "5fe1771065e2faaf434e25e564dbaf99d09fe40e209726567e7d2b368ca5a039",
+        "valueDate": "2026-11-17",
+        "paymentInfoId": "VINATRD-PMT-0031",
+        "messageId": "VINATRD-20261117-0031",
+        "instructionId": "VINATRD-INS-0031-1",
+        "endToEndId": "PO-7803"
+       },
+       "instruction_ref": "VINATRD-INS-0031-1"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "another-process-sent-the-same-message-under-its-own-id",
+   "note": "the platform took the other one and refused this one (duplicate_source_message): the answer is that settlement, already",
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "race": {
+      "taken": {
+       "payment_id": "BANK-HUB-B-000001",
+       "state": "BANK_AUTHORIZED",
+       "evidence_level": null,
+       "evidence_available": false,
+       "chain_tx": null,
+       "attestation": null,
+       "events": [
+        {
+         "seq": 0,
+         "type": "REQUEST_ACCEPTED",
+         "issuer": "STONEHASH",
+         "at": "2026-11-16T00:00:00.000Z",
+         "payload": {},
+         "sig": null
+        },
+        {
+         "seq": 1,
+         "type": "BANK_EVIDENCE_SUBMITTED",
+         "issuer": "VN-BANK-T1",
+         "at": "2026-11-16T00:00:00.100Z",
+         "payload": {
+          "bankInstruction": {
+           "ref": "BANK-HUB-B-000001",
+           "amount": "12500.00",
+           "currency": "USD",
+           "debtor": "Vina Trading Co., Ltd.",
+           "creditor": "Pacific Supply Pte Ltd",
+           "sourceMessage": {
+            "type": "pacs.008.001.08",
+            "messageId": "DEMOVNVX20261117000123",
+            "instructionId": "OUT-2026-000123",
+            "endToEndId": "PO-7781",
+            "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10",
+            "valueDate": "2026-11-17",
+            "sha256": "eae81c7fb20a731f54d197d0da598de78d47d490801a2709271172e053e25c55",
+            "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811"
+           }
+          },
+          "commercialDocs": {
+           "invoiceRef": "INV-2026-0457",
+           "amount": "12500.00",
+           "currency": "USD"
+          }
+         },
+         "sig": null
+        }
+       ]
+      }
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "BANK-HUB-B-000001",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-3f1c9a52-175c822e37",
+       "payment_id": "PAY-3f1c9a52-175c822e37",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "eae81c7fb20a731f54d197d0da598de78d47d490801a2709271172e053e25c55",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "BANK-HUB-B-000001",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "another-process-sent-the-other-rendering",
+   "note": "the MT103 with its header blocks, while the same one without them was being taken: refused by the twin rule, answered already",
+   "steps": [
+    {
+     "message": {
+      "parse": "mt/short-reference"
+     },
+     "options": {},
+     "race": {
+      "taken": {
+       "payment_id": "PAY-OTHER-RENDERING-1",
+       "state": "BANK_AUTHORIZED",
+       "evidence_level": null,
+       "evidence_available": false,
+       "chain_tx": null,
+       "attestation": null,
+       "events": [
+        {
+         "seq": 0,
+         "type": "REQUEST_ACCEPTED",
+         "issuer": "STONEHASH",
+         "at": "2026-11-16T00:00:00.000Z",
+         "payload": {},
+         "sig": null
+        },
+        {
+         "seq": 1,
+         "type": "BANK_EVIDENCE_SUBMITTED",
+         "issuer": "VN-BANK-T1",
+         "at": "2026-11-16T00:00:00.100Z",
+         "payload": {
+          "bankInstruction": {
+           "ref": "PAY-OTHER-RENDERING-1",
+           "amount": "990.75",
+           "currency": "USD",
+           "debtor": "VINA TRADING CO LTD",
+           "creditor": "PACIFIC SUPPLY PTE LTD",
+           "sourceMessage": {
+            "type": "MT103",
+            "sha256": "d682413dd6f588eeb32c811db204ee5b34e00f207c055b1680386b40595bf0fd",
+            "messageId": "R1",
+            "instructionId": "R1",
+            "valueDate": "2026-11-17",
+            "content": "daf66cbfc1e8fac39d387b5c82a6cf753bb32b479dd37f20c80e4ec36f41c0a5"
+           }
+          },
+          "commercialDocs": {
+           "invoiceRef": "INV-2026-0478",
+           "amount": "990.75",
+           "currency": "USD"
+          }
+         },
+         "sig": null
+        }
+       ]
+      }
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-OTHER-RENDERING-1",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "e53321d17f8962eff76d60568af42cba4eb9b3c506b6d7a9cfd7f6ddec4ae15c",
+        "content": "daf66cbfc1e8fac39d387b5c82a6cf753bb32b479dd37f20c80e4ec36f41c0a5",
+        "valueDate": "2026-11-17",
+        "messageId": "R1",
+        "instructionId": "R1",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "R1",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "mt/short-reference-without-headers"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-OTHER-RENDERING-1",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 2,
+      "quotes": 2,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-f670db5e-504cb3caf1",
+       "payment_id": "PAY-f670db5e-504cb3caf1",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "d682413dd6f588eeb32c811db204ee5b34e00f207c055b1680386b40595bf0fd",
+        "content": "daf66cbfc1e8fac39d387b5c82a6cf753bb32b479dd37f20c80e4ec36f41c0a5",
+        "valueDate": "2026-11-17",
+        "messageId": "R1",
+        "instructionId": "R1"
+       },
+       "instruction_ref": "R1"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "another-process-put-the-uetr-on-another-payment",
+   "note": "refused as reference_reused by the platform; the SDK reads the ledger and says which settlement holds the UETR",
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "race": {
+      "taken": {
+       "payment_id": "BANK-HUB-B-000002",
+       "state": "BANK_AUTHORIZED",
+       "evidence_level": null,
+       "evidence_available": false,
+       "chain_tx": null,
+       "attestation": null,
+       "events": [
+        {
+         "seq": 0,
+         "type": "REQUEST_ACCEPTED",
+         "issuer": "STONEHASH",
+         "at": "2026-11-16T00:00:00.000Z",
+         "payload": {},
+         "sig": null
+        },
+        {
+         "seq": 1,
+         "type": "BANK_EVIDENCE_SUBMITTED",
+         "issuer": "VN-BANK-T1",
+         "at": "2026-11-16T00:00:00.100Z",
+         "payload": {
+          "bankInstruction": {
+           "ref": "BANK-HUB-B-000002",
+           "amount": "9900.00",
+           "currency": "USD",
+           "debtor": "Vina Trading Co., Ltd.",
+           "creditor": "Pacific Supply Pte Ltd",
+           "sourceMessage": {
+            "type": "pacs.008.001.08",
+            "messageId": "DEMOVNVX20261117000123",
+            "instructionId": "OUT-2026-000123",
+            "endToEndId": "PO-7781",
+            "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10",
+            "valueDate": "2026-11-17",
+            "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "content": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+           }
+          },
+          "commercialDocs": {
+           "invoiceRef": "INV-2026-0457",
+           "amount": "9900.00",
+           "currency": "USD"
+          }
+         },
+         "sig": null
+        }
+       ]
+      }
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "reference_reused",
+        "message": "this message's reference (UETR 3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10) is already on settlement BANK-HUB-B-000002 (BANK_AUTHORIZED), which is a different payment — its amount, parties, accounts or identifiers differ, and nothing was sent. A reference names one payment: give this one its own UETR",
+        "status": 409,
+        "existingPaymentId": "BANK-HUB-B-000002"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10",
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-3f1c9a52-175c822e37",
+       "payment_id": "PAY-3f1c9a52-175c822e37",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "eae81c7fb20a731f54d197d0da598de78d47d490801a2709271172e053e25c55",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "another-process-and-no-value-date",
+   "note": "the two cannot be told apart: the platform's refusal is passed on, not turned into \"already\"",
+   "steps": [
+    {
+     "message": {
+      "parse": "xml/no-uetr-no-date-new-message-id"
+     },
+     "options": {},
+     "race": {
+      "taken": {
+       "payment_id": "BANK-HUB-B-000003",
+       "state": "BANK_AUTHORIZED",
+       "evidence_level": null,
+       "evidence_available": false,
+       "chain_tx": null,
+       "attestation": null,
+       "events": [
+        {
+         "seq": 0,
+         "type": "REQUEST_ACCEPTED",
+         "issuer": "STONEHASH",
+         "at": "2026-11-16T00:00:00.000Z",
+         "payload": {},
+         "sig": null
+        },
+        {
+         "seq": 1,
+         "type": "BANK_EVIDENCE_SUBMITTED",
+         "issuer": "VN-BANK-T1",
+         "at": "2026-11-16T00:00:00.100Z",
+         "payload": {
+          "bankInstruction": {
+           "ref": "BANK-HUB-B-000003",
+           "amount": "12500.00",
+           "currency": "USD",
+           "debtor": "Vina Trading Co., Ltd.",
+           "creditor": "Pacific Supply Pte Ltd",
+           "sourceMessage": {
+            "type": "pacs.008.001.08",
+            "sha256": "f61310928d485af133d011951336f125a93dde9595a1bf60173c56b46615371e",
+            "messageId": "DEMOVNVX20261117000123",
+            "instructionId": "OUT-2026-000123",
+            "endToEndId": "PO-7781",
+            "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811"
+           }
+          },
+          "commercialDocs": {
+           "invoiceRef": "INV-2026-0457",
+           "amount": "12500.00",
+           "currency": "USD"
+          }
+         },
+         "sig": null
+        }
+       ]
+      }
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "RemitApiError",
+        "code": "duplicate_source_message",
+        "message": "this payment cannot be told from settlement BANK-HUB-B-000003: the message states no value date",
+        "status": 409,
+        "existingPaymentId": "BANK-HUB-B-000003",
+        "ground": "twin_undated"
+       }
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [],
+      "posted": {
+       "idempotencyKey": "swift-PAY-2b5a6c31-2301aba5f9",
+       "payment_id": "PAY-2b5a6c31-2301aba5f9",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "8d36a82cdf5ff4fd2810e0b7029970ffe04b71d1af3f8829bac1b0ba660590e1",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "messageId": "DEMOVNVX20261118000009",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781"
+       },
+       "instruction_ref": "OUT-2026-000123"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "cancelled-then-handed-over-again",
+   "steps": [
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-3f1c9a52-175c822e37",
+       "payment_id": "PAY-3f1c9a52-175c822e37",
+       "sourceMessage": {
+        "type": "pacs.008.001.08",
+        "sha256": "eae81c7fb20a731f54d197d0da598de78d47d490801a2709271172e053e25c55",
+        "content": "fac9040b378c5d8e132d34558fbf34b6036ed763fa5f612727fc0cd11b16f811",
+        "valueDate": "2026-11-17",
+        "messageId": "DEMOVNVX20261117000123",
+        "instructionId": "OUT-2026-000123",
+        "endToEndId": "PO-7781",
+        "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+       },
+       "instruction_ref": "OUT-2026-000123",
+       "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+      }
+     }
+    },
+    {
+     "cancel": {
+      "paymentId": "PAY-3f1c9a52-175c822e37",
+      "reason": "customer request"
+     },
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "CANCELLED"
+      },
+      "posts": 1,
+      "quotes": 1
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/pacs008"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "CANCELLED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/exported-next-day"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-3f1c9a52-175c822e37",
+       "state": "CANCELLED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "a-test-message-with-a-live-key",
+   "apiKey": "sk_live_x",
+   "steps": [
+    {
+     "message": {
+      "parse": "mt/structured-crts"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "SwiftMappingError",
+        "message": "the message cannot be turned into a settlement instruction — 1 thing(s) missing: instruction (field 23B)"
+       }
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/mt103-structured"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "986abb2579a371143c7a57f804bbb9b215b4e95b0d3be6da7e5244e3b3a81cf6",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000126",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "a-test-message-with-a-test-key",
+   "steps": [
+    {
+     "message": {
+      "parse": "mt/structured-crts"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": false
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": [
+       "source_uetr=e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      ],
+      "posted": {
+       "idempotencyKey": "swift-PAY-e2a8c5f0-f5b8b68864",
+       "payment_id": "PAY-e2a8c5f0-f5b8b68864",
+       "sourceMessage": {
+        "type": "MT103",
+        "sha256": "21b67c16dffe9c13620bdaf13349898bb65980fd3bc668902fe661fc3ced6e0f",
+        "content": "db43c8be9983a3d6b8812339ff625137c63e58149d17a8c4e81cf9e8109884ee",
+        "valueDate": "2026-11-17",
+        "messageId": "OUT2026000126",
+        "instructionId": "OUT2026000126",
+        "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+       },
+       "instruction_ref": "OUT2026000126",
+       "uetr": "e2a8c5f0-17d4-4b9e-b3a6-9d0c4e7f1b28"
+      }
+     }
+    },
+    {
+     "message": {
+      "parse": "sample/mt103-structured"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "paymentId": "PAY-e2a8c5f0-f5b8b68864",
+       "state": "BANK_AUTHORIZED",
+       "already": true
+      },
+      "posts": 1,
+      "quotes": 1,
+      "searched": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "nothing-to-read",
+   "steps": [
+    {
+     "message": {
+      "parse": "other/hello"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "SwiftMessageError",
+        "code": "not_a_swift_message",
+        "message": "neither an ISO 20022 XML document (pacs.008, pain.001) nor a FIN message (MT103) — the text starts with \"hello\""
+       }
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/doctype-before-document"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "SwiftMessageError",
+        "code": "malformed_message",
+        "message": "not well-formed XML: a document type declaration is refused — payment messages carry no DTD, and none is processed"
+       }
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "parse": "xml/three-transactions-second-without-account"
+     },
+     "options": {
+      "index": 1
+     },
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "SwiftMappingError",
+        "message": "the message cannot be turned into a settlement instruction — 1 thing(s) missing: creditor.account (CdtTrfTxInf/CdtrAcct/Id)"
+       }
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": []
+     }
+    },
+    {
+     "message": {
+      "as": "string",
+      "text": ":20:R\n:23B:CRED\n:32A:261117USD5,\n:50K:A\n:59:/ACC1\nB\n:71A:SHA\n"
+     },
+     "options": {},
+     "expect": {
+      "outcome": {
+       "error": {
+        "name": "SwiftMappingError",
+        "message": "the message cannot be turned into a settlement instruction — 6 thing(s) missing: debtor.country (field 50F line 3/ or field 77B /ORDERRES/); debtor.address (field 50a (address lines)); debtor.registration_number (field 50F party identifier or line 6/ 7/); creditor.country (field 59F line 3/ or field 77B /BENEFRES/); creditor.bank (field 57a or the receiver BIC); invoice_ref (field 70 /INV/)"
+       }
+      },
+      "posts": 0,
+      "quotes": 0,
+      "searched": []
+     }
+    }
+   ]
+  }
+ ]
+}

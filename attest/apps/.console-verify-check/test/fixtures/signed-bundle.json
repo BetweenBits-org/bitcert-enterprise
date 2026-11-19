@@ -1,0 +1,51 @@
+{
+  "schema": "bitcert-proof-bundle/v1",
+  "bitcoin_network": "regtest",
+  "generated_at": "2026-11-18T08:20:10.757Z",
+  "record": {
+    "kind": "attestation",
+    "leaf_bytes": "8fe9b6c3b53280058f00e837ada66ea87393cc938e331e00ad38cd4c69adaf9b",
+    "preimage": {
+      "scheme": "sha256-signed-statement/v1",
+      "content_type": "text/plain",
+      "statement": {
+        "schema": "stonehash-attestation-statement/v1",
+        "document": {
+          "sha256": "2501eb8971aa496e86ed71f19b1d03b4738d594da148ea5620b0ed054e75a9e1",
+          "content_type": "text/plain"
+        },
+        "issuer": {
+          "key_id": "73c74988-c8b8-43ee-b823-3633f4c6213f",
+          "algorithm": "ES256",
+          "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEiQicJc6wPzI7crh+TBpBKcck3ak4hiVij/N7Mvs4bsksze/YaTKtODmKzJlXlzmtHvGEJA3q2BZyO4SS355wxg=="
+        },
+        "issued_at": "2026-11-18T08:20:07Z",
+        "signature": "85vjPiADUPGyInueGi2ZgwMuknaP-clX5W9doob_5ftoqZJSLMSDt_qSs3t6JiP3-3QacNidKhviDxPMeNOPtg"
+      }
+    },
+    "descriptor": {
+      "attestation_id": "ebeae324-5a44-4f96-b3d0-c9752754f21b",
+      "batch_id": "cb765029-dee6-494d-b552-d106b3b96eb7"
+    }
+  },
+  "anchor": {
+    "reveal_txid": "82389c85c8ab0280f6d0699c9330534abafea673b79fe990173a106d9b8033dc",
+    "reveal_tx_hex": "020000000001017e54f16863a62067d3060086d87c2ef9adc48b1bbdd363d43f41e71c6fdca6590000000000fdffffff010000000000000000376a35424330310176438c9da0971ad183cceae30daa310a1f55a709461b9decd0222bdba113d481cb765029dee6494db552d106b3b96eb702473044022007634766539f87f13334fcf67e1eceefedb66f320eac4e349a7982c6ea0cea0802207ac12211693adf36631cc49c1906241d717e6c626fbb8312f762903d59852b190121036f84738433eb750a45cc5bb9a8cea1719d634bb0d33be07788057a6e83b1fae300000000",
+    "op_return_payload_hex": "424330310176438c9da0971ad183cceae30daa310a1f55a709461b9decd0222bdba113d481cb765029dee6494db552d106b3b96eb7",
+    "confirmed": {
+      "block_height": 10209,
+      "block_hash": "608c05865d8900c19d96230ac5d6ddc34a386146a647033d330b837591fd2e11",
+      "confirmations": 1
+    }
+  },
+  "merkle": {
+    "leaf_index": 1,
+    "root": "76438c9da0971ad183cceae30daa310a1f55a709461b9decd0222bdba113d481",
+    "siblings": [
+      "01a466b9c148d0a8b50b93ed8e3caf2616abdfa08e21688d4eaa6b1c039fc905"
+    ],
+    "directions": [
+      "left"
+    ]
+  }
+}

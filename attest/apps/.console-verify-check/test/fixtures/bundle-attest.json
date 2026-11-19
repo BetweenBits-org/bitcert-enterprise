@@ -1,0 +1,35 @@
+{
+  "schema": "bitcert-proof-bundle/v1",
+  "bitcoin_network": "regtest",
+  "generated_at": "2026-11-18T07:50:30.125Z",
+  "record": {
+    "kind": "attestation",
+    "leaf_bytes": "4ef4add679342a9ab03290c801ea42ea19d796de462da7d9d46f4d74de691598",
+    "preimage": {
+      "scheme": "sha256-file",
+      "content_type": "text/plain"
+    },
+    "descriptor": {
+      "attestation_id": "26568034-a923-43ff-bcb6-714b0b88b90d",
+      "batch_id": "578658bb-c74e-4b1f-9614-aee2b4b4e0d2",
+      "sample": true,
+      "note": "Seeded at signup so your first bundle export has something to export."
+    }
+  },
+  "anchor": {
+    "reveal_txid": "9b09d0d585b06d4a89f586452173671ba0eb4655a995646f4dcdb68e64552294",
+    "reveal_tx_hex": "02000000000101b07ef9d598f1a655871c91090c1939840042fbd4d8519aa11e759d370e8a13130000000000fdffffff020000000000000000376a3542433031014f1372bd728b36371683ad7181b45dcf6ccf2adcb80577c8d471727ce97ae819578658bbc74e4b1f9614aee2b4b4e0d27cce0000000000002251207a4a7eb671dc5835dcccafb8532a3ef2de253a784f4f5d8654c4e69a8ba81e170140ac265ccdfec9cfc68e380651fee0f7c56e7d5ce0917e6232b5869811046008d3731f93d7ad63d13e663920a4eaae897d1154e3d00750a90c5eeefb5e468e616e00000000",
+    "op_return_payload_hex": "42433031014f1372bd728b36371683ad7181b45dcf6ccf2adcb80577c8d471727ce97ae819578658bbc74e4b1f9614aee2b4b4e0d2",
+    "confirmed": {
+      "block_height": 9774,
+      "block_hash": "26fa8642cb7ca83017746e75e6cf7d4eeeb8a5f011652fdade35ced4df708ccc",
+      "confirmations": 1
+    }
+  },
+  "merkle": {
+    "leaf_index": 0,
+    "root": "4f1372bd728b36371683ad7181b45dcf6ccf2adcb80577c8d471727ce97ae819",
+    "siblings": [],
+    "directions": []
+  }
+}

@@ -1,0 +1,54 @@
+/* 송금 화면 전용 추가 스타일 */
+.topnav { display: flex; gap: 6px; margin-left: 8px; flex: 1; }
+.topnav a {
+  color: rgba(255,255,255,.75); text-decoration: none; font-size: 13px;
+  padding: 5px 12px; border-radius: 6px;
+}
+.topnav a.active, .topnav a:hover { background: rgba(255,255,255,.14); color: #fff; }
+.persona { border-left: 4px solid #2a9d64; }
+.persona-tag { font-size: 11px; font-weight: 800; color: #2a9d64; margin-bottom: 6px; letter-spacing: .3px; }
+.persona-inline { font-size: 12px; color: #2a62b5; font-weight: 600; margin-left: 8px; }
+.fl { display: block; font-size: 12px; color: #5a6472; margin: 10px 0; }
+.fl input {
+  display: block; width: 100%; margin-top: 4px; padding: 9px 10px; font-size: 14px;
+  border: 1px solid #c7d0dd; border-radius: 7px;
+}
+.quotebox {
+  background: #f4f8ff; border: 1px solid #c7d4e8; border-radius: 8px;
+  padding: 12px 14px; margin: 10px 0; font-size: 13px;
+}
+.quotebox b { font-size: 15px; }
+.quotebox .exp { color: #8a5a00; font-size: 12px; }
+.checks { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; font-size: 13px; }
+.checks label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.flow { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 10px 18px 2px; }
+.flow .fstep {
+  font-size: 11px; padding: 3px 9px; border-radius: 12px;
+  background: #edf0f5; color: #7a8494; white-space: nowrap;
+}
+.flow .fstep.done { background: #e2f6e9; color: #156f3a; font-weight: 700; }
+.flow .fstep.now { background: #1c4f96; color: #fff; font-weight: 700; animation: pulse 1.2s infinite; }
+.flow .fstep.bad { background: #fdeaea; color: #a02222; font-weight: 700; }
+.flow .arrow { color: #b9c4d6; font-size: 11px; }
+.timeline { padding: 8px 18px; }
+.timeline .tl {
+  display: flex; gap: 10px; align-items: baseline; font-size: 12.5px;
+  padding: 4px 0; border-bottom: 1px dashed #edf0f5;
+}
+.timeline .tl:last-child { border-bottom: 0; }
+.timeline .at { color: #9aa4b2; font-family: ui-monospace, Consolas, monospace; font-size: 11px; flex: none; }
+.timeline .who { color: #445061; font-weight: 600; flex: none; min-width: 120px; }
+.timeline .src { font-size: 10px; border-radius: 3px; padding: 1px 5px; flex: none; }
+.timeline .src.webhook { background: #e7f0fe; color: #1c4f96; }
+.timeline .src.poll { background: #edf0f5; color: #5a6472; }
+.timeline .sigok { color: #156f3a; font-size: 11px; }
+.result {
+  display: flex; flex-wrap: wrap; gap: 14px; padding: 12px 18px;
+  background: #f3faf5; border-top: 1px solid #dcefe2; font-size: 13px;
+}
+.result .ritem b { display: block; font-size: 12px; color: #156f3a; }
+.result code { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; word-break: break-all; }
+.verify-report { padding: 10px 18px 14px; }
+.verify-report .vr { display: flex; gap: 8px; font-size: 12.5px; padding: 3px 0; align-items: baseline; }
+.verify-report .vr .d { color: #7a8494; font-size: 11.5px; font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+.statechip { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 3px; }

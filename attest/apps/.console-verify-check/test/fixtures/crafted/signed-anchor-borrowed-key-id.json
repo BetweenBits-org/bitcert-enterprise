@@ -1,0 +1,38 @@
+{
+  "schema": "bitcert-proof-bundle/v1",
+  "bitcoin_network": "regtest",
+  "generated_at": "2026-11-18T00:00:00.000Z",
+  "record": {
+    "kind": "attestation",
+    "leaf_bytes": "f459d42beb5c1e0748bf9700a72877ff2fbdd35b69736cab2cb6f7312d4fb31b",
+    "preimage": {
+      "scheme": "sha256-signed-statement/v1",
+      "content_type": "text/plain",
+      "statement": {
+        "schema": "stonehash-attestation-statement/v1",
+        "document": {
+          "sha256": "e63adf5e9e0a6a09bea91ba1474869d9d7c7e4ad8938d43d0d52f1d85ab95af9",
+          "content_type": "text/plain"
+        },
+        "issuer": {
+          "key_id": "73c74988-c8b8-43ee-b823-3633f4c6213f",
+          "algorithm": "ES256",
+          "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEepl3n8QHMIEU5J5RoBMoLqfTAG/8jOle8qTShbmg3lUYgPvgzu2es83N9XDLSynsHkCZDt8fL7dT5o1skS6HXQ=="
+        },
+        "issued_at": "2026-11-18T09:00:00Z",
+        "signature": "bOEz7zQRaKjdBGwXIKAYybY-K9LbhGcgJc7nY09cd9JHB6ctkodNzoQpZzrMPJix6wEJiD1YHgfn9o65RDJvPw"
+      }
+    }
+  },
+  "anchor": {
+    "reveal_txid": "36b7db1f47f68acfbe712f90918bf358a2c6708f4161a7729db85900109e2c4c",
+    "reveal_tx_hex": "020000000111111111111111111111111111111111111111111111111111111111111111110000000000ffffffff010000000000000000376a354243303101d9f19deb7f3bd3cd97600959af3f0ed2fc3925e97290dcf379f5e1738f3c23eaabababababababababababababababab00000000",
+    "op_return_payload_hex": "4243303101d9f19deb7f3bd3cd97600959af3f0ed2fc3925e97290dcf379f5e1738f3c23eaabababababababababababababababab"
+  },
+  "merkle": {
+    "leaf_index": 0,
+    "root": "d9f19deb7f3bd3cd97600959af3f0ed2fc3925e97290dcf379f5e1738f3c23ea",
+    "siblings": [],
+    "directions": []
+  }
+}

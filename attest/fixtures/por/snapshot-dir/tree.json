@@ -1,0 +1,18 @@
+{
+  "schema": "stonehash.por-tree.v2",
+  "exchange_id": "KR-EX-0a1b2c",
+  "assets": [
+    "BTC",
+    "ETH",
+    "USDT"
+  ],
+  "leaf_count": 12,
+  "root": "0a869e853c04cbebcbdca7ca16477c691ace16830b1c950a1c38d9f0de4324aa",
+  "totals": {
+    "BTC": "2463358024",
+    "ETH": "114050000000000000001",
+    "USDT": "255810750000"
+  },
+  "leaves_file": "leaves.jsonl",
+  "leaves_sha256": "913552eca824af9f01fc488fc2fd6cd51cd576c5267626b11dab9ce634d7e78b"
+}

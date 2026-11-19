@@ -1,0 +1,837 @@
+{
+ "layer": "database",
+ "summary": "The database layer is a thin async adapter (apps/core/src/db.ts) over mysql2 3.24.6. It uses one pool of 10 connections against a single MySQL 8.0.46 instance (schema stonehash_attest) that shares the 4-CPU, 15 GB box with everything else, and the config file in /etc/mysql is stock. The code treats MySQL as the production engine, even though the README still says SQLite. SQLite (node:sqlite) is used only by tests and as a fallback. On SQLite every statement and transaction runs one at a time through a single promise chain. Nothing like that exists on MySQL, where up to 10 statements run at once and only four operations, all in service.ts, use transactions. There is no row locking, compare-and-set or deadlock retry anywhere. The schema has 21 InnoDB utf8mb4_bin tables. They key rows on random v4 UUID strings and store timestamps as ISO VARCHAR(40), hashes as hex text, money as VARCHAR strings, and every JSON document as-is in MEDIUMTEXT. Foreign keys are enforced. Single-row lookups and keyset paging are well indexed, and no transaction stays open across a network call. High volume causes trouble in four places. (1) The batch worker reads the whole attestations table on every tick (the inscription poll). It also seals at most one batch of up to 1,024 leaves per tick, with 2N+1 separate database calls per batch, so sealing tops out near 341/s and slows as the table grows. (2) Every audited request writes an audit row before it replies, API reads included. The remit rail runs about 150 statements and about 60 separately committed writes per payment. (3) The console, billing and ledger endpoints count each organisation's entire history, use date filters that cannot use an index, search JSON payloads with JSON_EXTRACT, and run one subquery whose cost grows with the square of the number of exhausted webhooks. All of this shares the same 10 connections. (4) Nothing is purged or partitioned except free-tier records. Under the owner's rule that organisation records never expire, storage grows in a straight line with volume: attestations alone add about 95 GB a year at T1 and about 9.5 TB at T2, and a remit payment costs roughly 20 to 30 times more bytes than an attestation. T1 is reachable once the per-tick full scan is removed and the webhook outbox is fixed. T2 needs bulk batch writes, a transaction with a state check for each remit step, counter tables in place of whole-history counts, a larger pool, and a tuned or dedicated MySQL. T3 needs workers that are safe with several app instances, time partitioning with archiving, read replicas, and an org_id shard key.",
+ "components": [
+  {
+   "name": "Storage adapter",
+   "role": "Single async Db interface (prepare().get/all/run, exec, tx) with two engines; schema bootstrap and column/index migrations at boot",
+   "files": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/db.ts"
+   ],
+   "tech": "mysql2/promise 3.24.6 pool (execute = server-side prepared statements, per-connection LRU 16000); node:sqlite DatabaseSync",
+   "notes": "MySQL: createPool({waitForConnections:true, connectionLimit:10, charset:'utf8mb4_bin'}), no queueLimit (unbounded), no acquire timeout, no isolation level set (InnoDB default REPEATABLE READ), tx() = getConnection+beginTransaction+commit/rollback, no retry. SQLite: one promise chain serialises every statement; tx holds the queue slot. Bootstrap: 21 CREATE TABLE IF NOT EXISTS, 17 ADD COLUMN checks via information_schema, 12 secondary indexes via catalogue check, CLEAR_ORG_EXPIRY UPDATE on every boot."
+  },
+  {
+   "name": "MySQL instance",
+   "role": "Sole production store (primary only, no replica)",
+   "files": [
+    "/etc/mysql/mysql.conf.d/mysqld.cnf"
+   ],
+   "tech": "MySQL 8.0.46 (Ubuntu), InnoDB, utf8mb4/utf8mb4_bin, host mysqld :3306",
+   "notes": "Config file sets only bind-address, key_buffer_size, max_binlog_size=100M, log_error, so stock defaults apply (128 MB buffer pool, flush_log_at_trx_commit=1, sync_binlog=1, binlog ROW/FULL, max_connections 151, max_prepared_stmt_count 16382). Live values not verified (SET PERSIST possible). Shares a 4-CPU/15 GB box with Node, bitcoind, anvil and the web apps; 572 GB disk free."
+  },
+  {
+   "name": "Attest tables",
+   "role": "attestations (one row per record), batches, merkle_proofs (one per leaf), anchor_txs (one per batch)",
+   "files": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/service.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/worker.ts"
+   ],
+   "tech": "InnoDB; attestations PK id VARCHAR(64) random UUID, rowseq BIGINT AUTO_INCREMENT UNIQUE, UNIQUE(org_id, leaf_bytes CHAR(64)), FK org/batch; 6 secondary indexes",
+   "notes": "Indexes: attestations_open(batch_id,status), attestations_open_order(batch_id,created_at), attestations_expiry(expires_at), attestations_org_created(org_id,created_at); anchor_txs_pending(status); InnoDB auto-creates FK indexes merkle_proofs(batch_id), anchor_txs(batch_id). batches has no status index. No index leads on kind, status, source or reveal_txid."
+  },
+  {
+   "name": "Tenancy and auth tables",
+   "role": "orgs, api_keys, accounts, sessions, issuer_keys, subscriptions",
+   "files": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/auth.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/account.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/http/console.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/remit/registry.ts"
+   ],
+   "tech": "orgs.slug UNIQUE; api_keys.key_hash UNIQUE VARCHAR(128); accounts.email UNIQUE; sessions PK token_hash + sessions_expiry; subscriptions UNIQUE(org_id,product)",
+   "notes": "Every keyed request does 1 lookup by key_hash; every console request does 2 primary-key lookups (session, account). Nothing caches them."
+  },
+  {
+   "name": "Audit trail",
+   "role": "audit_log: one row per audited request (API key or console session), written before the response",
+   "files": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/audit.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/http/routes.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/http/server.ts"
+   ],
+   "tech": "PK id = randomUUID; index audit_log_org_at(org_id, at, id); keyset search",
+   "notes": "Only console screen GETs and health probes are silent. All API reads are audited. No purge."
+  },
+  {
+   "name": "Remit ledger tables",
+   "role": "remit_quotes, remit_payments (PK = client-supplied payment_id), remit_events (UNIQUE payment_id+seq), remit_travel_rule, remit_idempotency (PK org_id+idem_key), remit_webhook_deliveries (outbox, no FK, no org_id index), remit_manifests (UNIQUE org_id+date), institutions (registry)",
+   "files": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/remit/store.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/remit/registry.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/remit/webhook.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/remit/orchestrator.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/remit/routes.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/remit/worker.ts"
+   ],
+   "tech": "Amounts are VARCHAR(64) strings; request_body/verdict/package_json/payload/body are MEDIUMTEXT JSON",
+   "notes": "Indexes remit_payments_org(org_id,created_at), remit_payments_org_state(org_id,state,created_at), remit_payments_anchor(attestation_id), remit_webhook_pending(status,next_attempt_at); FK indexes on remit_payments(quote_id), remit_travel_rule(payment_id), remit_quotes(org_id), institutions(org_id). Nothing runs in a transaction."
+  },
+  {
+   "name": "PoR tables",
+   "role": "por_snapshots (signed statement, commitment, totals, challenge, reserves report)",
+   "files": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/por/routes.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/por/reserves.ts"
+   ],
+   "tech": "Index por_snapshots_org(org_id, created_at); MEDIUMTEXT JSON columns",
+   "notes": "Low write volume (periodic snapshots). Duplicate submissions are blocked by an in-process Map queue, not by a unique key. Public verification is primary-key reads only."
+  },
+  {
+   "name": "Background database consumers",
+   "role": "BatchWorker (pendingCount, seal, anchor, confirm, hourly free-tier purge) and RemitWorker (promoteAnchored, deliverDue)",
+   "files": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/worker.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/remit/worker.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/main.ts"
+   ],
+   "tech": "setInterval timers in the single Node process; a running flag prevents overlapping ticks",
+   "notes": "BatchWorker runs every 3000 ms live and seals one batch per tick. RemitWorker runs every 2000 ms (hardcoded) and delivers at most 20 webhooks per tick."
+  },
+  {
+   "name": "Migration and parity tooling",
+   "role": "One-shot SQLite to MySQL copy; MySQL adapter parity test",
+   "files": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/scripts/migrate-sqlite-to-mysql.mjs",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/test/mysql-parity.test.ts"
+   ],
+   "tech": "node:test; parity test runs only when STONEHASH_TEST_MYSQL_URL is set",
+   "notes": "Parity covers bootstrap, rowseq hygiene, rollback, REPLACE, keyset search and LIKE escaping. It does not cover sealBatch/anchor/confirm on MySQL, concurrency, duplicate-key mapping, INSERT IGNORE, the ON DUPLICATE KEY 'AS new' upsert, or dashboard SQL."
+  }
+ ],
+ "flows": [
+  {
+   "name": "Attestation write (keyed API)",
+   "sync_or_async": "sync request; batching async",
+   "steps": [
+    "routes.ts:228 POST /v1/attestations -> requireAuth",
+    "auth.ts:57-59 SELECT api_keys WHERE key_hash=? AND revoked_at IS NULL (UNIQUE key_hash)",
+    "service.ts:164-165 SELECT id FROM attestations WHERE org_id=? AND leaf_bytes=? (UNIQUE org_id,leaf_bytes)",
+    "service.ts:172-176 INSERT attestations (autocommit; FK S-lock on orgs row)",
+    "service.ts:351-354 SELECT * by id+org (read-after-write on the same primary)",
+    "server.ts:216-218 await onDone -> audit.ts:114-120 INSERT audit_log (autocommit) before send()"
+   ]
+  },
+  {
+   "name": "Batch, anchor, confirm (worker tick)",
+   "sync_or_async": "async, every WORKER_TICK_MS (3000 live), no overlap",
+   "steps": [
+    "worker.ts:71 pendingCount: COUNT(*) WHERE batch_id IS NULL (attestations_open range; cost grows with the backlog)",
+    "worker.ts:73-77 if pending>=1024 or flush window passed: sealBatch, one batch per tick",
+    "service.ts:474-477 head: oldest pending org, ORDER BY created_at, rowseq LIMIT 1 (filesort over pending rows)",
+    "service.ts:480-483 pending: that org's rows, LIMIT 1024",
+    "service.ts:486 Merkle tree in process (~2N SHA-256)",
+    "service.ts:490-508 tx: INSERT batches + per leaf UPDATE attestations by PK + INSERT merkle_proofs (2N+1 sequential calls)",
+    "service.ts:513-523 anchorBatch: SELECT batch; backend.submit (bitcoind) outside any tx",
+    "service.ts:526-534 tx: INSERT anchor_txs, UPDATE batches, UPDATE attestations WHERE batch_id=? (N rows)",
+    "main.ts afterAnchor: regtest generate(1)",
+    "service.ts:540-561 SELECT anchor_txs WHERE status!='confirmed'; RPC poll for each; tx of 3 UPDATEs per confirmed batch",
+    "service.ts:564-578 full scan of attestations for unconfirmed inscriptions; RPC poll + UPDATE each",
+    "worker.ts:104-106 hourly purgeExpiredPublic (attestations_expiry range; 2 DELETEs per row in one tx)"
+   ]
+  },
+  {
+   "name": "Remit payment lifecycle",
+   "sync_or_async": "sync acceptance; async pipeline (setImmediate), partner callbacks, worker",
+   "steps": [
+    "remit/routes.ts:380-387 POST /v1/quotes: auth, subscription+institution lookups, INSERT remit_quotes, audit",
+    "remit/routes.ts:391-403 POST /v1/settlements: auth, requireRemit (2 SELECTs), idempotencyHit (PK)",
+    "orchestrator.ts:152-283 acceptSettlement: get(paymentId) dup check, quote, institution, ECDSA verifies, INSERT payment + SELECT, 3 appendEvent (3 statements each), transition (SELECT*/UPDATE/SELECT*), notify (SELECT*, subscription, INSERT webhook)",
+    "remit/routes.ts:421 REPLACE INTO remit_idempotency; audit INSERT",
+    "orchestrator.ts:287-291 setImmediate advance (in memory, not durable)",
+    "orchestrator.ts:341-422 travelRuleLeg: registry lookups incl. full institutions list, INSERT travel_rule, UPDATE request_body, events, transition, notify, BFI HTTP",
+    "orchestrator.ts:520-552 approvalLeg; 554-593 transferLeg (EVM wallet transfer)",
+    "orchestrator.ts:597-674 BFI callbacks USDC_RECEIVED / PAYOUT_SUBMITTED / PAYOUT_COMPLETED",
+    "orchestrator.ts:677-736 reconcileAndConfirm: events + keyring (full institutions list), package (events + full registry snapshot), svc.issue (attestation), UPDATE package_json",
+    "remit/worker.ts:41 promoteAnchored every 2 s: store.ts:307-313 full scan of remit_payments JOIN attestations",
+    "webhook.ts:76-118 deliverDue every 2 s: up to 20 due rows, sequential HTTP POST, 1 UPDATE each"
+   ]
+  },
+  {
+   "name": "Console read paths",
+   "sync_or_async": "sync",
+   "steps": [
+    "console.ts:158-164 requireAccount: sessions PK + accounts PK",
+    "console.ts:685-928 dashboard: about 27 statements; Promise.all of 5 then 4 on the 10-connection pool; several counts over the org's whole history",
+    "console.ts:182-198 quota COUNT over the month (twice per create)",
+    "audit.ts:192-218 audit search: keyset on audit_log_org_at, filters checked row by row",
+    "remit/routes.ts:109-169 products/billing: 5 monthly COUNTs"
+   ]
+  },
+  {
+   "name": "PoR snapshot submit (root only)",
+   "sync_or_async": "sync",
+   "steps": [
+    "por/routes.ts:313-315 auth + requirePor (2 SELECTs)",
+    "por/routes.ts:340-341 ECDSA verify (1-2)",
+    "por/routes.ts:378 oneAtATime in-process queue keyed by org+commitment",
+    "por/routes.ts:175-179 acceptedRow (por_snapshots_org + filter)",
+    "por/routes.ts:248-258 measureReserves: sequential eth_call per entry, 5 s timeout, outside any tx",
+    "por/routes.ts:263 svc.issue (3 statements); por/routes.ts:214-224 INSERT por_snapshots; audit INSERT"
+   ]
+  }
+ ],
+ "per_txn_costs": [
+  {
+   "operation": "POST /v1/attestations (API key, unsigned digest)",
+   "db_reads": "3 (api_keys by key_hash; dup check on UNIQUE(org_id,leaf_bytes); SELECT * by id after insert)",
+   "db_writes": "2 autocommit INSERTs (attestations, audit_log), so 2 durable commits on the request path. Later, per leaf: 1 UPDATE + 1 INSERT merkle_proofs inside the seal tx, plus a 1/N share of 2 batch-wide UPDATEs (submitted, confirmed) and 3 batch-level commits",
+   "external_calls": "none on request path; per batch: 1 bitcoind submit, plus RPC polls until confirmed (regtest also generate(1))",
+   "crypto_ops": "SHA-256 of the API key (computed twice); per batch about 2N SHA-256 for the tree",
+   "sync_cpu_notes": "JSON.stringify descriptor; per batch N proof extractions + JSON.stringify of siblings/directions. Signed variant adds 1 issuer_keys read, JCS + signature verify",
+   "evidence": [
+    "auth.ts:57-59",
+    "service.ts:164-184",
+    "audit.ts:114-120",
+    "service.ts:490-508"
+   ]
+  },
+  {
+   "operation": "POST /v1/console/attestations (session)",
+   "db_reads": "7: sessions PK, accounts PK, quota COUNT before and after (each covers the org's whole month: range on org_created + per-row lookup for product), 3 in issue()",
+   "db_writes": "2 (INSERT attestations, INSERT audit_log)",
+   "external_calls": "none",
+   "crypto_ops": "SHA-256 of the session token",
+   "sync_cpu_notes": "Quota is check-then-insert with no atomicity",
+   "evidence": [
+    "console.ts:416-431",
+    "console.ts:182-188"
+   ]
+  },
+  {
+   "operation": "Any audited read, e.g. GET /v1/attestations, GET /v1/settlements/:id, GET bundle",
+   "db_reads": "1 auth + 1-5 query statements (bundle: att, merkle_proofs, batches, anchor_txs, all key lookups)",
+   "db_writes": "1 INSERT audit_log, awaited before the response",
+   "external_calls": "none",
+   "crypto_ops": "SHA-256 of the key",
+   "sync_cpu_notes": "Every read pays a durable commit",
+   "evidence": [
+    "server.ts:216-218",
+    "audit.ts:92-99",
+    "service.ts:655-669"
+   ]
+  },
+  {
+   "operation": "Batch worker tick (seal + anchor + confirm, N up to 1024)",
+   "db_reads": "pendingCount (cost grows with pending rows); head select (filesort over pending); pending select (up to N rows); SELECT batch; anchor_txs status range; FULL SCAN of attestations for inscriptions on every tick",
+   "db_writes": "seal tx: 1 + 2N statements (2,049 at N=1024) over 2N+1 sequential calls; anchor tx: 3 statements (one updates N rows); confirm tx: 3 statements (one updates N rows)",
+   "external_calls": "bitcoind sendrawtransaction-style submit, generate(1) on regtest, 1 RPC poll per unconfirmed anchor and per unconfirmed inscription, sequential",
+   "crypto_ops": "about 2N SHA-256 (tree) + N proofs",
+   "sync_cpu_notes": "Tree build and N JSON proof serialisations run on the event loop; at most one batch per tick",
+   "evidence": [
+    "worker.ts:71-99",
+    "service.ts:474-508",
+    "service.ts:526-534",
+    "service.ts:564-568"
+   ]
+  },
+  {
+   "operation": "POST /v1/settlements (synchronous half)",
+   "db_reads": "about 16: api key, subscription, institution, idempotency, payment dup, quote, BFI institution, payment re-read after insert, 3 MAX(seq) + 3 event re-reads, transition SELECT* x2, notify SELECT* + subscription",
+   "db_writes": "about 8 autocommits: INSERT payment, 3 INSERT events, UPDATE state, INSERT webhook, REPLACE idempotency, INSERT audit",
+   "external_calls": "none (pipeline continues via setImmediate)",
+   "crypto_ops": "4-5 ECDSA P-256 verifies (bank authorization, 3 evidence elements, mode B fields assertion); about 3 ECDSA signs (2 platform events, 1 webhook); SHA-256 of the body",
+   "sync_cpu_notes": "JSON.stringify/parse of several-KB request; request_body stored verbatim",
+   "evidence": [
+    "remit/routes.ts:391-422",
+    "orchestrator.ts:147-293",
+    "store.ts:252-264",
+    "store.ts:271-294"
+   ]
+  },
+  {
+   "operation": "Remit payment full lifecycle (accept to EVIDENCE_ANCHORED)",
+   "db_reads": "about 90 (SELECT * of the payment row about 30 times; 4 full reads of institutions; events read 2x in full for reconcile and package)",
+   "db_writes": "about 60 statements: about 33 rows inserted (14 remit_events, about 11 webhook rows, payment, quote, travel_rule, idempotency, attestation, merkle_proof, at least 2 audit) + about 27 UPDATEs (7 transitions, 6 patches, about 11 webhook delivery updates, about 3 attestation status updates). Nearly all autocommit, so about 60 commits",
+   "external_calls": "3-4 BFI partner calls, 1 settlement-wallet EVM transfer, 1 notifySettlement, about 11 outbound webhook POSTs, a share of 1 Bitcoin anchor",
+   "crypto_ops": "about 12 ECDSA signs, about 8 verifies, 1 JWE encryption (mode A), several SHA-256 + JCS",
+   "sync_cpu_notes": "keyring() converts every institution SPKI to JWK per reconcile; package_json repeats all events and the whole registry snapshot",
+   "evidence": [
+    "orchestrator.ts:129-136",
+    "orchestrator.ts:677-736",
+    "orchestrator.ts:762-766",
+    "registry.ts:61-62",
+    "evidence.ts:150",
+    "evidence.ts:223"
+   ]
+  },
+  {
+   "operation": "Remit worker tick (every 2 s)",
+   "db_reads": "anchoredPending: full scan of remit_payments JOIN attestations (no state-led index); deliverDue: range on (status,next_attempt_at) + filesort by created_at over all due rows, LIMIT 20",
+   "db_writes": "per promoted payment about 10 statements; 1 UPDATE per delivery attempt",
+   "external_calls": "up to 20 sequential webhook POSTs (5 s timeout each)",
+   "crypto_ops": "1 ECDSA sign per promotion event + webhook",
+   "sync_cpu_notes": "",
+   "evidence": [
+    "store.ts:307-313",
+    "webhook.ts:77-80",
+    "main.ts:102"
+   ]
+  },
+  {
+   "operation": "GET /v1/console/dashboard",
+   "db_reads": "about 27 statements (5 then 4 concurrently). Over the org's whole history: 4 on attestations (status!='confirmed', GROUP BY status, statement IS NOT NULL, issuer_trust), remit_payments GROUP BY state (index-only), today's sum via substr(created_at) (no index use). Full table scan: remit_webhook_deliveries by org (no org_id index). Square of the exhausted-webhook count: correlated subquery",
+   "db_writes": "0 (silent read)",
+   "external_calls": "none",
+   "crypto_ops": "none",
+   "sync_cpu_notes": "JSON.parse of manifests and snapshot reserves",
+   "evidence": [
+    "console.ts:694-705",
+    "console.ts:708-719",
+    "console.ts:752",
+    "console.ts:777-779",
+    "console.ts:858-864"
+   ]
+  },
+  {
+   "operation": "GET /v1/settlements (ledger search)",
+   "db_reads": "1 auth + COUNT(*) under the same filters on every page + page SELECT * (up to 101 rows) + up to 100 per-row attestation lookups (Promise.all). With q: UPPER LIKE '%q%' on 3 columns + 3 EXISTS with up to 7 JSON_EXTRACT per event row, done for both the COUNT and the page",
+   "db_writes": "1 audit INSERT",
+   "external_calls": "none",
+   "crypto_ops": "none",
+   "sync_cpu_notes": "MySQL parses JSON text per event row per query",
+   "evidence": [
+    "store.ts:141-218",
+    "remit/routes.ts:431-456"
+   ]
+  },
+  {
+   "operation": "POST /v1/por/snapshots (root only)",
+   "db_reads": "about 6 (key, subscription, institution, acceptedRow, dup, get)",
+   "db_writes": "3 (INSERT attestation, INSERT por_snapshots, INSERT audit)",
+   "external_calls": "1 eth_call per declared reserve entry (sequential, 5 s timeout)",
+   "crypto_ops": "1-2 ECDSA verifies, JCS + SHA-256 commitment",
+   "sync_cpu_notes": "In-process queue per (org, commitment)",
+   "evidence": [
+    "por/routes.ts:313-395"
+   ]
+  },
+  {
+   "operation": "GET /v1/public/por/snapshots/:id and free-tier GET /v1/public/anchors/:id",
+   "db_reads": "6 / 1 primary-key reads",
+   "db_writes": "0 (anonymous, not audited)",
+   "external_calls": "none",
+   "crypto_ops": "none",
+   "sync_cpu_notes": "",
+   "evidence": [
+    "por/routes.ts:479-492",
+    "service.ts:380-384"
+   ]
+  },
+  {
+   "operation": "POST /v1/public/anchors (free tier, at most 500/h globally)",
+   "db_reads": "2 (dup, get); on a duplicate digest + 1 FULL TABLE SCAN (findPublicByDigest)",
+   "db_writes": "1 INSERT attestations",
+   "external_calls": "none",
+   "crypto_ops": "none",
+   "sync_cpu_notes": "",
+   "evidence": [
+    "public.ts:137-145",
+    "service.ts:387-391"
+   ]
+  }
+ ],
+ "capacity_findings": [
+  {
+   "id": "DB-01",
+   "title": "Batch worker reads the whole attestations table on every tick (inscription poll)",
+   "severity": "blocker",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "claim": "refreshConfirmations runs on every worker tick and filters attestations on kind/status/reveal_txid. No index starts with any of those columns, so every tick reads the whole table. Ticks never overlap and seal one batch each, so the scan time sets the tick period and the sealing rate. Throughput falls as the table grows, and organisation rows never expire.",
+   "evidence": [
+    "service.ts:566-567 \"SELECT id, reveal_txid, reveal_tx_hex, leaf_bytes FROM attestations \" + \"WHERE kind = 'inscription' AND status != 'confirmed' AND reveal_txid IS NOT NULL\"",
+    "db.ts:693-696 attestation indexes lead on batch_id, expires_at or org_id only",
+    "worker.ts:99 const promoted = await this.svc.refreshConfirmations();",
+    "worker.ts:68 if (this.running) return; // a slow chain must not overlap ticks"
+   ],
+   "quantification": "The table grows 86.4k / 8.64M / 86.4M rows a day at T1/T2/T3. Sealing rate is about 1024 / max(3 s, scan time): a 30 s scan caps it near 34 leaves/s, below T2's 100/s. At T1 confirmations slow down over months; at T2 the backlog spirals within weeks.",
+   "fix": "Poll only status='submitted' rows through an index (kind, status) or a small pending-inscriptions table. Better, keep pending inscriptions out of the attestations scan altogether.",
+   "confidence": "high",
+   "affects": "Attest batching and confirmations; IO for all OLTP traffic"
+  },
+  {
+   "id": "DB-02",
+   "title": "sealBatch writes one row at a time, one batch per tick, selection not served by an index",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T3",
+   "claim": "Each seal is one transaction of 2N+1 sequential statements. Per leaf it runs an UPDATE by primary key and an INSERT into merkle_proofs. Only one batch of up to 1,024 leaves is sealed per tick. The head and pending selections order by (created_at, rowseq), but rowseq is not in any (batch_id, ...) index, so MySQL sorts all pending rows each time. Rows are not claimed with FOR UPDATE / SKIP LOCKED, and the UPDATE does not check batch_id IS NULL. Two concurrent sealers are stopped only by the merkle_proofs primary key, which makes the second fail with a duplicate-key error.",
+   "evidence": [
+    "service.ts:503-506 for (const [i, r] of pending.entries()) { ... await upd.run(batchId, i, r.id); await ins.run(r.id, batchId, i, JSON.stringify(p.siblings), ...",
+    "service.ts:476 WHERE batch_id IS NULL ORDER BY created_at ASC, ${ord} ASC LIMIT 1",
+    "db.ts:694 CREATE INDEX attestations_open_order ON attestations(batch_id, created_at)",
+    "worker.ts:74-77 // One batch per tick ... const batchId = await this.svc.sealBatch();"
+   ],
+   "quantification": "N=1024 means 2,049 calls per seal (about 0.2-0.5 s on localhost) holding 1 of 10 connections. Maximum sustained sealing is 1024 leaves per 3 s tick, about 341/s. At T3 the backlog grows by at least 659/s, and pendingCount and both selections slow down every tick. merkle_proofs stores about 0.86 KB per leaf (10 siblings x 66 chars) versus 64 B per leaf if the tree were stored once per batch.",
+   "fix": "Use a multi-row INSERT for proofs and a single UPDATE ... WHERE id IN (...). Add an index (batch_id, org_id, rowseq) or order by rowseq alone. Seal several batches per tick, claiming rows with SKIP LOCKED. Store each batch's tree once and derive proofs at export.",
+   "confidence": "medium",
+   "affects": "Attest throughput ceiling and merkle_proofs storage"
+  },
+  {
+   "id": "DB-03",
+   "title": "One 10-connection pool, unbounded wait queue, no acquire timeout, analytics on the same pool",
+   "severity": "major",
+   "kind": "configuration",
+   "bites_at_tier": "T2",
+   "claim": "Every statement for API traffic, console analytics, workers and N+1 fan-outs shares 10 connections. A request that cannot get a connection waits indefinitely: queueLimit is 0 and mysql2 has no acquire timeout. Each statement holds a connection for a round trip plus, for writes, a durable commit, because almost everything autocommits. Dashboard and ledger requests use Promise.all and take 5 to 100 queued slots at once.",
+   "evidence": [
+    "db.ts:942-943 waitForConnections: true, connectionLimit: 10,",
+    "mysql2 lib/pool_config.js:24-26 queueLimit default 0",
+    "console.ts:694 const [...] = await Promise.all([ (5 lifetime COUNTs)",
+    "remit/routes.ts:441 const data = await Promise.all(page.items.map(async (p) => ({ ... await d.svc.get(...)"
+   ],
+   "quantification": "Ceiling is about 10 / (connection-hold time per request). Attest API: 5 statements incl. 2 commits, about 1-5 ms, so roughly 2,000-10,000 req/s at most before other costs. Remit: about 60 commits per payment, so T2 needs about 6,000 commits/s, at or beyond what 10 connections with fsync per commit can do. A dashboard holds 5 connections for as long as its whole-history COUNTs run.",
+   "fix": "Make the pool size configurable and larger (30-50, within max_connections). Set queueLimit and request deadlines. Give analytics a separate pool or a replica. Group each request's writes into one transaction.",
+   "confidence": "medium",
+   "affects": "Every request's latency under load; worker progress"
+  },
+  {
+   "id": "DB-04",
+   "title": "Synchronous audit INSERT on every audited request, including API reads",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "claim": "The router waits for the audit_log INSERT to commit before sending the response. Only console screen GETs and health probes are exempt, so every keyed API read becomes a write plus a durable commit. audit_log is keyed on random UUIDs and never purged.",
+   "evidence": [
+    "server.ts:216-218 if (this.onDoneHook) { try { await this.onDoneHook(ctx, reply ? reply.status : res.statusCode, ...",
+    "routes.ts:132-133 if (!ctx.audit || !isAudited(method, ctx.path)) return; await recordAudit(d.db, ctx.audit, {...})",
+    "audit.ts:92-96 SILENT_READS = '/healthz', '/readyz', '/v1/meta', '/v1/console/audit', ...",
+    "audit.ts:118 ).run(randomUUID(), actor.orgId, new Date().toISOString(), ..."
+   ],
+   "quantification": "At least one row per API call: at least 86k/day (T1), 8.6M/day (T2), 86M/day (T3); about 0.45 KB/row with indexes, so at least 14 GB/yr, 1.4 TB/yr and 14 TB/yr. Bank status polling multiplies it.",
+   "fix": "Buffer audit rows and write them asynchronously in multi-row INSERTs (or ship them to a log pipeline). Exempt or sample idempotent GETs. Partition by month and archive.",
+   "confidence": "high",
+   "affects": "Latency and commit rate of every API call; storage"
+  },
+  {
+   "id": "DB-05",
+   "title": "Every table except the free tier grows without limit; no purge, partitioning or archive",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "claim": "Organisation records never expire: issue() refuses an expiry and a boot-time UPDATE clears old expiries. The only purge deletes free-tier attestations hourly. purgeExpiredSessions exists but nothing calls it. Delivered webhooks, idempotency rows, expired quotes, events and audit rows are never deleted, and no table is partitioned.",
+   "evidence": [
+    "service.ts:157-158 if (opts.expiresAt !== undefined && opts.source !== 'public') { throw new Error('only free-tier records expire; ...",
+    "worker.ts:104-106 retention sweep -> this.svc.purgeExpiredPublic()",
+    "account.ts:208-209 export async function purgeExpiredSessions(db: Db) ... DELETE FROM sessions WHERE expires_at <= ? (no caller in src)",
+    "store.ts:351 REPLACE INTO remit_idempotency ... (no TTL)"
+   ],
+   "quantification": "Attest: about 3 rows and about 3 KB per attestation incl. indexes (attestations about 1.1 KB, merkle_proofs about 1.4 KB, audit about 0.45 KB), so about 0.26 GB/day (95 GB/yr) at T1, 26 GB/day (9.5 TB/yr) at T2, 260 GB/day (95 TB/yr) at T3. Remit: about 33 rows and about 60-90 KB per payment, so about 5-8 GB/day at T1 and 0.5-0.8 TB/day at T2. The box has 572 GB free. Binlog and backups are extra.",
+   "fix": "Range-partition append-only tables by month. Archive cold partitions to cheaper storage rather than deleting, since organisation records are kept. Add TTL purges for idempotency (e.g. 7-30 days), delivered webhooks, expired quotes and sessions (wire up purgeExpiredSessions).",
+   "confidence": "medium",
+   "affects": "Disk, buffer-pool hit rate, backup/restore time, schema-change time"
+  },
+  {
+   "id": "DB-06",
+   "title": "Random UUID string primary keys and text-encoded binary/time columns, with a stock 128 MB buffer pool",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "claim": "Hot tables are keyed on randomUUID() stored as VARCHAR(64), so every insert lands on a random clustered-index page. That 36-byte key is repeated in every secondary index. Digests are hex CHAR(64), timestamps VARCHAR(40), ids text. The MySQL config file does not set innodb_buffer_pool_size, so the 128 MB default applies (live value unverified) on a 15 GB box. Once tables outgrow memory, inserts turn into random disk reads.",
+   "evidence": [
+    "db.ts:434 id VARCHAR(64) NOT NULL PRIMARY KEY,  (with service.ts:171 const id = randomUUID();)",
+    "db.ts:437 leaf_bytes CHAR(64) NOT NULL,  db.ts:443 created_at VARCHAR(40) NOT NULL,",
+    "audit.ts:118 randomUUID() as audit_log PK; store.ts:257 randomUUID() as remit_events PK",
+    "/etc/mysql/mysql.conf.d/mysqld.cnf sets only bind-address, key_buffer_size, max_binlog_size, log_error"
+   ],
+   "quantification": "attestations carries about 540 B of secondary-index data per row across 6 indexes. Attest data passes 128 MB within the first day at T1 (0.26 GB/day). UNIQUE(org_id, leaf_bytes) also receives random inserts within each org.",
+   "fix": "Use ordered keys (UUIDv7, or a BIGINT primary key with the UUID as a unique secondary), BINARY(16) ids, BINARY(32) digests and DATETIME(3). Size the buffer pool to RAM, ideally on a dedicated DB host. Needs a migration plan, because the tables never shrink.",
+   "confidence": "medium",
+   "affects": "Insert latency and IO for attestations, merkle_proofs, audit_log, remit_events, webhook rows"
+  },
+  {
+   "id": "DB-07",
+   "title": "Remit uses about 150 statements and about 60 commits per payment; the payment row is rewritten about 13 times; the registry is read in full 4 times",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "claim": "Each orchestrator step is built from small autocommit helpers. transition does SELECT *, UPDATE, SELECT *; notify does SELECT *, a subscription read and a webhook INSERT; appendEvent does MAX(seq), INSERT, SELECT. registry.list(), a full ordered read of institutions, runs for keyring, snapshot and twice in requireSettlementEntity. The evidence package stores the whole registry snapshot and a copy of every event inside the payment row.",
+   "evidence": [
+    "store.ts:291-293 UPDATE remit_payments SET state = ?, updated_at = ? WHERE id = ? ... return (await this.get(paymentId))!;",
+    "orchestrator.ts:130-131 const fresh = (await this.d.store.get(p.id))!; await this.d.outbox.enqueue(p.org_id, await this.webhookUrl(p.org_id), ...",
+    "registry.ts:62 SELECT * FROM institutions ORDER BY created_at",
+    "evidence.ts:223 trust_registry: await registry.snapshot(),"
+   ],
+   "quantification": "Commits per second: about 60 at T1, 6,000 at T2, 60,000 at T3. The full payment row (20-40 KB when finished) is read back about 30 times per payment. Institutions read per payment = 4 x the platform-wide institution count, and package_json grows about 0.5-0.7 KB per registered institution.",
+   "fix": "Run one transaction per step (event, state change and outbox row together) and avoid the re-reads. Cache the registry in memory with version invalidation. Reference the registry snapshot by hash/version instead of embedding it. Keep large JSON off the hot row.",
+   "confidence": "medium",
+   "affects": "Remit throughput, commit rate, storage, binlog volume"
+  },
+  {
+   "id": "DB-08",
+   "title": "Remit/PoR state changes are unguarded read-check-write with no transactions, no compare-and-set and no retry",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "claim": "Event sequence numbers come from MAX(seq)+1 with no lock. State changes are checked in JavaScript and then written with an UPDATE that does not include the expected old state. Duplicate checks are read-then-insert. Nothing uses SELECT ... FOR UPDATE, SKIP LOCKED or deadlock retry. A concurrent BFI callback, the async pipeline and the worker can therefore collide: the loser gets a UNIQUE(payment_id, seq) violation, which surfaces as HTTP 500, or a state is lost or moves backwards. SQLite runs one statement at a time, so the tests cannot surface this.",
+   "evidence": [
+    "store.ts:254-256 'SELECT COALESCE(MAX(seq), -1) + 1 AS n FROM remit_events WHERE payment_id = ?' then INSERT (no tx, no lock)",
+    "store.ts:291 'UPDATE remit_payments SET state = ?, updated_at = ? WHERE id = ?' (no AND state = ?)",
+    "orchestrator.ts:152 if (await this.d.store.get(paymentId)) { ... duplicate_payment",
+    "routes.ts:120 return new HttpResult(500, { error: 'internal', message: e instanceof Error ? e.message : String(e) });"
+   ],
+   "quantification": "Collisions grow with concurrent writers per payment: rare at T1, routine at T2. Duplicate-key races return 500 with the engine message instead of 409.",
+   "fix": "Use db.tx per step with SELECT ... FOR UPDATE on the payment row (or UPDATE ... WHERE id=? AND state=? and check affected rows). Retry on ER_DUP_ENTRY / ER_LOCK_DEADLOCK and map duplicate keys to 409.",
+   "confidence": "high",
+   "affects": "Remit correctness under concurrency; error rates"
+  },
+  {
+   "id": "DB-09",
+   "title": "Webhook outbox: sorts all due rows each tick, delivers at most 20 per 2 s, never purged",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "claim": "deliverDue filters through the (status, next_attempt_at) index but orders by created_at, which is not in it, so every due row is sorted before LIMIT 20. Deliveries are sequential with a 5 s timeout, and the remit tick is fixed at 2 s. Each payment emits about 11 webhooks. Delivered and exhausted rows are never deleted.",
+   "evidence": [
+    "webhook.ts:78-79 WHERE status = 'pending' AND next_attempt_at <= ? ORDER BY created_at LIMIT 20",
+    "db.ts:703 CREATE INDEX remit_webhook_pending ON remit_webhook_deliveries(status, next_attempt_at)",
+    "main.ts:102 new RemitWorker(orchestrator, outbox, cfg.workerTickMs > 0 ? 2_000 : 0, log)",
+    "webhook.ts:85-90 await fetch(d.url, { ... signal: AbortSignal.timeout(5_000) })"
+   ],
+   "quantification": "Delivery ceiling is about 10/s. At 1 payment/s (T1), about 11 webhooks/s are queued when banks register a webhook_url, so the pending backlog grows and the per-tick sort grows with it. About 11 rows of about 0.8 KB each are kept per payment.",
+   "fix": "ORDER BY next_attempt_at (matches the index) or index (status, next_attempt_at, created_at). Deliver in parallel with SKIP LOCKED claiming. Delete delivered rows after N days.",
+   "confidence": "high",
+   "affects": "Bank notification latency; outbox table growth"
+  },
+  {
+   "id": "DB-10",
+   "title": "Console, billing and dashboard queries count each organisation's whole history on the OLTP pool",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "claim": "The dashboard counts attestations by status, product, statement and issuer_trust with no index beyond org_id, which means one clustered lookup per historical row. It sums today's payments with substr(created_at,1,10)=?, which cannot use an index. It groups remit_webhook_deliveries by org_id with no org_id index (whole-table scan) and runs a correlated subquery over exhausted deliveries whose cost grows with the square of their number. Quota runs a monthly COUNT twice per console create, and the products page runs 5 monthly COUNTs.",
+   "evidence": [
+    "console.ts:704 SELECT COUNT(*) AS n FROM attestations WHERE org_id = ? AND status != 'confirmed'",
+    "console.ts:709-710 SELECT status, COUNT(*) AS n FROM attestations WHERE org_id = ? AND product = 'attest' GROUP BY status",
+    "console.ts:752 sumRow('substr(created_at, 1, 10) = ?', today)",
+    "console.ts:778 SELECT status, COUNT(*) AS n FROM remit_webhook_deliveries WHERE org_id = ? GROUP BY status",
+    "console.ts:861-863 AND d.id = (SELECT d2.id FROM remit_webhook_deliveries d2 WHERE d2.org_id = d.org_id AND d2.payment_id = d.payment_id AND d2.status = 'exhausted' ORDER BY ..."
+   ],
+   "quantification": "At T2 one organisation reaches about 260M attestations in a month and about 3B in a year, so each dashboard view runs 4+ COUNTs over billions of rows on up to 5 pooled connections. Quota cost grows through the month (up to about 260M rows at T2).",
+   "fix": "Keep per-org/day/product/status counter or rollup tables, updated in the write transaction. Use created_at ranges instead of substr. Index remit_webhook_deliveries(org_id, status, payment_id, created_at). Move analytics to a replica or separate pool.",
+   "confidence": "high",
+   "affects": "Console responsiveness and pool starvation of API traffic"
+  },
+  {
+   "id": "DB-11",
+   "title": "API request paths with scans or per-row work: free-tier duplicate lookup, ledger search, daily manifest, tx view",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "claim": "findPublicByDigest omits org_id, so UNIQUE(org_id, leaf_bytes) cannot serve it and it scans the table. Ledger search runs COUNT(*) on every page and, with q, runs 3 EXISTS subqueries with JSON_EXTRACT over every event of every org payment, twice. The daily manifest filters on substr(created_at,1,10), which cannot use an index. The console tx view combines OR with IN (subquery), so it reads every org row.",
+   "evidence": [
+    "service.ts:389 SELECT * FROM attestations WHERE leaf_bytes = ? AND source = 'public'",
+    "store.ts:194-195 SELECT COUNT(*) AS n FROM remit_payments WHERE ${where.join(' AND ')}",
+    "store.ts:163 UPPER(COALESCE(JSON_EXTRACT(e.payload, '${path}'), '')) LIKE ? ESCAPE '!'",
+    "remit/routes.ts:588 SELECT id FROM remit_payments WHERE org_id = ? AND substr(created_at, 1, 10) = ? ORDER BY created_at",
+    "console.ts:481-482 WHERE org_id = ? AND (reveal_txid = ? OR commit_txid = ? OR batch_id IN (SELECT batch_id FROM anchor_txs WHERE txid = ?))"
+   ],
+   "quantification": "Ledger search with q costs O(org payments x about 14 events) JSON parses, twice per page. The manifest reads the org's entire payment history once per day (index-only). The free-tier scan is bounded by the 500/h global limit.",
+   "fix": "Add AND org_id = publicOrgId. Make the total approximate, capped or optional. Copy searchable references (UETR, bank_reference, instruction ids) into indexed columns or a lookup table. Use date ranges. Keep a txid to attestation lookup table.",
+   "confidence": "high",
+   "affects": "Bank-facing ledger and manifest endpoints; free tier"
+  },
+  {
+   "id": "DB-12",
+   "title": "Too many distinct prepared statements: dynamic SQL through execute() can exhaust server-wide max_prepared_stmt_count",
+   "severity": "moderate",
+   "kind": "configuration",
+   "bites_at_tier": "T1",
+   "claim": "Every statement goes through conn.execute(), which prepares it on the server, and mysql2 caches up to 16,000 per connection. Several queries put LIMIT values, IN-list lengths or filter combinations directly into the SQL text, so each variant becomes a separate statement. The caller controls the IN-list length through state=a,a,a,..., since duplicates are not removed. 10 connections x 16,000 exceeds MySQL's server-wide default of 16,382, which is shared with the other apps on this mysqld.",
+   "evidence": [
+    "db.ts:885 const [rows] = await conn.execute(sql, norm(p));",
+    "audit.ts:211 ORDER BY at DESC, id DESC LIMIT ${limit + 1}",
+    "store.ts:188 where.push(`state IN (${states.map(() => '?').join(', ')})`);",
+    "mysql2 lib/base/connection.js:127-131 this._statements = createLRU({ max: this.config.maxPreparedStatements, onEviction: ... statement.close()"
+   ],
+   "quantification": "Audit search alone can produce 64 filter combinations x 200 limits = 12,800 SQL texts. Settlement search variants are unbounded. Once the limit is reached, new prepares fail across the whole server (ER_MAX_PREPARED_STMT_COUNT_REACHED).",
+   "fix": "Set maxPreparedStatements to about 256. Use pool.query() for dynamic SQL, or bind LIMIT and de-duplicate and cap the state list.",
+   "confidence": "medium",
+   "affects": "Availability of the whole mysqld, including other apps on the box"
+  },
+  {
+   "id": "DB-13",
+   "title": "Several app instances or read replicas would break: workers without claims, in-process dedupe, read-your-writes assumptions",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T3",
+   "claim": "Both workers would run in every instance with no leader election or row claiming. Concurrent sealBatch runs fail on merkle_proofs duplicate keys, deliverDue sends the same webhooks twice, and promoteAnchored can append duplicate events. PoR duplicate snapshots are prevented by an in-memory Map that assumes one process. Writes are immediately read back (insert then get; the audit screen is expected to show a call right away), so those reads must stay on the primary.",
+   "evidence": [
+    "por/routes.ts:294-299 One process serves this API (see service.ts), so a queue in memory is enough to close that. const queued = new Map<string, Promise<unknown>>();",
+    "service.ts:184 return (await this.get(orgId, id))!;",
+    "audit.ts:5-8 written ... before the response goes out, so a reader who asks right after a call already sees the call",
+    "webhook.ts:77-80 deliverDue selects due rows with no claim/lock"
+   ],
+   "quantification": "Today: pm2 fork mode with 1 instance. Horizontal scale needs these fixed first.",
+   "fix": "Use an advisory lock (GET_LOCK) or a leader lease for the workers, or claim work with SKIP LOCKED plus a claimed_by column. Enforce PoR dedupe with a unique key. Route read-after-write paths to the primary and only lag-tolerant reads to replicas.",
+   "confidence": "high",
+   "affects": "Scale-out of the app tier"
+  },
+  {
+   "id": "DB-14",
+   "title": "Sharding by org_id has exceptions: global client-supplied payment ids, batch tables without an org column, one shared public org",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "beyond-T3",
+   "claim": "Almost every query filters by org_id, so org_id is the natural shard key. However, remit_payments is keyed by the bank-supplied payment_id across all tenants, and duplicate checks and partner callbacks look it up by id alone. batches, anchor_txs and merkle_proofs have no org_id. All free-tier records belong to one org, which would be a hot shard. institutions is global reference data.",
+   "evidence": [
+    "db.ts:574 id VARCHAR(128) NOT NULL PRIMARY KEY, (remit_payments)",
+    "orchestrator.ts:152 if (await this.d.store.get(paymentId)) {",
+    "orchestrator.ts:603 const p = await this.d.store.get(paymentId); (BFI callback, no org)",
+    "public.ts:137 att = await d.svc.issue(d.publicOrgId, raw.toLowerCase(), ..."
+   ],
+   "quantification": "Two banks using the same payment_id: the second gets 409 duplicate_payment, which also tells it the id exists for another tenant.",
+   "fix": "Key payments on (org_id, payment_id) or an internal id, with a routing table for callbacks. Add org_id to batches. Treat the public tier as its own shard. Replicate orgs, api_keys and institutions as reference data.",
+   "confidence": "high",
+   "affects": "Future partitioning/sharding; tenant isolation of payment ids"
+  },
+  {
+   "id": "DB-15",
+   "title": "Stock MySQL durability and binlog defaults multiply writes of large rows",
+   "severity": "moderate",
+   "kind": "configuration",
+   "bites_at_tier": "T2",
+   "claim": "No InnoDB or binlog tuning is set in /etc/mysql, so MySQL 8.0 defaults apply: fsync on every commit (flush_log_at_trx_commit=1, sync_binlog=1), binlog on with ROW format and FULL row images. Each UPDATE of a large MEDIUMTEXT row logs both the before and after image in full. The payment row is updated about 13 times, and attestations are updated 3 times each. Live values were not checked because the lead is collecting them.",
+   "evidence": [
+    "/etc/mysql/mysql.conf.d/mysqld.cnf: [mysqld] bind-address, mysqlx-bind-address, key_buffer_size = 16M, myisam-recover-options, log_error, max_binlog_size = 100M",
+    "/usr/sbin/mysqld Ver 8.0.46-0ubuntu0.24.04.5",
+    "store.ts:291 / store.ts:302 UPDATE remit_payments ... WHERE id = ? (about 13 per payment)"
+   ],
+   "quantification": "If FULL images are in use: about 0.5-1 MB of binlog per payment (13 x 2 x 20-40 KB), i.e. about 50-100 MB/s at T2. Attest about 3 KB per attestation, i.e. about 26 GB/day at T2, kept about 30 days by default.",
+   "fix": "binlog_row_image=MINIMAL or NOBLOB. Keep blobs off rows that are updated often. Size the redo log and buffer pool. Put the DB on dedicated storage and host; add monitoring.",
+   "confidence": "low",
+   "affects": "Disk IO, disk space, replication lag"
+  },
+  {
+   "id": "DB-16",
+   "title": "Schema changes run inline at boot (synchronous CREATE INDEX before the server listens)",
+   "severity": "moderate",
+   "kind": "operational",
+   "bites_at_tier": "T2",
+   "claim": "bootstrapMysql builds any missing index and adds any missing column before the server starts. There is no versioned migration step, so adding an index in a future release blocks startup for as long as the build takes, and several instances would each try it.",
+   "evidence": [
+    "db.ts:975-978 for (const { name, ddl } of MYSQL_INDEXES) { if (existing.has(name)) continue; await pool.query(ddl); }",
+    "db.ts:957-966 ADDED_COLUMNS loop runs ALTER TABLE at boot"
+   ],
+   "quantification": "On a table of 100M+ rows (about 12 days at T2), one secondary index build takes tens of minutes to hours of downtime. ADD COLUMN at the end is INSTANT in 8.0, so it is cheap.",
+   "fix": "Move schema changes to a separate versioned migration tool and run large DDL online outside the boot path.",
+   "confidence": "medium",
+   "affects": "Deploys and restarts"
+  },
+  {
+   "id": "DB-17",
+   "title": "SQLite and MySQL behave differently in ways the SQLite-based tests cannot catch",
+   "severity": "minor",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "claim": "Tests run on SQLite, which executes one statement at a time, so MySQL concurrency races (DB-08) never appear. The MySQL parity test is skipped unless STONEHASH_TEST_MYSQL_URL is set and covers few paths. Column limits differ: idem_key VARCHAR(191) while the route only checks a minimum length of 8; content_type VARCHAR(255); label and slug VARCHAR(191); TEXT tops out at 64 KB; INT is 32-bit. The db.ts comment says MEDIUMTEXT NOT NULL columns get expression defaults, but the DDL gives them none. Upsert syntax differs (INSERT IGNORE vs ON CONFLICT; ON DUPLICATE KEY with 'AS new' needs MySQL 8.0.19+). JSON_EXTRACT returns quoted JSON on MySQL. Duplicate-key errors come back as 500 with engine-specific text. One thing does match: mysql2's FOUND_ROWS flag makes affectedRows count matched rows, like SQLite.",
+   "evidence": [
+    "test/mysql-parity.test.ts:22 skip: SERVER === '' ? 'STONEHASH_TEST_MYSQL_URL not set — MySQL parity not exercised' : false",
+    "db.ts:631 idem_key VARCHAR(191) NOT NULL,  vs remit/routes.ts:396 if (typeof idemKey !== 'string' || idemKey.length < 8) {",
+    "db.ts:396-397 comment 'the three that had one use an expression default' vs db.ts:439 descriptor MEDIUMTEXT NOT NULL, (no DEFAULT)",
+    "remit/routes.ts:625-626 VALUES (?, ...) AS new ON DUPLICATE KEY UPDATE"
+   ],
+   "quantification": "Example: an Idempotency-Key longer than 191 characters makes REPLACE fail after the payment was already accepted. MySQL returns 500 and the bank's retry gets 409 duplicate_payment. SQLite accepts it.",
+   "fix": "Run the core suite against MySQL in CI, including concurrency tests. Validate input lengths against column sizes. Give MySQL TEXT columns explicit DEFAULT expressions or fix the comment.",
+   "confidence": "high",
+   "affects": "Production-only failures"
+  },
+  {
+   "id": "DB-18",
+   "title": "Inscriptions are swept into digest batches (no kind filter in batching queries)",
+   "severity": "minor",
+   "kind": "structural",
+   "bites_at_tier": "n/a",
+   "claim": "inscribe() inserts rows with status 'submitted' and batch_id NULL. pendingCount, the sealBatch head and the pending selections only filter batch_id IS NULL. Inscriptions therefore get sealed into the org's next digest batch, which writes an extra merkle_proofs row and moves their status back from 'submitted' to 'batched'. No test combines an inscription with a seal. This is a correctness issue, not a capacity one.",
+   "evidence": [
+    "service.ts:226-229 INSERT INTO attestations (... status, ... kind, commit_txid, ...) VALUES (..., 'submitted', ..., 'inscription', ...)  (no batch_id)",
+    "service.ts:476 WHERE batch_id IS NULL ORDER BY created_at ASC, ${ord} ASC LIMIT 1",
+    "grep src: no \"kind = 'digest'\" or other kind filter anywhere"
+   ],
+   "quantification": "One extra proof row and one status regression per inscription.",
+   "fix": "Add kind = 'digest' to pendingCount and both sealBatch selections, with a matching index.",
+   "confidence": "medium",
+   "affects": "Status correctness of inscriptions"
+  },
+  {
+   "id": "DB-S1",
+   "title": "Hot single-row lookups are index-served",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "claim": "API key by UNIQUE key_hash, session by primary key, duplicate digest by UNIQUE(org_id, leaf_bytes), payment by primary key, events by UNIQUE(payment_id, seq) (MAX(seq) is answered from the index alone), idempotency by primary key, subscription by UNIQUE(org_id, product), manifest by UNIQUE(org_id, date), and bundle export through four key lookups.",
+   "evidence": [
+    "db.ts:415 key_hash VARCHAR(128) NOT NULL UNIQUE,",
+    "db.ts:459 UNIQUE KEY attestations_org_leaf (org_id, leaf_bytes),",
+    "db.ts:612 UNIQUE KEY remit_events_payment_seq (payment_id, seq),",
+    "db.ts:636 PRIMARY KEY (org_id, idem_key)"
+   ],
+   "quantification": "Each costs O(log N) regardless of tier.",
+   "fix": "",
+   "confidence": "high",
+   "affects": "Auth, dedupe, payment reads"
+  },
+  {
+   "id": "DB-S2",
+   "title": "Keyset pagination with matching indexes; newest-first lists stop at LIMIT",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "claim": "Audit and settlement lists page on (at, id) and (created_at, id) keyset cursors backed by (org_id, at, id) and (org_id, created_at) with the primary key appended. The attestation list scans (org_id, created_at) newest first with LIMIT at most 500. LIKE wildcards are escaped the same way on both engines.",
+   "evidence": [
+    "audit.ts:203 where.push('(at < ? OR (at = ? AND id < ?))');",
+    "db.ts:704 CREATE INDEX audit_log_org_at ON audit_log(org_id, at, id)",
+    "store.ts:200 where.push('(created_at < ? OR (created_at = ? AND id < ?))');",
+    "service.ts:368 WHERE a.org_id = ? ORDER BY a.created_at DESC LIMIT ?"
+   ],
+   "quantification": "Unfiltered pages cost O(page size). Cost grows only when filters outside the index are selective (see DB-11).",
+   "fix": "",
+   "confidence": "high",
+   "affects": "Console and API lists"
+  },
+  {
+   "id": "DB-S3",
+   "title": "No network call inside a database transaction",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "claim": "Anchor submission, inscription broadcast, reserve measurement and partner calls all happen before or between transactions. Transactions only hold locks for local statements, and the connection is released in finally.",
+   "evidence": [
+    "service.ts:523-526 const handle = await this.backend.submit(payload); ... await this.db.tx(async (tx) => {",
+    "service.ts:222 const r = await this.inscriber(body, contentType);  (before INSERT)",
+    "db.ts:918-919 } finally { conn.release(); }"
+   ],
+   "quantification": "Lock hold time is bounded by local statement time (the seal transaction is the longest, about 0.2-0.5 s at N=1024).",
+   "fix": "",
+   "confidence": "high",
+   "affects": "Lock contention"
+  },
+  {
+   "id": "DB-S4",
+   "title": "Unique keys act as fail-closed backstops",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "claim": "Even where application checks race, the merkle_proofs primary key (one proof per attestation), UNIQUE(org_id, leaf_bytes), the remit_payments primary key, UNIQUE(payment_id, seq) and UNIQUE(org_id, date) stop duplicate facts from being stored. The losing request errors out instead of corrupting data.",
+   "evidence": [
+    "db.ts:465 attestation_id VARCHAR(64) NOT NULL PRIMARY KEY, (merkle_proofs)",
+    "db.ts:686 UNIQUE KEY remit_manifests_org_date (org_id, date),"
+   ],
+   "quantification": "",
+   "fix": "Map these errors to 409 and retry where appropriate (DB-08).",
+   "confidence": "high",
+   "affects": "Data integrity"
+  }
+ ],
+ "hard_limits": [
+  {
+   "name": "MySQL pool connectionLimit",
+   "value": "10",
+   "where": "apps/core/src/db.ts:943",
+   "configurable": "no (hardcoded)"
+  },
+  {
+   "name": "Pool wait queue (queueLimit) / acquire timeout",
+   "value": "0 = unbounded / none",
+   "where": "db.ts:942 waitForConnections: true; mysql2 3.24.6 lib/pool_config.js:24-26",
+   "configurable": "code change"
+  },
+  {
+   "name": "mysql2 connectTimeout / idleTimeout / maxIdle",
+   "value": "10000 ms / 60000 ms / 10",
+   "where": "mysql2 lib/connection_config.js:115-117, lib/pool_config.js:18-23 (defaults)",
+   "configurable": "code change"
+  },
+  {
+   "name": "Prepared statements cached per connection",
+   "value": "16000 (LRU, closed on eviction)",
+   "where": "mysql2 lib/connection_config.js:194, lib/base/connection.js:127-131",
+   "configurable": "code change (maxPreparedStatements)"
+  },
+  {
+   "name": "MySQL server defaults (stock config, live values unverified)",
+   "value": "max_prepared_stmt_count 16382; max_connections 151; innodb_buffer_pool_size 128M; REPEATABLE READ; innodb_lock_wait_timeout 50s",
+   "where": "/etc/mysql/mysql.conf.d/mysqld.cnf (no overrides), mysqld 8.0.46",
+   "configurable": "server config"
+  },
+  {
+   "name": "BATCH_MAX_LEAVES",
+   "value": "1024 (default and live)",
+   "where": "config.ts:332",
+   "configurable": "env"
+  },
+  {
+   "name": "WORKER_TICK_MS / batches per tick",
+   "value": "2000 default, 3000 live / 1 batch per tick",
+   "where": "config.ts:342; worker.ts:74-77",
+   "configurable": "env / code"
+  },
+  {
+   "name": "BATCH_FLUSH_INTERVAL_MS",
+   "value": "10000 default, 15000 live",
+   "where": "config.ts:333",
+   "configurable": "env"
+  },
+  {
+   "name": "Remit worker tick",
+   "value": "2000 ms",
+   "where": "main.ts:102",
+   "configurable": "no (hardcoded)"
+  },
+  {
+   "name": "Webhook delivery batch / timeout / backoff / attempts",
+   "value": "LIMIT 20 per tick / 5 s / 2s,10s,30s,2m,10m / 5",
+   "where": "webhook.ts:79, webhook.ts:89, webhook.ts:34, config.ts:390 (REMIT_WEBHOOK_MAX_ATTEMPTS)",
+   "configurable": "attempts via env; rest code"
+  },
+  {
+   "name": "List page sizes",
+   "value": "attestations at most 500; remit list at most 500; settlements search 1-100; audit 1-200; PoR list 100; manifests 30; dashboard LIMIT 100 and 5",
+   "where": "service.ts:369, store.ts:132, store.ts:142, audit.ts:186-189, por/routes.ts:455, remit/routes.ts:647, console.ts:728,827",
+   "configurable": "no"
+  },
+  {
+   "name": "Free-tier retention and limits",
+   "value": "30 days; 10/h per address; 500/h global; purge hourly",
+   "where": "config.ts:371 + PUBLIC_ANCHOR_MAX / PUBLIC_ANCHOR_GLOBAL_MAX; worker.ts:104",
+   "configurable": "env"
+  },
+  {
+   "name": "Session TTL",
+   "value": "14 days (expired rows deleted only when presented)",
+   "where": "account.ts:59; account.ts:188-190",
+   "configurable": "no"
+  },
+  {
+   "name": "CONSOLE_MONTHLY_QUOTA / MAX_ACTIVE_KEYS",
+   "value": "1000 / 10",
+   "where": "config.ts:350; console.ts:132",
+   "configurable": "env / no"
+  },
+  {
+   "name": "Request body cap",
+   "value": "1 MiB",
+   "where": "http/server.ts:76",
+   "configurable": "no"
+  },
+  {
+   "name": "Column size limits",
+   "value": "TEXT 64 KB; MEDIUMTEXT 16 MB; INT signed 32-bit (por leaf_count checked against 2,147,483,647); idem_key VARCHAR(191); content_type VARCHAR(255); audit path 512 (truncated)",
+   "where": "db.ts:404-689; por/routes.ts:120; audit.ts:103",
+   "configurable": "schema change"
+  }
+ ],
+ "scale_path": "T2 (about 100/s), in order: (1) Remove the per-tick full scans. Index or restructure the inscription poll (service.ts:564-568, an index on (kind, status)), give anchoredPending (store.ts:307-313) a state-led index or make it event-driven, and make deliverDue order by next_attempt_at. (2) Write batches in bulk. Use multi-row INSERT/UPDATE in sealBatch, an index (batch_id, org_id, rowseq), several batches per tick claimed with SKIP LOCKED, and one stored tree per batch instead of one proof row per leaf. (3) Make each remit step one db.tx with SELECT ... FOR UPDATE or a state check in the UPDATE, retry on duplicate-key or deadlock, map ER_DUP_ENTRY to 409, cache the registry, and stop re-reading the payment row with SELECT *. (4) Replace whole-history and monthly COUNTs (dashboard, quota, billing, ledger total) with per-org counter tables updated in the write transaction. Make date filters use ranges, add a remit_webhook_deliveries(org_id, status, payment_id, created_at) index, and scope findPublicByDigest by org_id. (5) Pool: make connectionLimit configurable and larger, set queueLimit and request deadlines, cap maxPreparedStatements at about 256 (or use query() for dynamic SQL), and give analytics a separate pool. (6) MySQL: dedicated host or at least a buffer pool sized to RAM, larger redo log, binlog_row_image MINIMAL or NOBLOB, lock-wait and deadlock monitoring. (7) Write audit rows asynchronously in batches, partition audit_log by month, and add TTL purges for idempotency, delivered webhooks, expired quotes and sessions (wire up purgeExpiredSessions). (8) Plan a type migration (ordered keys, BINARY digests and ids, DATETIME(3)); because tables never shrink, it gets costlier the later it starts. T3 (about 1,000/s), additionally: (1) Make the app tier safe to run as several instances: leader lease or GET_LOCK, or SKIP LOCKED claims, for both workers; a unique key instead of the in-process PoR queue; no other process-local assumptions. (2) Add read replicas for reads that tolerate lag (console analytics, ledger search, public verification) and keep read-after-write paths on the primary. (3) Range-partition every append-only table (attestations, merkle_proofs, audit_log, remit_events, webhook deliveries) by time and move cold partitions to an archive tier, since organisation records are never deleted. (4) Shard by org_id: add org_id to batches, anchor_txs and merkle_proofs; key payments on (org_id, payment_id) with a routing table for callbacks; give the public tier its own shard; replicate orgs, api_keys and institutions as reference data. (5) Move large JSON (package_json, request_body, event payloads, webhook bodies) to object storage or compressed columns and keep rows lean. (6) Replace table polling for the audit trail and webhook outbox with a queue or log pipeline.",
+ "open_questions": [
+  "Live MySQL variables are unverified: innodb_buffer_pool_size, innodb_flush_log_at_trx_commit, sync_binlog, log_bin/binlog_row_image, max_prepared_stmt_count, transaction_isolation, innodb_autoinc_lock_mode. The config file in /etc/mysql is stock, but SET PERSIST overrides could exist. The lead's live statistics should confirm.",
+  "Validate the size estimates against live data: AVG(LENGTH()) of remit_payments.package_json/request_body/verdict, remit_events.payload, remit_webhook_deliveries.body and merkle_proofs.siblings, plus current row counts and data_length/index_length per table. My figures (about 3 KB per attestation, about 60-90 KB per payment) are derived from code shape only.",
+  "No EXPLAIN was run (live DB off-limits). Plans for the sealBatch head/pending selections, the console tx lookup, the dashboard COUNTs and the settlement search with q should be confirmed.",
+  "Will production run more than one app instance (pm2 cluster or several hosts)? Today it is pm2 fork x1, and the workers, PoR dedupe and rate limiters all assume one process.",
+  "Will banks register webhook_url in production? That decides whether about 11 outbox rows per payment are created at all.",
+  "For the chain/backend readers: worker.ts:94-95 says a failed anchor 'stays sealed and the next tick retries it', but no query ever selects batches with status 'sealed' (grep), so a failed batch looks orphaned.",
+  "For the backend reader: the remit pipeline continues via setImmediate (orchestrator.ts:287-291), with no durable queue or resume sweep after a crash.",
+  "Does the owner's never-expire rule cover remit_events, webhook deliveries, idempotency rows, quotes and audit_log, or only attestations? The answer decides whether TTL purges or archive tiers are needed.",
+  "Is it intended that all free-tier records share one public org (a single hot partition, and the one shard that must route id-only lookups)?"
+ ]
+}

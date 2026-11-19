@@ -1,0 +1,241 @@
+{
+ "lens": "behaviour-parity",
+ "summary": "The work order states the right contracts at a high level: REST paths and codes, byte formats, the auth formats and existing data. It is not yet safe to execute from a parity standpoint, because §4 tells the sessions to rebuild rather than port line by line, and many behaviours that clients and stored rows depend on are written only in the TypeScript code. Two must be fixed before stage 1. First, every time column is TEXT and compared or sorted as text, so Java must write exactly the `toISOString()` shape (UTC, 3-digit milliseconds); `Instant.toString()` breaks purge, counting windows, batch order, list order and the TS rollback path. Second, the idempotency request hash and the SWIFT twin key are stored SHA-256 values of JS `JSON.stringify` output, not JCS. A different recipe turns retries that span the cutover into 409s and silently disables the double-acceptance check against existing rows. Next, define what 'the response matches' means: pretty JSON, absent versus null, and the extra top-level fields that error bodies carry. Also pin the HTTP edge cases so Spring defaults (405, 415, a missing-body 400, no 1 MiB cap, trailing slash) do not leak. The remaining items are smaller and should go into the order as a checklist: the test-only console-cookie fallback on the keyed API, P1363 signatures with unpadded base64url, reuse of the SDK's restricted JCS, the exact domain prefixes, batch order by rowseq, audit rows written before the response, rate-limit and CORS semantics, case handling under utf8mb4_bin, decimal handling, scrypt per-row parameters and id shapes. I recommend adding these as a '동작 동등성' table to §1, and making vectors from rows the TS core wrote (timestamps, idempotency hashes, twin keys, proofs) part of stage 0.",
+ "findings": [
+  {
+   "id": "PAR-01",
+   "severity": "must-fix",
+   "kind": "parity-trap",
+   "where_in_doc": "4장 '함께 하면 좋은 것' 두 번째 줄: '기존 표와 API의 시각 표현(ISO 문자열)은 호환을 유지합니다'",
+   "problem": "Every time column is TEXT and is compared or sorted as text: the free-tier purge (expires_at < cutoff), the quota counts (created_at >= since), batch selection, payment lists and the audit list. TS always writes `new Date().toISOString()`, which has exactly 3 fraction digits and a 'Z'. Java's `Instant.toString()` drops the fraction on whole seconds and prints 6 digits with the microsecond clock of JDK 15+ on Linux. Once rows from both are mixed, '…:03Z' sorts after '…:03.500Z' and '…:03.123456Z' sorts before '…:03.123Z'. 'ISO 문자열 호환' does not prevent this, and the TS core kept for rollback reads the same rows.",
+   "evidence": [
+    "attest/apps/core/src/db.ts:108,140-142 — created_at/expires_at are TEXT",
+    "attest/apps/core/src/service.ts:90 — const nowIso = () => new Date().toISOString()",
+    "attest/apps/core/src/service.ts:411-414 — expires_at < ? with cutoff = now.toISOString()",
+    "attest/apps/core/src/service.ts:429-433 — COUNT(*) … created_at >= ?",
+    "attest/apps/core/src/service.ts:482,488 — ORDER BY created_at ASC, rowseq ASC",
+    "attest/apps/core/src/remit/store.ts:243 — ORDER BY created_at DESC, id DESC",
+    "attest/apps/core/src/audit.ts:211 — ORDER BY at DESC, id DESC"
+   ],
+   "confidence": "high",
+   "proposed_text": "기존 표의 시각 열(TEXT)과 API의 시각 값은 JS `toISOString()`과 같은 형식, 즉 UTC·밀리초 3자리 고정 `yyyy-MM-dd'T'HH:mm:ss.SSS'Z'`로만 씁니다(`DateTimeFormatter`로 고정하고 `Instant.toString()`은 쓰지 않습니다. 정각에는 소수부가 빠지고 JDK 15 이상에서는 6자리가 나와 문자열 비교와 정렬이 깨집니다). 비교에 쓰는 파라미터(만료 기준 시각, 집계 시작 시각, 커서)도 같은 형식으로 만들고, 롤백용 TS 코어가 Java가 쓴 행을 그대로 읽을 수 있어야 합니다."
+  },
+  {
+   "id": "PAR-02",
+   "severity": "must-fix",
+   "kind": "parity-trap",
+   "where_in_doc": "1장 '깨면 안 되는 계약' 2항(바이트 단위 형식)과 5장 5단계 '이중 접수 차단'",
+   "problem": "Two digests are stored in the DB and compared with later requests, and both are computed from JS JSON.stringify, not from JCS or the raw bytes. The first is the idempotency request_hash, sha256hex(JSON.stringify(parsed body)). The second is the SWIFT twin key, sha256(JSON.stringify([\"stonehash:remit:twin:v1\", instructionId, endToEndId, valueDate, content.toLowerCase()])). If Java hashes the raw bytes or a Jackson re-serialisation (which keeps whitespace and 1.0, does not hoist integer-like keys, and writes uppercase \\u escapes), a retry with the same Idempotency-Key that spans the cutover gets 409 idempotency_conflict instead of the stored 202 replay. A SWIFT message the TS core already accepted is also no longer recognised as a twin, which allows double acceptance. Both codes are in the clients' TAKEN_ALREADY sets.",
+   "evidence": [
+    "attest/apps/core/src/remit/routes.ts:401 — const requestHash = sha256hex(JSON.stringify(body))",
+    "attest/apps/core/src/remit/routes.ts:405-409 — hash mismatch → 409 idempotency_conflict; :421 stores the 202 result",
+    "attest/apps/core/src/remit/store.ts:173-176 — twinKey = sha256(JSON.stringify(['stonehash:remit:twin:v1', instructionId, endToEndId, valueDate, normalContent]))",
+    "attest/packages/attest-remit/src/client.ts:314-315 and attest/sdks/attest-remit-java/src/main/java/com/stonehash/attest/remit/SwiftPath.java:33-34 — TAKEN_ALREADY = duplicate_payment, idempotency_conflict, duplicate_source_message, reference_reused"
+   ],
+   "confidence": "high",
+   "proposed_text": "DB에 저장돼 이후 요청과 비교되는 해시 두 가지는 기존 행과 같은 값이 나오도록 JS `JSON.stringify` 바이트를 재현합니다. ① 멱등 요청 해시 = 소문자 hex SHA-256(`JSON.stringify(파싱한 본문)`): 공백 없음, 키는 수신 순서(정수형 키는 오름차순으로 앞에, 중복 키는 첫 위치에 마지막 값), 숫자는 JS 표기(1.0→1, 1e21→1e+21), 제어문자는 소문자 `\\u00xx`. ② 쌍둥이 키 = SHA-256(`[\"stonehash:remit:twin:v1\",instructionId,endToEndId,valueDate,소문자 content]`의 JSON.stringify). 원본 바이트 해시와 Jackson 재직렬화는 쓰지 않고, TS가 저장한 행으로 만든 벡터로 확인합니다."
+  },
+  {
+   "id": "PAR-03",
+   "severity": "should-fix",
+   "kind": "parity-trap",
+   "where_in_doc": "1장 1항(REST 계약)과 2장 '프레임워크' 행",
+   "problem": "The current router answers several edge cases differently from Spring MVC defaults. An unknown path or a wrong method gets 404 not_found with the {error,message} body, where Spring sends 405 and its own error JSON. An empty body is read as {} and Content-Type is never checked, where @RequestBody gives a 400 for a missing body or a 415. Invalid JSON gives 400 invalid_json. A body over 1 MiB gives 413 payload_too_large, and Spring has no JSON size cap. A malformed percent-escape gives 400 invalid_path. A doubled slash `//` and a trailing slash still match the route, and Spring 6 turned trailing-slash matching off. A non-numeric ?limit= falls back to the default instead of a 400.",
+   "evidence": [
+    "attest/apps/core/src/http/server.ts:186 — no route → 404 { error: 'not_found', message: `no route for ${method} ${path}` } (no 405)",
+    "attest/apps/core/src/http/server.ts:304 — empty body → {}; :309 invalid_json; no content-type check anywhere in readJson",
+    "attest/apps/core/src/http/server.ts:76,301 — 1 MiB cap → 413 payload_too_large",
+    "attest/apps/core/src/http/server.ts:98-104 — 400 invalid_path; :156 and :193-196 — empty segments skipped",
+    "attest/apps/core/src/http/server.ts:318-321 — pageLimit: NaN/<1 → default, floor, min(max)"
+   ],
+   "confidence": "high",
+   "proposed_text": "Spring 기본 오류 응답(Whitelabel, 405, 415, 'Required request body is missing' 400)은 쓰지 않고 현행 라우터와 같게 답합니다. 경로나 메서드가 맞지 않으면 404 `not_found`, 빈 본문은 `{}`로 처리하고 Content-Type은 검사하지 않습니다. JSON 오류는 400 `invalid_json`, 1 MiB 초과는 413 `payload_too_large`, 잘못된 %-인코딩은 400 `invalid_path`입니다. `//`와 끝의 `/`는 같은 경로로 봅니다. `?limit=`가 숫자가 아니거나 1 미만이면 기본값, 소수면 내림, 상한을 넘으면 상한으로 처리합니다."
+  },
+  {
+   "id": "PAR-04",
+   "severity": "should-fix",
+   "kind": "gap",
+   "where_in_doc": "1장 4항(인증 호환)",
+   "problem": "On every keyed route, requireAuth falls back to the console session cookie when env=test and the console is enabled; the console's sandbox calls the same routes with a cookie. requireSession answers 403 console_disabled outside test and 401 when no session exists. Sessions are DB rows keyed by the SHA-256 of a 32-byte base64url token. The cookie carries Path=/, Expires (not Max-Age), HttpOnly, SameSite=Lax, and Secure only when configured, because the test box serves plain HTTP. A bearer-only Spring Security setup breaks the console. HttpSession or Spring Session (JSESSIONID, Secure always on) breaks login on the test box. A careless fallback would open the keyed API to cookies in live.",
+   "evidence": [
+    "attest/apps/core/src/http/routes.ts:62-77 — requireAuth: key first, then cookie only if env === 'test' && console.enabled, else 401 unauthorized",
+    "attest/apps/core/src/http/routes.ts:147-152 — requireSession: 403 console_disabled / 401",
+    "attest/apps/core/src/account.ts:168-172 — token = randomBytes(32).toString('base64url'); row stores hashToken(token)",
+    "attest/apps/core/src/account.ts:224-244 — Set-Cookie: Path=/; Expires=…; HttpOnly; SameSite=Lax; Secure only if configured"
+   ],
+   "confidence": "high",
+   "proposed_text": "키 API 인증 순서: ① `Authorization: Bearer` 키를 확인하고, ② 키가 없거나 틀리면 env=test이고 콘솔이 켜져 있을 때만 `stonehash_session` 쿠키 세션을 허용하며, ③ 둘 다 아니면 401 `unauthorized`입니다. 운영(live)에서는 쿠키로 키 API를 열지 않습니다. 세션에는 서블릿 HttpSession이나 Spring Session을 쓰지 않고 `sessions` 표(토큰의 SHA-256)를 그대로 씁니다. 쿠키는 `Path=/; Expires=…; HttpOnly; SameSite=Lax`이고 `Secure`는 설정이 켜진 경우에만 붙입니다."
+  },
+  {
+   "id": "PAR-05",
+   "severity": "should-fix",
+   "kind": "parity-trap",
+   "where_in_doc": "2장 '암호' 행: 'JCA(P-256, SHA-256, HMAC, AES-GCM)'",
+   "problem": "Every ES256 signature the core produces is a raw r||s value (64 bytes, IEEE P1363), carried as base64url without padding, and the TS verifiers use WebCrypto, which accepts P1363 only. JCA's default SHA256withECDSA emits DER (70-72 bytes), and Base64.getUrlEncoder() pads by default. A straightforward JCA port would therefore produce signatures that every TS verifier rejects. The Java SDKs already do P1363.",
+   "evidence": [
+    "attest/apps/core/src/remit/sign.ts:37 — sig: string; // base64url, raw r||s (64 bytes)",
+    "attest/apps/core/src/remit/sign.ts:45,59,75 — dsaEncoding: 'ieee-p1363'",
+    "attest/packages/attest-verify/src/statement.ts:274 — crypto.subtle.verify (P1363)",
+    "attest/sdks/attest-remit-java/src/main/java/com/stonehash/attest/remit/KeySigner.java — already uses P1363"
+   ],
+   "confidence": "high",
+   "proposed_text": "ECDSA 서명은 `SHA256withECDSAinP1363Format`으로 만든 64바이트 r||s이고, 문자열로는 패딩 없는 base64url(`Base64.getUrlEncoder().withoutPadding()`)로 씁니다. 기본 `SHA256withECDSA`(DER)는 쓰지 않습니다. 구현은 `attest-remit-java`의 `KeySigner`/`Signers`를 재사용합니다."
+  },
+  {
+   "id": "PAR-06",
+   "severity": "should-fix",
+   "kind": "parity-trap",
+   "where_in_doc": "5장 1단계(공통·형식)의 'JCS'",
+   "problem": "The JCS used here is a restricted profile: integers within ±(2^53−1) only (non-integers and larger integers throw), strings serialised exactly as JSON.stringify does, and keys sorted by UTF-16 code unit. attest-por-java's CanonicalJson implements this same profile. A generic RFC 8785 library or a Jackson-based canonicaliser would silently sign values that the TS verifier refuses, such as decimals, big integers and BigDecimal amounts. Separately, sandbox.ts has its own canonical() with different rules (non-integers allowed, undefined members dropped) for sandbox digests.",
+   "evidence": [
+    "attest/packages/attest-verify/src/jcs.ts:26-38 — throws on non-integers and unsafe integers; strings via JSON.stringify; Object.keys().sort()",
+    "attest/sdks/attest-por-java/src/main/java/com/stonehash/attest/por/CanonicalJson.java:5,18-22 — 'RFC 8785 in which the only numbers are integers within ±(2^53 - 1)'",
+    "attest/apps/core/src/http/sandbox.ts:39-45 — separate canonical(): drops undefined, JSON.stringify for any number"
+   ],
+   "confidence": "high",
+   "proposed_text": "서명과 해시에 쓰는 JCS는 `attest-por-java`의 `CanonicalJson`을 그대로 씁니다. 정수는 ±(2^53−1)만 허용하고 소수와 범위 밖 정수는 거부하며, 금액은 10진 문자열이고, 키는 UTF-16 코드 단위 순으로 정렬합니다. Jackson 출력이나 범용 RFC 8785 라이브러리로 서명 대상 바이트를 만들지 않습니다. 샌드박스 자료의 `canonical()`(sandbox.ts: 소수 허용, undefined 제외)은 규칙이 다르므로 따로 옮깁니다."
+  },
+  {
+   "id": "PAR-07",
+   "severity": "should-fix",
+   "kind": "parity-trap",
+   "where_in_doc": "1장 2항 '서명 대상 바이트(도메인 접두사 포함)'",
+   "problem": "The domain prefixes are not uniform. They use three name prefixes (stonehash, attest, bitcert), most end with '\\n' and some do not, and one is uppercase. §4 tells the sessions to rebuild rather than port, which invites tidying these up. Changing any byte breaks verification of every existing signature, bundle and stored twin key. The work order does not list them.",
+   "evidence": [
+    "attest/packages/attest-verify/src/statement.ts:54 — 'stonehash:attestation:sig:v1\\n'",
+    "attest/apps/core/src/remit/sign.ts:30 — 'stonehash:remit:event:v1\\n'; :228 — 'stonehash:evidence:digest:v1\\n'",
+    "attest/packages/attest-rules/src/signature.ts:54 — 'stonehash:evidence:sig:v1\\n'; attest/packages/attest-rules/src/audit-leaf.ts:59 — 'attest:settlement:v1\\n'",
+    "attest/packages/attest-verify/src/chain.ts:17 — 'bitcert:chain:v1\\n'",
+    "attest/apps/core/src/remit/evidence.ts:178 — 'STONEHASH-EVIDENCE-V1' (no newline); attest/apps/core/src/remit/store.ts:176 — 'stonehash:remit:twin:v1'",
+    "attest/apps/core/src/merkle/tree.ts:45-46 — LEAF_TAG 0x00, NODE_TAG 0x01"
+   ],
+   "confidence": "high",
+   "proposed_text": "| 도메인 접두사(바이트 그대로 옮기고, 이름 통일이나 개행 정리를 하지 않음) | `stonehash:attestation:sig:v1\\n`, `stonehash:remit:event:v1\\n`, `stonehash:evidence:digest:v1\\n`, `stonehash:evidence:sig:v1\\n`, `attest:settlement:v1\\n`, `bitcert:chain:v1\\n`, `STONEHASH-EVIDENCE-V1`(개행 없음), `stonehash:remit:twin:v1`(JSON 배열의 첫 원소), Merkle 태그 0x00/0x01 |"
+  },
+  {
+   "id": "PAR-08",
+   "severity": "should-fix",
+   "kind": "parity-trap",
+   "where_in_doc": "5장 2단계 '배치 워커'와 4장 '새로 만드는 표는 시간순 ID'",
+   "problem": "Sealing works as follows: the oldest pending row picks one org, and that org's pending rows are taken in order created_at ASC, rowseq ASC, up to maxLeaves. rowseq is the AUTO_INCREMENT insertion order, and it breaks ties because created_at has millisecond resolution and bursts share one value. leaf_index is the position in that order. merkle_proofs stores siblings and directions as compact JSON arrays, where 'left'/'right' is the sibling's position. The comment above sealBatch still says 'created_at, id'; the code is what counts. rowseq must stay in the schema, but it is stripped from every row because the code uses SELECT *.",
+   "evidence": [
+    "attest/apps/core/src/service.ts:473 — 'Ties break on the insertion-order column (rowid/rowseq), not on id'",
+    "attest/apps/core/src/service.ts:482,488 — ORDER BY created_at ASC, ${ord} ASC, first query picks org_id",
+    "attest/apps/core/src/service.ts:512 — JSON.stringify(p.siblings), JSON.stringify(p.directions)",
+    "attest/apps/core/src/merkle/tree.ts:30,125 — Direction = 'left' | 'right' (position of the sibling)",
+    "attest/apps/core/src/db.ts:452 — rowseq BIGINT NOT NULL AUTO_INCREMENT UNIQUE; :903-908 — strip() deletes rowseq from every row",
+    "attest/apps/core/src/remit/store.ts:243 — SELECT * FROM remit_payments …"
+   ],
+   "confidence": "high",
+   "proposed_text": "배치 봉인: 가장 오래된 대기 행의 org 하나를 고르고, 그 org의 대기 행을 `created_at ASC, rowseq ASC` 순으로 최대 maxLeaves개 담으며, leaf_index는 그 순서입니다(주석의 'created_at, id'가 아니라 코드가 기준입니다). `merkle_proofs.siblings`·`directions`는 공백 없는 JSON 배열이고, hex는 소문자, 방향은 형제의 위치(`\"left\"`|`\"right\"`)입니다. `rowseq`는 Flyway 기준선에 두되 어떤 응답이나 내보내기에도 나가지 않게 합니다(`SELECT *` 결과를 그대로 직렬화하지 않습니다)."
+  },
+  {
+   "id": "PAR-09",
+   "severity": "should-fix",
+   "kind": "ambiguity",
+   "where_in_doc": "5장 첫 문단 '같은 입력에 대한 응답이 기존 서버와 일치'과 1장 1항의 오류 본문",
+   "problem": "'일치' (match) is not defined. Bodies are written with JSON.stringify(body, null, 2): 2-space indentation, `\": \"` after keys, one array element per line. Optional members are left out (conditional spreads) rather than set to null. Error bodies carry ServiceError.detail members at the top level next to error and message, although the work order shows only {error, message}. Spring Boot's Jackson defaults are compact output, or `\" : \"` and `[ ]` with the default pretty printer, and they include nulls. Without a definition, either every textual comparison fails or a change from absent to null slips through.",
+   "evidence": [
+    "attest/apps/core/src/http/server.ts:263 — JSON.stringify(body, null, 2)",
+    "attest/apps/core/src/bundle/assemble.ts:113,116 — ...(i.contentType ? { content_type } : {}) (absent, not null)",
+    "attest/apps/core/src/http/routes.ts:118 — { ...(e.detail ?? {}), error: e.code, message: e.message }",
+    "attest/apps/core/src/service.ts:38-41 — detail = 'Members that go into the answer beside error and message — what a caller's program acts on'",
+    "attest/fixtures/bundle-schema.md:417 — 'verifier skips this section if absent'"
+   ],
+   "confidence": "medium",
+   "proposed_text": "'응답 일치'는 상태 코드, 헤더(content-type, retry-after, set-cookie, content-disposition, CORS), 파싱한 JSON이 같다는 뜻으로 정합니다. 필드가 없는 것과 `null`, 숫자와 문자열은 서로 다른 값으로 보고, 무작위 id와 시각만 가립니다. 직렬화는 `JSON.stringify(body, null, 2)`와 같은 모양(2칸 들여쓰기, `\": \"`)으로 맞추고, 현행에서 조건부로 빠지는 필드는 null로 내지 않고 생략합니다. 오류 본문에는 `error`·`message` 옆에 `ServiceError.detail` 필드를 최상위로 둡니다."
+  },
+  {
+   "id": "PAR-10",
+   "severity": "should-fix",
+   "kind": "gap",
+   "where_in_doc": "5장 2단계 '감사 기록'",
+   "problem": "The recording rules exist only in the router. Only admitted requests (ctx.audit set) are recorded, and every method is recorded except GETs on the SILENT_READS list. The path is stored without the query, with `//` collapsed, and cut to 512 characters. The status is the one about to be sent. The write is awaited before the response is written, and a failed write never fails the call. Spring's natural hooks, HandlerInterceptor.afterCompletion or a filter after the chain, run after the body is committed. A 감사 기록 read made right after an action could then miss the row.",
+   "evidence": [
+    "attest/apps/core/src/http/server.ts:33-38 — audit unset for anonymous requests = not recorded",
+    "attest/apps/core/src/http/server.ts:125-133,216-224 — hook awaited before send; hook failure logged, response still sent",
+    "attest/apps/core/src/audit.ts:92-99 — SILENT_READS and isAudited(method, path)",
+    "attest/apps/core/src/audit.ts:103 — PATH_MAX = 512; attest/apps/core/src/http/server.ts:196 — path with runs of '/' collapsed"
+   ],
+   "confidence": "high",
+   "proposed_text": "감사 기록: 인증을 통과한 요청만 남기며, `SILENT_READS` 목록에 있는 GET만 빼고 모두 기록합니다. 경로는 쿼리 없이 `//`를 합쳐 512자로 자르고, 상태 코드는 실제로 보낼 값입니다. 기록은 응답 본문을 쓰기 전에 끝냅니다(afterCompletion이나 응답 뒤 비동기 기록은 쓰지 않습니다). 기록이 실패하면 로그만 남기고 응답은 그대로 보냅니다."
+  },
+  {
+   "id": "PAR-11",
+   "severity": "should-fix",
+   "kind": "gap",
+   "where_in_doc": "missing (3장 HTTP 행이 '속도 제한'을 이름으로만 언급)",
+   "problem": "The limiters are in-memory fixed-window counters. The free tier checks per address first, then globally, before the body is parsed. It answers 429 rate_limited (per address) or 429 capacity (global), with retry-after set to the remaining seconds rounded up. X-Forwarded-For is used only when trustProxy is set. Sandbox key minting has its own limiter and answers 403 not_available outside test. CORS headers are set only on the free-tier paths: the allowed origin is echoed with vary: origin, and OPTIONS gets 204 with no body. The homepage checks for 429, and the remit adapter treats 429 as 'retry later'. A global Spring CORS config or a token-bucket library would change this behaviour.",
+   "evidence": [
+    "attest/apps/core/src/http/ratelimit.ts:20-36 — window starts at first hit; count >= max → Math.ceil((resetAt-now)/1000)",
+    "attest/apps/core/src/http/ratelimit.ts:50-60 — x-forwarded-for only when trustProxy",
+    "attest/apps/core/src/http/public.ts:81-92 — CORS 'for this surface only'; :108-124 — 429 rate_limited / capacity + retry-after",
+    "attest/apps/core/src/http/routes.ts:427-437 — sandbox keys: 403 not_available outside test; 429 rate_limited",
+    "homepage/js/attest.js:169 — === 429; attest/packages/attest-remit/src/adapter.ts:322 — 429 is not a permanent failure"
+   ],
+   "confidence": "high",
+   "proposed_text": "무료 티어와 샌드박스 가입 제한은 현행 의미 그대로 옮깁니다. 고정 창(첫 요청부터 windowMs)으로 세고, 본문을 파싱하기 전에 주소별, 전역 순서로 검사합니다. 초과하면 429 `rate_limited`(주소) 또는 `capacity`(전역)와 `retry-after`(남은 초, 올림)를 보냅니다. 주소는 `trustProxy`일 때만 X-Forwarded-For에서 읽습니다. CORS는 무료 티어 경로에만 붙이고(전역 CORS 설정은 쓰지 않음), 허용 목록의 origin을 되돌려 주며 `vary: origin`을 붙이고, OPTIONS에는 204와 빈 본문으로 답합니다. 제한은 프로세스 메모리에 있으므로 API 인스턴스는 하나로 둡니다(늘리려면 공유 저장소로 옮깁니다)."
+  },
+  {
+   "id": "PAR-12",
+   "severity": "should-fix",
+   "kind": "parity-trap",
+   "where_in_doc": "missing (2장 'DB' 행 근처)",
+   "problem": "Columns compare byte for byte under utf8mb4_bin, so the TS lowercases hex digests, UETRs and content digests before storing and before looking them up. Searches use UPPER(col) LIKE ? ESCAPE '!' with likeContains, which uppercases the needle and escapes % _ !. A Java port that stores uppercase hex (String.format(\"%02X\"), printHexBinary) or skips lowercasing on lookup misses existing rows, for example in free-tier dedupe and source references. A backslash escape or a locale-dependent toUpperCase changes which rows a search finds. The payment-event search also uses MySQL's JSON_EXTRACT, which contradicts the §2 rule against DB-specific SQL.",
+   "evidence": [
+    "attest/apps/core/src/service.ts:166 — leafBytesHex.toLowerCase() before insert; :396 — before lookup",
+    "attest/apps/core/src/http/public.ts:137,143 — raw.toLowerCase() for issue and findPublicByDigest",
+    "attest/apps/core/src/remit/routes.ts:440,446 and attest/apps/core/src/remit/store.ts:173 — uetr/content lowercased",
+    "attest/apps/core/src/db.ts:92-94 — likeContains: toUpperCase + replace(/[%_!]/g, '!$&'); attest/apps/core/src/audit.ts:200 — ESCAPE '!'",
+    "attest/apps/core/src/remit/store.ts:275 — UPPER(COALESCE(JSON_EXTRACT(e.payload, …))) LIKE ? ESCAPE '!'",
+    "attest/apps/core/src/db.ts:978 — charset: 'utf8mb4_bin'"
+   ],
+   "confidence": "high",
+   "proposed_text": "문자열 비교는 utf8mb4_bin(대소문자 구분)입니다. 따라서 입력으로 받은 hex와 UETR은 저장하거나 조회하기 전에 소문자로 바꾸고, 출력하는 hex도 소문자로 씁니다(`HexFormat.of()`; `%02X`와 `printHexBinary`는 쓰지 않음). 검색은 `UPPER(col) LIKE ? ESCAPE '!'`에 `likeContains`와 같은 패턴(`toUpperCase(Locale.ROOT)` 뒤 `%`, `_`, `!` 앞에 `!`)을 씁니다. 결제 이벤트 검색의 `JSON_EXTRACT`(remit/store.ts)는 MySQL 전용이므로 대체 방식을 따로 정합니다."
+  },
+  {
+   "id": "PAR-13",
+   "severity": "should-fix",
+   "kind": "parity-trap",
+   "where_in_doc": "4장 5항(불변 복식부기 원장, `DECIMAL(38,0)`)과 5장 5단계(송금)",
+   "problem": "Quotes are computed with exact fixed-point arithmetic on decimal strings, rounded half-up, and returned as plain strings, because the evidence that cites a quote must reproduce it. In Java, BigDecimal.toString() switches to exponent notation (0.00000001 becomes \"1E-8\", which hits any 18-decimal token amount below 1e-6), and double loses exactness. Jackson also writes BigDecimal values from the proposed DECIMAL(38,0) columns as JSON numbers, while amounts cross the API and JCS as decimal strings (the SDK's CanonicalJson refuses numeric amounts).",
+   "evidence": [
+    "attest/apps/core/src/remit/quotes.ts:4-6 — 'a sandbox quote must be reproducible in the evidence that later cites it'",
+    "attest/apps/core/src/remit/quotes.ts:41-63 — 'Fixed-point multiply: decimal strings in, decimal string out, half-up' (BigInt)",
+    "attest/sdks/attest-por-java/src/main/java/com/stonehash/attest/por/CanonicalJson.java:18-20 — an amount held as a number instead of a decimal string is refused"
+   ],
+   "confidence": "medium",
+   "proposed_text": "금액과 환율 계산은 `BigDecimal`과 `RoundingMode.HALF_UP`, 그리고 현행 `mulDecimal`의 자릿수 규칙으로 합니다. 문자열로 바꿀 때는 `toPlainString()`만 쓰고(`toString()`은 0.00000001을 \"1E-8\"로 냅니다), `double`은 쓰지 않습니다. DB 열이 `DECIMAL(38,0)`이어도 API와 JCS에서는 금액을 10진 문자열로 내보냅니다(Jackson이 숫자로 쓰지 않도록 지정합니다)."
+  },
+  {
+   "id": "PAR-14",
+   "severity": "nice-to-have",
+   "kind": "parity-trap",
+   "where_in_doc": "1장 4항 '비밀번호 해시(`scrypt$N$r$p$salt$hash`, N=32768·r=8·p=1)'",
+   "problem": "N=32768, r=8, p=1 apply only to new hashes. Verification reads N, r and p from the stored string and takes the key length from the decoded stored hash. The salt (16 bytes) and the hash are standard base64 with padding, not base64url. The password bytes are the UTF-8 of the string, with no normalisation. maxmem is 256·N·r, and absurd stored parameters return 'login failed', not a 500. Hard-coding the constants or using the URL-safe decoder would lock out accounts.",
+   "evidence": [
+    "attest/apps/core/src/account.ts:78-82 — randomBytes(16) salt; salt.toString('base64'), hash.toString('base64')",
+    "attest/apps/core/src/account.ts:91-104 — parameters from the stored string; keylen = expected.length; catch → false",
+    "attest/apps/core/src/account.ts:57 — maxmem = 256 * N * r"
+   ],
+   "confidence": "high",
+   "proposed_text": "비밀번호 검증은 저장 문자열에 들어 있는 N·r·p와 저장된 해시의 길이를 그대로 써서 계산합니다(상수로 가정하지 않음). salt(16바이트)와 hash는 표준 Base64(패딩 포함, URL-safe 아님)이고, 비밀번호는 정규화 없이 UTF-8 바이트로 넣습니다. 파라미터가 비정상이면 500이 아니라 로그인 실패로 답합니다."
+  },
+  {
+   "id": "PAR-15",
+   "severity": "nice-to-have",
+   "kind": "parity-trap",
+   "where_in_doc": "4장 '새로 만드는 표는 시간순 ID와 시각 타입 사용'",
+   "problem": "Clients see the existing id and secret shapes, and the shapes are stored. Most ids are lowercase UUID v4. Quote ids are 'QT-' plus the first 13 characters of a UUID. Evidence ids are 'EV-' plus 8 uppercase characters. Payment ids are country-marker-6 uppercase characters. An API key is the prefix plus base64url of 24 bytes (32 characters). A session token is base64url of 32 bytes: 43 characters, no padding. Java's Base64.getUrlEncoder() pads (44 characters ending in '=') unless withoutPadding() is used.",
+   "evidence": [
+    "attest/apps/core/src/remit/quotes.ts:97 — `QT-${randomUUID().slice(0, 13)}`",
+    "attest/apps/core/src/http/evidence.ts:93 — `EV-${randomUUID().slice(0, 8).toUpperCase()}`",
+    "attest/apps/core/src/remit/routes.ts:215 — `${country}-${marker}-${randomUUID().slice(0, 6).toUpperCase()}`",
+    "attest/apps/core/src/auth.ts:34 — prefix + randomBytes(24).toString('base64url')",
+    "attest/apps/core/src/account.ts:168 — randomBytes(32).toString('base64url')"
+   ],
+   "confidence": "high",
+   "proposed_text": "기존 표의 ID와 비밀값은 모양을 그대로 둡니다. 대부분 소문자 UUID v4이고, 견적은 `QT-`+UUID 앞 13자, 증빙은 `EV-`+대문자 8자, 결제는 `국가-표지-대문자 6자`, API 키는 `sk_test_`|`sk_live_`+base64url(24바이트), 세션 토큰은 base64url(32바이트, 43자)입니다. base64url은 모두 패딩 없이 씁니다(`withoutPadding()`). 시간순 ID는 새 표에만 씁니다."
+  }
+ ]
+}

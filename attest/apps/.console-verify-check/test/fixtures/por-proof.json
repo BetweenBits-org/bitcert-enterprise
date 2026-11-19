@@ -1,0 +1,59 @@
+{
+  "schema": "stonehash.por-snapshot-proof.v1",
+  "notice": "Private. With the balance export named under \"source\", this file rebuilds the snapshot and issues every account's proof. It holds no account and no balance, but it holds the seed the salts are derived from: keep it where the export is kept, and do not publish it.",
+  "snapshot_id": "c8733f39-aabb-41cb-9474-3b2835307d94",
+  "platform": "http://127.0.0.1:8931",
+  "created_at": "2026-11-18T08:10:16.259Z",
+  "statement": {
+    "schema": "stonehash.por-snapshot.v1",
+    "exchange": {
+      "institution_id": "KY-EX-C6F6EB",
+      "name": "Verify Check Exchange"
+    },
+    "asof": "2026-11-18T08:10:16Z",
+    "assets": [
+      {
+        "symbol": "BTC",
+        "decimals": 8
+      },
+      {
+        "symbol": "ETH",
+        "decimals": 18
+      },
+      {
+        "symbol": "USDT",
+        "decimals": 8
+      }
+    ],
+    "tree": {
+      "algo": "merkle-sum-sha256-v2",
+      "leaf_count": 12,
+      "root": "bd51bbfb934ea8bfb063c62f36c1dda3e84c94a43a738a1064b92b051ee21ca8",
+      "padding": "empty"
+    },
+    "totals": {
+      "BTC": "2463358024",
+      "ETH": "114050000000000000001",
+      "USDT": "25581075000000"
+    },
+    "params": {
+      "user_ref_hash": "sha256(STONEHASH-POR-USER-V1\\n + exchange_id + \\n + user_ref)",
+      "salt": "hmac-sha256(master_seed, user_ref)"
+    },
+    "generated_at": "2026-11-18T08:10:16.173Z"
+  },
+  "sig": {
+    "alg": "ES256",
+    "key_id": "KY-EX-C6F6EB",
+    "issuer": "Verify Check Exchange",
+    "sig": "BYuCIbkNsPtv274-rRZm-P3Quvn82P8-CTfBLpd48HwcU7zmn0V3Y8esAkI2OhmOJqnMFvo3VVJB93wXmUO6XA"
+  },
+  "seed": "e2dc00b3a16f210e123a41eb8adc6ee9fa7c0e423a2f4c73b37dc491fff6364a",
+  "source": {
+    "file": "balances.wide.csv",
+    "bytes": 289,
+    "sha256": "1aacc50834d279746f1dfa9d4dc21ecb511566a4af6e3fc0839952aef4b37daf",
+    "layout": "wide",
+    "amounts": "decimal"
+  }
+}

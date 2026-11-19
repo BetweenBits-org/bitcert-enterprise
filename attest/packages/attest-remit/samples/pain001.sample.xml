@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Sample only: the instruction as the importing company's system sends it to its bank. -->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09">
+  <CstmrCdtTrfInitn>
+    <GrpHdr>
+      <MsgId>VINATRD-20261117-0031</MsgId>
+      <CreDtTm>2026-11-17T08:55:12+07:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>4300.00</CtrlSum>
+      <InitgPty>
+        <Nm>Vina Trading Co., Ltd.</Nm>
+      </InitgPty>
+    </GrpHdr>
+    <PmtInf>
+      <PmtInfId>VINATRD-PMT-0031</PmtInfId>
+      <PmtMtd>TRF</PmtMtd>
+      <ReqdExctnDt>
+        <Dt>2026-11-17</Dt>
+      </ReqdExctnDt>
+      <Dbtr>
+        <Nm>Vina Trading Co., Ltd.</Nm>
+        <PstlAdr>
+          <StrtNm>Le Loi Boulevard</StrtNm>
+          <BldgNb>12</BldgNb>
+          <TwnNm>Ho Chi Minh City</TwnNm>
+          <Ctry>VN</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>0312345678</Id>
+              <SchmeNm>
+                <Cd>TXID</Cd>
+              </SchmeNm>
+            </Othr>
+          </OrgId>
+        </Id>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>VN-ACC-000777</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>DEMOVNVX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <ChrgBr>DEBT</ChrgBr>
+      <CdtTrfTxInf>
+        <PmtId>
+          <InstrId>VINATRD-INS-0031-1</InstrId>
+          <EndToEndId>PO-7803</EndToEndId>
+        </PmtId>
+        <Amt>
+          <InstdAmt Ccy="USD">4300.00</InstdAmt>
+        </Amt>
+        <CdtrAgt>
+          <FinInstnId>
+            <BICFI>DEMOSGSG</BICFI>
+          </FinInstnId>
+        </CdtrAgt>
+        <Cdtr>
+          <Nm>Pacific Supply Pte Ltd</Nm>
+          <PstlAdr>
+            <TwnNm>Singapore</TwnNm>
+            <Ctry>SG</Ctry>
+          </PstlAdr>
+        </Cdtr>
+        <CdtrAcct>
+          <Id>
+            <Othr>
+              <Id>SG-ACC-000009</Id>
+            </Othr>
+          </Id>
+        </CdtrAcct>
+        <Purp>
+          <Cd>GDDS</Cd>
+        </Purp>
+        <RmtInf>
+          <Ustrd>Invoice INV-2026-0470</Ustrd>
+          <Strd>
+            <RfrdDocInf>
+              <Nb>INV-2026-0470</Nb>
+            </RfrdDocInf>
+          </Strd>
+        </RmtInf>
+      </CdtTrfTxInf>
+    </PmtInf>
+  </CstmrCdtTrfInitn>
+</Document>

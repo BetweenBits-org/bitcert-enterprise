@@ -1,0 +1,38 @@
+{
+  "schema": "stonehash.por-snapshot.v1",
+  "exchange": {
+    "institution_id": "KR-EX-0a1b2c",
+    "name": "Sample Exchange"
+  },
+  "asof": "2026-11-16T00:00:00Z",
+  "assets": [
+    {
+      "symbol": "BTC",
+      "decimals": 8
+    },
+    {
+      "symbol": "ETH",
+      "decimals": 18
+    },
+    {
+      "symbol": "USDT",
+      "decimals": 6
+    }
+  ],
+  "tree": {
+    "algo": "merkle-sum-sha256-v2",
+    "leaf_count": 12,
+    "root": "eeb2534289eb2a990c5b526a511a5d0ebf80a06069488a9cf1b8ef905feba297",
+    "padding": "empty"
+  },
+  "totals": {
+    "BTC": "2463358024",
+    "ETH": "114050000000000000001",
+    "USDT": "255810750000"
+  },
+  "params": {
+    "user_ref_hash": "sha256(STONEHASH-POR-USER-V1\\n + exchange_id + \\n + user_ref)",
+    "salt": "hmac-sha256(master_seed, user_ref)"
+  },
+  "generated_at": "2026-11-16T01:02:03.456Z"
+}

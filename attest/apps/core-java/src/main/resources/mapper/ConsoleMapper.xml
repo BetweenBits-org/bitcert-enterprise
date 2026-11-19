@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonehash.attest.core.console.ConsoleMapper">
+
+  <!-- ── the account's organisation, its keys, its allowance ─────────────── -->
+
+  <select id="org" resultType="java.util.LinkedHashMap">
+    SELECT id, slug, name, created_at FROM orgs WHERE id = #{id}
+  </select>
+
+  <select id="newestActiveKey" resultType="java.util.LinkedHashMap">
+    SELECT id, label, created_at FROM api_keys
+     WHERE org_id = #{orgId} AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1
+  </select>
+
+  <select id="activeKeys" resultType="java.util.LinkedHashMap">
+    SELECT id, prefix, label, created_at FROM api_keys
+     WHERE org_id = #{orgId} AND revoked_at IS NULL ORDER BY created_at DESC
+  </select>
+
+  <select id="activeKeyCount" resultType="long">
+    SELECT COUNT(*) FROM api_keys WHERE org_id = #{orgId} AND revoked_at IS NULL
+  </select>
+
+  <update id="renameKey">
+    UPDATE api_keys SET label = #{label} WHERE id = #{id} AND org_id = #{orgId} AND revoked_at IS NULL
+  </update>
+
+  <update id="revokeKey">
+    UPDATE api_keys SET revoked_at = #{at} WHERE id = #{id} AND org_id = #{orgId} AND revoked_at IS NULL
+  </update>
+
+  <update id="revokeKeyById">
+    UPDATE api_keys SET revoked_at = #{at} WHERE id = #{id}
+  </update>
+
+  <!-- The order is the store's own: the screen lists them, it does not rank them. -->
+  <select id="activeIssuerKeys" resultType="java.util.LinkedHashMap">
+    SELECT id, label, algorithm, created_at FROM issuer_keys WHERE org_id = #{orgId} AND revoked_at IS NULL
+  </select>
+
+  <!-- What counts against the monthly allowance: document anchoring's own records, not the anchors the other products make. -->
+  <select id="anchorsSince" resultType="long">
+    SELECT COUNT(*) FROM attestations WHERE org_id = #{orgId} AND created_at &gt;= #{since} AND product = #{product}
+  </select>
+
+  <!-- Signing up subscribes to document anchoring; an organisation that already is stays as it is. -->
+  <insert id="subscribeToAttest">
+    INSERT IGNORE INTO subscriptions (id, org_id, product, plan, status, config, created_at)
+    VALUES (#{id}, #{orgId}, 'attest', 'sandbox', 'active', '{}', #{createdAt})
+  </insert>
+
+  <!-- Is this transaction one of the organisation's own anchors: a reveal, a commit, or the transaction of a batch it has a record in? -->
+  <select id="recordUsingTx" resultType="string">
+    SELECT id FROM attestations
+     WHERE org_id = #{orgId} AND (reveal_txid = #{txid} OR commit_txid = #{txid}
+           OR batch_id IN (SELECT batch_id FROM anchor_txs WHERE txid = #{txid}))
+     LIMIT 1
+  </select>
+
+  <!-- ── the dashboard: what needs a person ──────────────────────────────── -->
+
+  <select id="rfiWaitingCount" resultType="long">
+    SELECT COUNT(*) FROM remit_payments p
+     WHERE p.org_id = #{orgId} AND p.state = 'TRAVEL_RULE_PENDING'
+       AND EXISTS (SELECT 1 FROM remit_events e WHERE e.payment_id = p.id AND e.type = 'TRAVEL_RULE_RFI')
+       AND NOT EXISTS (SELECT 1 FROM remit_events e2 WHERE e2.payment_id = p.id AND e2.type = 'TRAVEL_RULE_RECEIVED')
+  </select>
+
+  <select id="l1HeldCount" resultType="long">
+    SELECT COUNT(*) FROM remit_payments
+     WHERE org_id = #{orgId} AND state = 'PAYOUT_IN_PROGRESS' AND evidence_level = 'L1'
+  </select>
+
+  <select id="exceptionCount" resultType="long">
+    SELECT COUNT(*) FROM remit_payments WHERE org_id = #{orgId} AND state = 'EXCEPTION'
+  </select>
+
+  <select id="webhookExhaustedCount" resultType="long">
+    SELECT COUNT(DISTINCT payment_id) FROM remit_webhook_deliveries WHERE org_id = #{orgId} AND status = 'exhausted'
+  </select>
+
+  <select id="unconfirmedAnchorCount" resultType="long">
+    SELECT COUNT(*) FROM attestations WHERE org_id = #{orgId} AND status != 'confirmed'
+  </select>
+
+  <!-- An exception with the event that recorded why it stopped. -->
+  <select id="exceptionItems" resultType="java.util.LinkedHashMap">
+    SELECT p.id, p.state, p.created_at,
+           (SELECT e.payload FROM remit_events e
+             WHERE e.payment_id = p.id AND e.type = 'EXCEPTION'
+             ORDER BY e.seq DESC LIMIT 1) AS payload
+      FROM remit_payments p
+     WHERE p.org_id = #{orgId} AND p.state = 'EXCEPTION'
+     ORDER BY p.created_at DESC, p.id DESC LIMIT #{limit}
+  </select>
+
+  <select id="rfiItems" resultType="java.util.LinkedHashMap">
+    SELECT p.id, p.state, p.created_at FROM remit_payments p
+     WHERE p.org_id = #{orgId} AND p.state = 'TRAVEL_RULE_PENDING'
+       AND EXISTS (SELECT 1 FROM remit_events e WHERE e.payment_id = p.id AND e.type = 'TRAVEL_RULE_RFI')
+       AND NOT EXISTS (SELECT 1 FROM remit_events e2 WHERE e2.payment_id = p.id AND e2.type = 'TRAVEL_RULE_RECEIVED')
+     ORDER BY p.created_at DESC, p.id DESC LIMIT #{limit}
+  </select>
+
+  <select id="heldItems" resultType="java.util.LinkedHashMap">
+    SELECT id, state, created_at FROM remit_payments
+     WHERE org_id = #{orgId} AND state = 'PAYOUT_IN_PROGRESS' AND evidence_level = 'L1'
+     ORDER BY created_at DESC, id DESC LIMIT #{limit}
+  </select>
+
+  <!-- One row per payment whose deliveries ran out: its latest, with the error that ended it. -->
+  <select id="exhaustedItems" resultType="java.util.LinkedHashMap">
+    SELECT d.payment_id, d.last_error, d.created_at FROM remit_webhook_deliveries d
+     WHERE d.org_id = #{orgId} AND d.status = 'exhausted'
+       AND d.id = (SELECT d2.id FROM remit_webhook_deliveries d2
+                    WHERE d2.org_id = d.org_id AND d2.payment_id = d.payment_id AND d2.status = 'exhausted'
+                    ORDER BY d2.created_at DESC, d2.id DESC LIMIT 1)
+     ORDER BY d.created_at DESC, d.id DESC LIMIT #{limit}
+  </select>
+
+  <!-- ── the dashboard: document anchoring ───────────────────────────────── -->
+
+  <select id="attestFunnel" resultType="java.util.LinkedHashMap">
+    SELECT status, COUNT(*) AS n FROM attestations
+     WHERE org_id = #{orgId} AND product = 'attest' GROUP BY status
+  </select>
+
+  <select id="signedCount" resultType="long">
+    SELECT COUNT(*) FROM attestations WHERE org_id = #{orgId} AND product = 'attest' AND statement IS NOT NULL
+  </select>
+
+  <select id="registeredCount" resultType="long">
+    SELECT COUNT(*) FROM attestations WHERE org_id = #{orgId} AND product = 'attest' AND issuer_trust = 'registered'
+  </select>
+
+  <!-- When each of the newest confirmed records was accepted and when its batch's transaction confirmed. -->
+  <select id="confirmPairs" resultType="java.util.LinkedHashMap">
+    SELECT a.created_at AS c, x.confirmed_at AS f
+      FROM attestations a JOIN anchor_txs x ON x.batch_id = a.batch_id
+     WHERE a.org_id = #{orgId} AND a.product = 'attest' AND a.status = 'confirmed' AND x.confirmed_at IS NOT NULL
+     ORDER BY a.created_at DESC LIMIT 100
+  </select>
+
+  <select id="recentAttest" resultType="java.util.LinkedHashMap">
+    SELECT id, leaf_bytes, kind, status, created_at FROM attestations
+     WHERE org_id = #{orgId} AND product = 'attest' ORDER BY created_at DESC LIMIT 5
+  </select>
+
+  <!-- ── the dashboard: settlements ──────────────────────────────────────── -->
+
+  <select id="remitOfDay" resultType="java.util.LinkedHashMap">
+    SELECT COUNT(*) AS n, SUM(CAST(trade_amount AS DECIMAL(18,2))) AS s
+      FROM remit_payments WHERE org_id = #{orgId} AND substr(created_at, 1, 10) = #{day}
+  </select>
+
+  <select id="remitSince" resultType="java.util.LinkedHashMap">
+    SELECT COUNT(*) AS n, SUM(CAST(trade_amount AS DECIMAL(18,2))) AS s
+      FROM remit_payments WHERE org_id = #{orgId} AND created_at &gt;= #{since}
+  </select>
+
+  <select id="remitStates" resultType="java.util.LinkedHashMap">
+    SELECT state, COUNT(*) AS n FROM remit_payments WHERE org_id = #{orgId} GROUP BY state
+  </select>
+
+  <select id="manifestVerdict" resultType="string">
+    SELECT verdict FROM remit_manifests WHERE org_id = #{orgId} AND date = #{date}
+  </select>
+
+  <select id="latestManifest" resultType="java.util.LinkedHashMap">
+    SELECT date, verdict FROM remit_manifests WHERE org_id = #{orgId} ORDER BY date DESC LIMIT 1
+  </select>
+
+  <select id="webhookStatuses" resultType="java.util.LinkedHashMap">
+    SELECT status, COUNT(*) AS n FROM remit_webhook_deliveries WHERE org_id = #{orgId} GROUP BY status
+  </select>
+
+  <select id="creditPairs" resultType="java.util.LinkedHashMap">
+    SELECT p.created_at AS c, e.created_at AS f
+      FROM remit_payments p JOIN remit_events e
+        ON e.payment_id = p.id AND e.type = 'SETTLEMENT_RECONCILED'
+     WHERE p.org_id = #{orgId} ORDER BY p.created_at DESC LIMIT 100
+  </select>
+
+  <select id="terminalBadSince" resultType="long">
+    SELECT COUNT(*) FROM remit_payments
+     WHERE org_id = #{orgId} AND created_at &gt;= #{since} AND state IN ('RETURNED', 'CANCELLED', 'EXCEPTION')
+  </select>
+
+  <select id="recentRemit" resultType="java.util.LinkedHashMap">
+    SELECT id, state, trade_amount, trade_currency, evidence_level, created_at
+      FROM remit_payments WHERE org_id = #{orgId} ORDER BY created_at DESC, id DESC LIMIT 5
+  </select>
+
+  <!-- ── the dashboard: reserve proofs ───────────────────────────────────── -->
+
+  <select id="recentSnapshots" resultType="java.util.LinkedHashMap">
+    SELECT id, status, asof, root, leaf_count, totals, reserves, attestation_id, created_at
+      FROM por_snapshots WHERE org_id = #{orgId} ORDER BY created_at DESC LIMIT 10
+  </select>
+
+  <select id="attestationStatus" resultType="string">
+    SELECT status FROM attestations WHERE id = #{id}
+  </select>
+
+  <!-- ── products: subscriptions, institutions, what the month used ──────── -->
+
+  <select id="subscriptions" resultType="java.util.LinkedHashMap">
+    SELECT id, org_id, product, plan, status, config, created_at FROM subscriptions WHERE org_id = #{orgId} ORDER BY created_at
+  </select>
+
+  <select id="subscription" resultType="java.util.LinkedHashMap">
+    SELECT id, org_id, product, plan, status, config, created_at FROM subscriptions WHERE org_id = #{orgId} AND product = #{product}
+  </select>
+
+  <update id="reactivateSubscription">
+    UPDATE subscriptions SET config = #{config}, status = 'active' WHERE id = #{id}
+  </update>
+
+  <insert id="insertSubscription">
+    INSERT INTO subscriptions (id, org_id, product, plan, status, config, created_at)
+    VALUES (#{id}, #{orgId}, #{product}, 'sandbox', 'active', #{config}, #{createdAt})
+  </insert>
+
+  <select id="institution" resultType="java.util.LinkedHashMap">
+    SELECT id, org_id, role, name, country, signing_spki, encryption_jwk, authority, created_at, console_spki
+      FROM institutions WHERE id = #{id}
+  </select>
+
+  <select id="institutionForOrg" resultType="java.util.LinkedHashMap">
+    SELECT id, org_id, role, name, country, signing_spki, encryption_jwk, authority, created_at, console_spki
+      FROM institutions WHERE org_id = #{orgId} AND role = #{role} LIMIT 1
+  </select>
+
+  <!-- The whole registry: public material of every institution. Ordered by when each was registered, and by nothing else. -->
+  <select id="institutions" resultType="java.util.LinkedHashMap">
+    SELECT id, org_id, role, name, country, signing_spki, encryption_jwk, authority, created_at, console_spki
+      FROM institutions ORDER BY created_at
+  </select>
+
+  <!-- A key or an encryption key that is not given stays as it was; everything else is replaced. -->
+  <update id="updateInstitution">
+    UPDATE institutions SET role = #{role}, name = #{name}, country = #{country}, org_id = #{orgId},
+           signing_spki = COALESCE(#{signingSpki}, signing_spki),
+           encryption_jwk = COALESCE(#{encryptionJwk}, encryption_jwk),
+           authority = #{authority} WHERE id = #{id}
+  </update>
+
+  <insert id="insertInstitution">
+    INSERT INTO institutions (id, org_id, role, name, country, signing_spki, encryption_jwk, authority, created_at)
+    VALUES (#{id}, #{orgId}, #{role}, #{name}, #{country}, #{signingSpki}, #{encryptionJwk}, #{authority}, #{createdAt})
+  </insert>
+
+  <select id="activeIssuerKey" resultType="java.util.LinkedHashMap">
+    SELECT public_key, algorithm FROM issuer_keys WHERE id = #{id} AND org_id = #{orgId} AND revoked_at IS NULL
+  </select>
+
+  <select id="issuerKey" resultType="java.util.LinkedHashMap">
+    SELECT public_key, algorithm, revoked_at FROM issuer_keys WHERE id = #{id} AND org_id = #{orgId}
+  </select>
+
+  <update id="deactivateSubscription">
+    UPDATE subscriptions SET status = 'inactive' WHERE id = #{id}
+  </update>
+
+  <update id="setSigningKey">
+    UPDATE institutions SET signing_spki = #{spki} WHERE id = #{id}
+  </update>
+
+  <update id="setConsoleKey">
+    UPDATE institutions SET console_spki = #{spki} WHERE id = #{id}
+  </update>
+
+  <select id="settlementsSince" resultType="long">
+    SELECT COUNT(*) FROM remit_payments WHERE org_id = #{orgId} AND created_at &gt;= #{since}
+  </select>
+
+  <select id="snapshotsSince" resultType="long">
+    SELECT COUNT(*) FROM por_snapshots WHERE org_id = #{orgId} AND created_at &gt;= #{since}
+  </select>
+</mapper>

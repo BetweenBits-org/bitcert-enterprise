@@ -1,0 +1,155 @@
+{
+  "schema": "stonehash.por-openings.v1",
+  "openings": [
+    {
+      "leaf_index": 0,
+      "leaf": {
+        "user_ref_hash": "14fa7b21b725f522eaa4b9c00ed172b40ad376618f7e8a143efe560e5e97eabe",
+        "salt": "2c2b00a11e5b3a1792a6a5b1b06285786234e32d1e7d1aed911906799c2719b9",
+        "balances": {
+          "BTC": "1000000",
+          "ETH": "300000000000000000",
+          "USDT": "99999999"
+        }
+      },
+      "siblings": [
+        {
+          "hash": "0504d87d18402671852081b8bac99da3f0eca72d5b60b5aa305125176ec5af20",
+          "sums": {
+            "BTC": "0",
+            "ETH": "1250000000000000000",
+            "USDT": "0"
+          },
+          "dir": "right"
+        },
+        {
+          "hash": "3c2392f3527c2b1b42604c0e1e98e5b4f2ae0c63b9301185aa71e6919ed3242e",
+          "sums": {
+            "BTC": "2112345678",
+            "ETH": "0",
+            "USDT": "4200500000"
+          },
+          "dir": "right"
+        },
+        {
+          "hash": "45dc419c3385abd58751f60794c7f305d89686d2364256c1f7ef9d3f20af7b98",
+          "sums": {
+            "BTC": "50000001",
+            "ETH": "112500000000000000000",
+            "USDT": "1510250001"
+          },
+          "dir": "right"
+        },
+        {
+          "hash": "bd9e8ea1e4c7a2d52e1cd933d481769a92d6cf35fcd93b5fed3efa563c8457d7",
+          "sums": {
+            "BTC": "300012345",
+            "ETH": "1",
+            "USDT": "250000000000"
+          },
+          "dir": "right"
+        }
+      ]
+    },
+    {
+      "leaf_index": 3,
+      "leaf": {
+        "user_ref_hash": "695ea9f119d561a56c8bf51c35b0b320f97b7593552d371cd60931d75935fa30",
+        "salt": "c9876e616c8af0c10961ed6ece92016e175a196cd432f5b3e0328125bb3c33e8",
+        "balances": {
+          "BTC": "2112345678",
+          "ETH": "0",
+          "USDT": "0"
+        }
+      },
+      "siblings": [
+        {
+          "hash": "ab45cfac7ca197c6b6de60fb27e293cd0969c833538ba82d84c4b6fd1b3c8723",
+          "sums": {
+            "BTC": "0",
+            "ETH": "0",
+            "USDT": "4200500000"
+          },
+          "dir": "left"
+        },
+        {
+          "hash": "4b11b34779c2b31bd1d3704ccf90d1a1c64c6db2cbfbfe1470b6e2f97d694f84",
+          "sums": {
+            "BTC": "1000000",
+            "ETH": "1550000000000000000",
+            "USDT": "99999999"
+          },
+          "dir": "left"
+        },
+        {
+          "hash": "45dc419c3385abd58751f60794c7f305d89686d2364256c1f7ef9d3f20af7b98",
+          "sums": {
+            "BTC": "50000001",
+            "ETH": "112500000000000000000",
+            "USDT": "1510250001"
+          },
+          "dir": "right"
+        },
+        {
+          "hash": "bd9e8ea1e4c7a2d52e1cd933d481769a92d6cf35fcd93b5fed3efa563c8457d7",
+          "sums": {
+            "BTC": "300012345",
+            "ETH": "1",
+            "USDT": "250000000000"
+          },
+          "dir": "right"
+        }
+      ]
+    },
+    {
+      "leaf_index": 7,
+      "leaf": {
+        "user_ref_hash": "b33d9adeedc452cca18f0999354d02613b1809eccc5296048b77e20c7c303604",
+        "salt": "910d5a216cea1be7175950899cbc2b1f69997a3086350857041b62fe9790f949",
+        "balances": {
+          "BTC": "1",
+          "ETH": "0",
+          "USDT": "0"
+        }
+      },
+      "siblings": [
+        {
+          "hash": "206abc20f58d97207ca458b00580acb8d7cc69df2a6c79209ade2b4d14bc1c66",
+          "sums": {
+            "BTC": "0",
+            "ETH": "0",
+            "USDT": "10000000"
+          },
+          "dir": "left"
+        },
+        {
+          "hash": "9983dc7ba2c944d2e6e8cafcaaaa67b4d4455858fb71db563e199bc180d174e7",
+          "sums": {
+            "BTC": "50000000",
+            "ETH": "112500000000000000000",
+            "USDT": "1500250001"
+          },
+          "dir": "left"
+        },
+        {
+          "hash": "334ccca930182e11baf6b634e67b34943bfc36c9001abd4be019625fa35dde68",
+          "sums": {
+            "BTC": "2113345678",
+            "ETH": "1550000000000000000",
+            "USDT": "4300499999"
+          },
+          "dir": "left"
+        },
+        {
+          "hash": "bd9e8ea1e4c7a2d52e1cd933d481769a92d6cf35fcd93b5fed3efa563c8457d7",
+          "sums": {
+            "BTC": "300012345",
+            "ETH": "1",
+            "USDT": "250000000000"
+          },
+          "dir": "right"
+        }
+      ]
+    }
+  ]
+}

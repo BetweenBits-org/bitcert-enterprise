@@ -1,0 +1,56 @@
+{
+  "policyVersion": "settlement-match-v1",
+  "currencies": [
+    "USD",
+    "USDC"
+  ],
+  "unitOfAccountGroups": [
+    [
+      "USD",
+      "USDC"
+    ]
+  ],
+  "amountTolerance": "0.00",
+  "amountToleranceBps": 0,
+  "fxReference": null,
+  "settlementWindow": "P3D",
+  "fees": {
+    "deductible": false,
+    "maxBps": 0
+  },
+  "splitPayments": {
+    "allowed": true,
+    "aggregate": true
+  },
+  "partyIDMatch": "normalized",
+  "sourceTrustLevel": "ATTESTED",
+  "requiredElements": [
+    "chainTransfer",
+    "payoutReceipts",
+    "bankInstruction",
+    "commercialDocs"
+  ],
+  "signatureRequiredElements": [
+    "payoutReceipts",
+    "bankInstruction",
+    "commercialDocs"
+  ],
+  "regulatoryFields": [
+    "originator",
+    "beneficiary",
+    "amount",
+    "currency",
+    "purpose",
+    "jurisdictionFrom",
+    "jurisdictionTo",
+    "chainTxRef",
+    "originatorAddress",
+    "beneficiaryAddress",
+    "invoiceRef",
+    "payoutRef",
+    "iso20022"
+  ],
+  "requireTravelRulePreflight": false,
+  "enforceFxQuoteWindow": false,
+  "settlementIdRequiredIn": []
+}

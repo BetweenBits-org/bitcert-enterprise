@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonehash.attest.core.attest.AttestMapper">
+
+  <!-- Every column of a record, in the table's order. `rowseq` (insertion order) is plumbing and never leaves the store. -->
+  <sql id="record">
+    a.id, a.org_id, a.leaf_bytes, a.content_type, a.descriptor, a.status, a.batch_id, a.leaf_index, a.created_at,
+    a.source, a.expires_at, a.kind, a.commit_txid, a.reveal_txid, a.reveal_tx_hex, a.body_length, a.protocol_tag,
+    a.block_height, a.block_hash, a.confirmations, a.statement, a.issuer_trust, a.product
+  </sql>
+
+  <select id="orgIdBySlug" resultType="string">
+    SELECT id FROM orgs WHERE slug = #{slug}
+  </select>
+
+  <insert id="insertOrg">
+    INSERT INTO orgs (id, slug, name, created_at) VALUES (#{id}, #{slug}, #{name}, #{createdAt})
+  </insert>
+
+  <select id="attestation" resultType="java.util.LinkedHashMap">
+    SELECT <include refid="record"/> FROM attestations a WHERE a.id = #{id} AND a.org_id = #{orgId}
+  </select>
+
+  <select id="publicAttestation" resultType="java.util.LinkedHashMap">
+    SELECT <include refid="record"/> FROM attestations a WHERE a.id = #{id} AND a.source = 'public'
+  </select>
+
+  <select id="publicAttestationByDigest" resultType="java.util.LinkedHashMap">
+    SELECT <include refid="record"/> FROM attestations a WHERE a.leaf_bytes = #{leafBytes} AND a.source = 'public' LIMIT 1
+  </select>
+
+  <select id="attestationIdByDigest" resultType="string">
+    SELECT id FROM attestations WHERE org_id = #{orgId} AND leaf_bytes = #{leafBytes}
+  </select>
+
+  <insert id="insertAttestation">
+    INSERT INTO attestations
+      (id, org_id, leaf_bytes, content_type, descriptor, status, created_at, source, expires_at, statement, issuer_trust, product)
+    VALUES (#{id}, #{orgId}, #{leafBytes}, #{contentType}, #{descriptor}, 'accepted', #{createdAt}, #{source}, #{expiresAt},
+            #{statement}, #{issuerTrust}, #{product})
+  </insert>
+
+  <!-- An inscription is recorded once its transactions are on the network: it starts `submitted`, and holds no batch. -->
+  <insert id="insertInscription">
+    INSERT INTO attestations
+      (id, org_id, leaf_bytes, content_type, descriptor, status, created_at, source, expires_at, kind,
+       commit_txid, reveal_txid, reveal_tx_hex, body_length, protocol_tag)
+    VALUES (#{id}, #{orgId}, #{leafBytes}, #{contentType}, #{descriptor}, 'submitted', #{createdAt}, #{source}, NULL, 'inscription',
+            #{commitTxid}, #{revealTxid}, #{revealTxHex}, #{bodyLength}, #{protocolTag})
+  </insert>
+
+  <select id="attestations" resultType="java.util.LinkedHashMap">
+    SELECT <include refid="record"/>, b.anchor_txid AS anchor_txid
+      FROM attestations a LEFT JOIN batches b ON b.id = a.batch_id
+     WHERE a.org_id = #{orgId}<if test="product != null"> AND a.product = #{product}</if> ORDER BY a.created_at DESC LIMIT #{limit}
+  </select>
+
+  <select id="activeIssuerKeyId" resultType="string">
+    SELECT id FROM issuer_keys WHERE org_id = #{orgId} AND public_key = #{publicKey} AND revoked_at IS NULL LIMIT 1
+  </select>
+
+  <insert id="insertIssuerKey">
+    INSERT INTO issuer_keys (id, org_id, label, public_key, algorithm, created_at)
+    VALUES (#{id}, #{orgId}, #{label}, #{publicKey}, #{algorithm}, #{createdAt})
+  </insert>
+
+  <select id="issuerKeys" resultType="java.util.LinkedHashMap">
+    SELECT id, label, algorithm, public_key, created_at FROM issuer_keys
+     WHERE org_id = #{orgId} AND revoked_at IS NULL ORDER BY created_at DESC
+  </select>
+
+  <select id="activeIssuerKeyMaterial" resultType="string">
+    SELECT public_key FROM issuer_keys WHERE id = #{id} AND org_id = #{orgId} AND revoked_at IS NULL
+  </select>
+
+  <update id="revokeIssuerKey">
+    UPDATE issuer_keys SET revoked_at = #{at} WHERE id = #{id} AND org_id = #{orgId} AND revoked_at IS NULL
+  </update>
+
+  <!-- A revoked key verifies nothing any more: the organisation's institutions that signed with it are left without one. -->
+  <update id="withdrawInstitutionKey">
+    UPDATE institutions SET signing_spki = NULL WHERE org_id = #{orgId} AND signing_spki = #{publicKey}
+  </update>
+
+  <select id="proof" resultType="java.util.LinkedHashMap">
+    SELECT leaf_index, siblings, directions FROM merkle_proofs WHERE attestation_id = #{attestationId}
+  </select>
+
+  <select id="batch" resultType="java.util.LinkedHashMap">
+    SELECT merkle_root FROM batches WHERE id = #{batchId}
+  </select>
+
+  <select id="anchor" resultType="java.util.LinkedHashMap">
+    SELECT txid, raw_tx_hex, payload_hex, status, block_height, block_hash, confirmations
+      FROM anchor_txs WHERE batch_id = #{batchId} LIMIT 1
+  </select>
+
+</mapper>

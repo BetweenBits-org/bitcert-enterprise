@@ -1,0 +1,7 @@
+[
+ {"id": "u1", "account_id": "u9", "assets": {"BTC": "1"}},
+ {"id": "u2", "assets": {"BTC": "1"}, "balances": {"BTC": "2"}},
+ {"id": "u3", "assets": {"BTC": "1", "ETH": "1", "BTC": "2"}},
+ {"id": "u4", "id": "u5", "assets": {"BTC": "1"}},
+ {"id": "u6", "assets": {"BTC": "3"}, "tier": "vip"}
+]

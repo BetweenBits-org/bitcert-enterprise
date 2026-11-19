@@ -1,0 +1,37 @@
+{
+ "note": "Made once by apps/core-java/tools/make-console-vectors.mjs and kept: salts are random. Test passwords of no account.",
+ "password": "correct horse battery staple",
+ "byTheReference": "scrypt$32768$8$1$70yiGmafbhKdGwuHus0VFw==$TyvGLY/0u7nAJWLMZVhvDFB0+cdV5PNvQ0lCbwAN8MQ=",
+ "unicode": {
+  "password": "pässwörd 😀 パスワード",
+  "stored": "scrypt$32768$8$1$HZfRCNUXH8R4hfDu72AKbg==$VLiBwRCJqXt5YqOarfJLiLhnLIJ/Dk/BdGSm11jqlLs="
+ },
+ "halfACharacter": {
+  "password": "half \ud83d of a pair",
+  "stored": "scrypt$32768$8$1$0R/m/ItHhSiifbCxccaJgg==$HQaRrWCzS2Wqdy4cWg0DZWu/3PtcnmLP5wxUguFZ8mU="
+ },
+ "empty": {
+  "password": "",
+  "stored": "scrypt$32768$8$1$LXQu9EfK+oHAbUJHMGXh+w==$SuuS5Rc9ccLGOdhTTZFuJ6Kj5WUBGDTM58v3p1SWRKk="
+ },
+ "long": {
+  "password": "pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp",
+  "stored": "scrypt$32768$8$1$MfVz60/xyuVdIqU2cB9LWg==$HmAY5Vlim9zKR/UHQVzlMQLUj+U6QxHxf9AwVVSiD4I="
+ },
+ "small": "scrypt$16$1$1$6eCrYetdqIYsK3oMeTjc3w==$JaTe7A6VYcyRvFb2XvnmXhPLGUk9ZcM4KqrYwup0uvg=",
+ "otherParameters": "scrypt$4096$4$2$6X1c5cjL/rLYX8FH7hrZiw==$WxrZSED0kQ7JB+NLli1OoUEBTbOAnJhIOpB2xtKUiVA=",
+ "r1": "scrypt$32768$1$1$9LOsCc9pVDinCe7nrOtg5A==$pfvPfYeA6BmdRg/YkhK9gHMjT4J4p4/GFgBxNA3Kd94=",
+ "digest64": "scrypt$1024$8$1$TbtiXMkA7ATS2Uj3QAPg7g==$kjhcvWJJQwSwTE32TX1Tm5nSUzgXeZSK7IIHd3sC9+ZScQ64kTFiwwWLHyCUAcNib5UupyvZ6wofrGnDkOaSMA==",
+ "digest16": "scrypt$1024$8$1$nwyeHIAzMNae+W2Pyi23TA==$wpRXzxgTpIPLCKG7rrqOpw==",
+ "digest1": "scrypt$1024$8$1$6FFAO13cgMhiQ1MRcZgGkg==$LA==",
+ "emptySalt": "scrypt$1024$8$1$$LuUGAWD7Ba2Mz6nnao7+iGXOMKSyl1FOqvqfx9KqNaM=",
+ "salt3": "scrypt$1024$8$1$YWJj$Cp8x4lOrYpsQExwBj6kr0kCQVlUv+LT6NQQ+S22DxQQ=",
+ "pAtTheEdge": "scrypt$4$8$2$65uFMBjpAfmuUJUq11LlIg==$NS7rGH/D3/9qj/ffadAJ/5gRoTyNJA5Xd7BnBhhwZQw=",
+ "zeroN": "scrypt$0$8$1$auPanW87avzCX680nb7ynQ==$fUv5Lk+ChxpWmGfBZwDqpfN6UmiCETNwMrQ1q+P8JX0=",
+ "zeroR": "scrypt$1024$0$1$EH9ovcLX4Es8HBH8W2uvZw==$PCdBcuyxuzNuW2wad7ZZpncycl0DxtZyABR7ePN4pQU=",
+ "zeroP": "scrypt$1024$8$0$aAGn8AH4IJ9ZuWvrFx2y/A==$Q+o42c0cgSWV/+0vRZj55dohlK9TLN4JssGzwJOSdaU=",
+ "doubleMemory": "scrypt$65536$8$1$Wm+NupUXNaXvKVR3YYB9YA==$/QAdW/o5Q5WfzmFjmYAqigzbKQd61oDctz/i8GwvQZk=",
+ "fourTimesTheMemory": "scrypt$131072$8$1$Fl8sKgtWIrcA9vnYwF6tAw==$riWCSf5k746YttXrLZ9dRg+JkkvPlupM30wsrND34ig=",
+ "fourTimesTheTime": "scrypt$32768$8$4$KAJcWFDaZNCVRRMVl3Gj1w==$GG2gTk9H+kUkn4iLN1BHkiB6ZxLe851r8CHcgDQFNxc=",
+ "sixteenTimesTheTime": "scrypt$1024$8$512$OTmcu6nyi/4guNMz0FHk5A==$y5PvRp8ITZz/hgitJ/aPC/S6bfLC/i/G572eS1k3D5k="
+}

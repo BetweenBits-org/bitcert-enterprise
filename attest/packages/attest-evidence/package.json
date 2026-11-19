@@ -1,0 +1,22 @@
+{
+  "name": "@stonehash/attest-evidence",
+  "version": "0.1.0",
+  "description": "Evidence bundle assembly: a reproducible ZIP carrying the sources, the policy, the verdict, the Merkle proof, the Bitcoin anchor and a printable report.",
+  "license": "MIT",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "files": ["src"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test 'test/*.test.ts'",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@stonehash/attest-verify": "workspace:*",
+    "@stonehash/attest-rules": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3"
+  }
+}

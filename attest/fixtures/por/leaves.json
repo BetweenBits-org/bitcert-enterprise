@@ -1,0 +1,98 @@
+{
+  "about": "From a ledger row to a leaf. The leaf hash is taken over the balances with every asset present (\"0\" where the account holds none).",
+  "exchange_id": "KR-EX-0a1b2c",
+  "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "assets": [
+    "BTC",
+    "ETH",
+    "USDT"
+  ],
+  "cases": [
+    {
+      "user_ref": "U-100001",
+      "balances": {
+        "BTC": "50000000",
+        "ETH": "12500000000000000000",
+        "USDT": "1500250000"
+      },
+      "user_ref_hash": "88542b15baed49b35215864b0b01d4fbb3005984da5f8a2d0ea6dff554199377",
+      "salt": "fcdae57ffe5c788313f092f0886aa7843b571f449841c2862d69e7812cb01ad9",
+      "normalised_balances": {
+        "BTC": "50000000",
+        "ETH": "12500000000000000000",
+        "USDT": "1500250000"
+      },
+      "leaf_hash": "a7246fc996f8658d13baca100fdd038057b5e5958f34da21e298b007dfa857c7"
+    },
+    {
+      "user_ref": "U-100002",
+      "balances": {
+        "BTC": "12345"
+      },
+      "user_ref_hash": "d5fe4db47c9c45fa68bf84527240150cf7dccbd6c3f669016ad9c1fadb9144e7",
+      "salt": "f08bd305376b67ce36c51e09dd873f9c7d316882a7fe2de38d8a09ac0fc495f1",
+      "normalised_balances": {
+        "BTC": "12345",
+        "ETH": "0",
+        "USDT": "0"
+      },
+      "leaf_hash": "625a1d7a4bd46976fd1a380c481402df2ad2c26e53148387c7e23a96afa0d28d"
+    },
+    {
+      "user_ref": "kim, 민수",
+      "balances": {
+        "USDT": "1"
+      },
+      "user_ref_hash": "45cd85895ca9419c5c3118603526159017329f1536ffa8c59636d763a56c5958",
+      "salt": "36cdd149a3908d3f5e92904445b81e23cdaad73aa180e55661faaeb22b114d68",
+      "normalised_balances": {
+        "BTC": "0",
+        "ETH": "0",
+        "USDT": "1"
+      },
+      "leaf_hash": "91249e97810ff42a5f414a6c6aca7198fe8b4dbd4bb93c86c31cebc9fe88097e"
+    },
+    {
+      "user_ref": "😀 account",
+      "balances": {},
+      "user_ref_hash": "8a688903951f2d49b472d52c0e6edb868c73e91ac5104a26d0efbed231f4ea0c",
+      "salt": "3987803cb25965b55a2ef75f6a842bdcbba111f5cb203385fa3e5f09b9d45cb3",
+      "normalised_balances": {
+        "BTC": "0",
+        "ETH": "0",
+        "USDT": "0"
+      },
+      "leaf_hash": "3182d3587f6cdc3b68292fee5ca6ab467dba872c46d67a9859ec898d89ec196d"
+    },
+    {
+      "user_ref": "00000000-0000-4000-8000-000000000001",
+      "balances": {
+        "ETH": "1"
+      },
+      "user_ref_hash": "a50f6365c3ef0bfe47bdcd734bdcf920473468767ddaafdc9f600bd60170df7b",
+      "salt": "58e7008dc86da549f214a5051a7632898205e0a3f3a45c233350710d0851d88d",
+      "normalised_balances": {
+        "BTC": "0",
+        "ETH": "1",
+        "USDT": "0"
+      },
+      "leaf_hash": "8c2270cd393973977dbf86be8f31e9cf81e901b00bebf38e702d78a184867e3b"
+    },
+    {
+      "user_ref": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "balances": {
+        "BTC": "0",
+        "ETH": "0",
+        "USDT": "0"
+      },
+      "user_ref_hash": "cdc9f89d73470e65892dbf5da12a7cc2c5d92f0069e545c1e2c6ac3351b266b2",
+      "salt": "e5ebc2c0de048ac182b59898c2fecd053613934190e5a77b2f86e0e07131689b",
+      "normalised_balances": {
+        "BTC": "0",
+        "ETH": "0",
+        "USDT": "0"
+      },
+      "leaf_hash": "1a0714c953cec33282dbe9d231f9122e5202a9fcb41eb7e4d6446533fced5c10"
+    }
+  ]
+}

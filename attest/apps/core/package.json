@@ -1,0 +1,28 @@
+{
+  "name": "@stonehash/attest-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "StoneHash Attest Core — single-process attestation service. Issue, batch, Merkle-aggregate, anchor to Bitcoin, export proof bundles.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node --watch src/main.ts",
+    "start": "node src/main.ts",
+    "test": "node --test 'test/*.test.ts'",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@stonehash/attest-sign": "workspace:*",
+    "@stonehash/attest-verify": "workspace:*",
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "@stonehash/attest-evidence": "workspace:*",
+    "@stonehash/attest-por": "workspace:*",
+    "@stonehash/attest-rules": "workspace:*",
+    "mysql2": "^3.24.6"
+  }
+}

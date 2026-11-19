@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonehash.attest.core.por.PorMapper">
+
+  <sql id="columns">
+    id, org_id, institution_id, status, statement, sig, commitment, root, asof, leaf_count, totals, challenge, problems, reserves,
+    attestation_id, signing_spki, created_at, updated_at
+  </sql>
+
+  <select id="snapshot" resultType="java.util.LinkedHashMap">
+    SELECT <include refid="columns"/> FROM por_snapshots WHERE id = #{id}
+  </select>
+
+  <select id="acceptedSnapshot" resultType="java.util.LinkedHashMap">
+    SELECT <include refid="columns"/> FROM por_snapshots
+     WHERE org_id = #{orgId} AND commitment = #{commitment} AND status = 'ACCEPTED' ORDER BY created_at LIMIT 1
+  </select>
+
+  <select id="snapshotsOfOrg" resultType="java.util.LinkedHashMap">
+    SELECT <include refid="columns"/> FROM por_snapshots WHERE org_id = #{orgId} ORDER BY created_at DESC LIMIT 100
+  </select>
+
+  <select id="attestationBrief" resultType="java.util.LinkedHashMap">
+    SELECT id, status FROM attestations WHERE id = #{id}
+  </select>
+
+  <insert id="insertSnapshot">
+    INSERT INTO por_snapshots
+      (id, org_id, institution_id, status, statement, sig, commitment, root, asof,
+       leaf_count, totals, challenge, reserves, attestation_id, signing_spki, created_at, updated_at)
+    VALUES (#{id}, #{orgId}, #{institutionId}, #{status}, #{statement}, #{sig}, #{commitment}, #{root}, #{asof},
+       #{leafCount}, #{totals}, #{challenge}, #{reserves}, #{attestationId}, #{signingSpki}, #{at}, #{at})
+  </insert>
+
+  <update id="rejectSnapshot">
+    UPDATE por_snapshots SET status = 'REJECTED', problems = #{problems}, updated_at = #{at} WHERE id = #{id} AND status = 'CHALLENGED'
+  </update>
+
+  <update id="verifySnapshot">
+    UPDATE por_snapshots SET status = 'VERIFIED', attestation_id = #{attestationId}, reserves = #{reserves}, updated_at = #{at}
+     WHERE id = #{id} AND status = 'CHALLENGED'
+  </update>
+
+  <select id="lockOrg" resultType="string">
+    SELECT id FROM orgs WHERE id = #{orgId} FOR UPDATE
+  </select>
+
+  <select id="snapshotsWithoutKey" resultType="java.util.LinkedHashMap">
+    SELECT id, institution_id, statement, sig FROM por_snapshots WHERE signing_spki IS NULL
+  </select>
+
+  <update id="setSnapshotKey">
+    UPDATE por_snapshots SET signing_spki = #{spki} WHERE id = #{id} AND signing_spki IS NULL
+  </update>
+</mapper>

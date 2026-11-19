@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonehash.attest.core.attest.BatchMapper">
+
+  <!--
+    "Oldest" is by created_at, and among records of the same millisecond by the insertion
+    counter (rowseq) — not by id, which is random. That order decides whose batch is next and
+    each record's leaf index, so it is part of what a proof says.
+  -->
+
+  <!--
+    What waits for a batch is a digest that has none. An inscription has no batch either and
+    never gets one: its document is on the chain in a transaction of its own, so sweeping it
+    into a tree would pay for a second transaction and take its status back to `batched`.
+  -->
+
+  <select id="pendingCount" resultType="long">
+    SELECT COUNT(*) FROM attestations WHERE batch_id IS NULL AND kind &lt;&gt; 'inscription'
+  </select>
+
+  <select id="oldestPendingOrgForUpdate" resultType="string">
+    SELECT org_id FROM attestations WHERE batch_id IS NULL AND kind &lt;&gt; 'inscription'
+     ORDER BY created_at ASC, rowseq ASC LIMIT 1 FOR UPDATE
+  </select>
+
+  <select id="pendingOfOrgForUpdate" resultType="java.util.LinkedHashMap">
+    SELECT id, leaf_bytes FROM attestations
+     WHERE batch_id IS NULL AND kind &lt;&gt; 'inscription' AND org_id = #{orgId}
+     ORDER BY created_at ASC, rowseq ASC LIMIT #{limit} FOR UPDATE
+  </select>
+
+  <insert id="insertBatch">
+    INSERT INTO batches (id, status, merkle_root, leaf_count, opened_at, sealed_at)
+    VALUES (#{id}, 'sealed', #{merkleRoot}, #{leafCount}, #{ts}, #{ts})
+  </insert>
+
+  <update id="putInBatch">
+    UPDATE attestations SET batch_id = #{batchId}, leaf_index = #{leafIndex}, status = 'batched'
+     WHERE id = #{id} AND batch_id IS NULL AND kind &lt;&gt; 'inscription'
+  </update>
+
+  <insert id="insertProof">
+    INSERT INTO merkle_proofs (attestation_id, batch_id, leaf_index, siblings, directions)
+    VALUES (#{attestationId}, #{batchId}, #{leafIndex}, #{siblings}, #{directions})
+  </insert>
+
+  <select id="batch" resultType="java.util.LinkedHashMap">
+    SELECT id, status, merkle_root FROM batches WHERE id = #{id}
+  </select>
+
+  <select id="batchForUpdate" resultType="java.util.LinkedHashMap">
+    SELECT id, status, merkle_root, anchor_txid FROM batches WHERE id = #{id} FOR UPDATE
+  </select>
+
+  <select id="oldestSealedBatch" resultType="string">
+    SELECT id FROM batches
+     WHERE status = 'sealed' <if test="except != null">AND id &lt;&gt; #{except}</if>
+     ORDER BY sealed_at ASC, id ASC LIMIT 1
+  </select>
+
+  <insert id="insertAnchorTx">
+    INSERT INTO anchor_txs (txid, batch_id, network, payload_hex, raw_tx_hex, status, submitted_at)
+    VALUES (#{txid}, #{batchId}, #{network}, #{payloadHex}, #{rawTxHex}, 'pending', #{submittedAt})
+  </insert>
+
+  <update id="markBatchSubmitted">
+    UPDATE batches SET status = 'submitted', anchor_txid = #{txid} WHERE id = #{id} AND status = 'sealed'
+  </update>
+
+  <update id="markAttestationsSubmitted">
+    UPDATE attestations SET status = 'submitted' WHERE batch_id = #{batchId}
+  </update>
+
+  <select id="unconfirmedAnchors" resultType="java.util.LinkedHashMap">
+    SELECT txid, batch_id, raw_tx_hex, payload_hex FROM anchor_txs WHERE status != 'confirmed'
+  </select>
+
+  <update id="confirmAnchorTx">
+    UPDATE anchor_txs SET status = 'confirmed', block_height = #{blockHeight}, block_hash = #{blockHash},
+           confirmations = #{confirmations}, confirmed_at = #{confirmedAt}
+     WHERE txid = #{txid} AND status != 'confirmed'
+  </update>
+
+  <update id="confirmBatch">
+    UPDATE batches SET status = 'confirmed' WHERE id = #{id}
+  </update>
+
+  <update id="confirmAttestations">
+    UPDATE attestations SET status = 'confirmed' WHERE batch_id = #{batchId}
+  </update>
+
+  <select id="unconfirmedInscriptions" resultType="java.util.LinkedHashMap">
+    SELECT id, reveal_txid FROM attestations
+     WHERE kind = 'inscription' AND status != 'confirmed' AND reveal_txid IS NOT NULL
+  </select>
+
+  <update id="confirmInscription">
+    UPDATE attestations SET status = 'confirmed', block_height = #{blockHeight}, block_hash = #{blockHash},
+           confirmations = #{confirmations}
+     WHERE id = #{id} AND status != 'confirmed'
+  </update>
+
+  <select id="expiredPublic" resultType="string">
+    SELECT id FROM attestations WHERE source = 'public' AND expires_at IS NOT NULL AND expires_at &lt; #{cutoff}
+  </select>
+
+  <delete id="deleteProof">
+    DELETE FROM merkle_proofs WHERE attestation_id = #{attestationId}
+  </delete>
+
+  <delete id="deleteAttestation">
+    DELETE FROM attestations WHERE id = #{id}
+  </delete>
+
+  <!-- attempts: what was about to be broadcast, written down before it is -->
+
+  <select id="openAttempt" resultType="java.util.LinkedHashMap">
+    SELECT attempt, txid, raw_tx_hex, payload_hex FROM anchor_attempts
+     WHERE batch_id = #{batchId} AND state = 'recorded' ORDER BY attempt DESC LIMIT 1
+  </select>
+
+  <select id="attemptCount" resultType="long">
+    SELECT COUNT(*) FROM anchor_attempts WHERE batch_id = #{batchId}
+  </select>
+
+  <insert id="insertAttempt">
+    INSERT INTO anchor_attempts (batch_id, attempt, txid, raw_tx_hex, payload_hex, state, created_at, updated_at)
+    VALUES (#{batchId}, #{attempt}, #{txid}, #{rawTxHex}, #{payloadHex}, 'recorded', UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
+  </insert>
+
+  <update id="setAttemptState">
+    UPDATE anchor_attempts SET state = #{state}, updated_at = UTC_TIMESTAMP(3)
+     WHERE batch_id = #{batchId} AND attempt = #{attempt} AND state = 'recorded'
+  </update>
+
+  <!-- the lease: by the database's own clock, so two hosts need not agree on the time -->
+
+  <update id="takeLease">
+    UPDATE worker_leases
+       SET owner = #{owner}, expires_at = UTC_TIMESTAMP(3) + INTERVAL #{ttlSeconds} SECOND, renewed_at = UTC_TIMESTAMP(3)
+     WHERE name = #{name} AND (owner = #{owner} OR expires_at &lt; UTC_TIMESTAMP(3))
+  </update>
+
+  <insert id="createLease">
+    INSERT IGNORE INTO worker_leases (name, owner, expires_at, renewed_at)
+    VALUES (#{name}, #{owner}, UTC_TIMESTAMP(3) + INTERVAL #{ttlSeconds} SECOND, UTC_TIMESTAMP(3))
+  </insert>
+
+  <update id="renewLease">
+    UPDATE worker_leases
+       SET expires_at = UTC_TIMESTAMP(3) + INTERVAL #{ttlSeconds} SECOND, renewed_at = UTC_TIMESTAMP(3)
+     WHERE name = #{name} AND owner = #{owner} AND expires_at &gt;= UTC_TIMESTAMP(3)
+  </update>
+
+  <delete id="releaseLease">
+    DELETE FROM worker_leases WHERE name = #{name} AND owner = #{owner}
+  </delete>
+
+  <select id="lease" resultType="java.util.LinkedHashMap">
+    SELECT owner, (expires_at &lt; UTC_TIMESTAMP(3)) AS expired FROM worker_leases WHERE name = #{name}
+  </select>
+
+</mapper>

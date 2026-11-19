@@ -1,0 +1,22 @@
+{
+  "schema": "bitcert-proof-bundle/v1",
+  "bitcoin_network": "mainnet",
+  "generated_at": "2026-11-18T00:00:00.000Z",
+  "record": {
+    "kind": "attestation",
+    "leaf_bytes": "df50c6b5d09cc0088f41e1028dc4d2122e2be19c4617cc1b50efd51c8a350e13",
+    "preimage": {
+      "scheme": "sha256-file"
+    }
+  },
+  "anchor": {
+    "reveal_txid": "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
+    "op_return_payload_hex": "424330310134a2063db8b8ab3df3686b8f77236e4f897f7911e6ed9fb36aadd74e582f599eabababababababababababababababab"
+  },
+  "merkle": {
+    "leaf_index": 0,
+    "root": "34a2063db8b8ab3df3686b8f77236e4f897f7911e6ed9fb36aadd74e582f599e",
+    "siblings": [],
+    "directions": []
+  }
+}

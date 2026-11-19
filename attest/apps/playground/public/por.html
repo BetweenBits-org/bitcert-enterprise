@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>준비금 증명 검증 — 내 잔고가 거래소 부채 트리에 있는가</title>
+<meta name="description" content="거래소가 발급한 포함증명(proof.json)을 브라우저에서만 검증합니다. 아무것도 업로드되지 않습니다.">
+<link rel="stylesheet" href="./app.css">
+<link rel="stylesheet" href="./por.css">
+</head>
+<body>
+<header class="masthead">
+  <div class="wrap">
+    <a class="brand" href="./">StoneHash <b>Attest</b></a>
+    <span class="por-sub">준비금 증명(PoR) — 사용자 포함증명 검증</span>
+  </div>
+</header>
+
+<div class="wrap main">
+  <section class="panel">
+    <h1>내 잔고가 거래소 부채 트리에 들어 있는가</h1>
+    <p class="lede">
+      거래소가 발급한 <b>포함증명 파일(proof.json)</b>과 공개된 <b>스냅샷 선언문</b>만으로,
+      이 브라우저 안에서 머클 합 트리 경로를 재계산합니다. 루트뿐 아니라 <b>자산별 총부채까지
+      함께 바인딩</b>되므로, 내 잔고를 빼고 총액을 줄여 말하면 검증이 깨집니다.
+      아무 데이터도 서버로 전송되지 않습니다.
+    </p>
+
+    <div class="por-grid">
+      <div class="por-in">
+        <h3>① 포함증명 (거래소가 나에게 발급)</h3>
+        <textarea id="proofIn" placeholder='proof.json 내용을 붙여넣거나 아래에서 파일 선택'></textarea>
+        <div class="sub">
+          <input type="file" id="proofFile" accept=".json">
+        </div>
+      </div>
+      <div class="por-in">
+        <h3>② 스냅샷 공개 자료 (플랫폼 공개 페이지)</h3>
+        <textarea id="snapIn" placeholder='/v1/public/por/snapshots/<id> 응답 JSON을 붙여넣거나, ID로 가져오기'></textarea>
+        <div class="sub">
+          <input type="text" id="snapId" placeholder="snapshot id (같은 서버에서 가져오기)">
+          <button class="btn" id="fetchSnap">가져오기</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="por-actions">
+      <input type="text" id="userRef" placeholder="(선택) 내 계정 참조 user_ref — 가명 해시와 대조">
+      <button class="btn" id="verifyBtn">검증 실행 (오프라인)</button>
+    </div>
+
+    <div id="out" class="por-out"></div>
+  </section>
+</div>
+
+<script type="module" src="./por.js"></script>
+</body>
+</html>

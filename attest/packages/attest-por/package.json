@@ -1,0 +1,28 @@
+{
+  "name": "@stonehash/attest-por",
+  "version": "0.1.0",
+  "description": "StoneHash proof-of-reserves SDK \u2014 build the Merkle sum liability tree on the exchange's own machine; only the root, the totals and challenged openings ever leave it.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test 'test/*.test.ts'",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@stonehash/attest-verify": "workspace:*",
+    "@stonehash/attest-rules": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3"
+  }
+}

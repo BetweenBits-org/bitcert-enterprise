@@ -1,0 +1,32 @@
+{
+  "name": "@stonehash/attest-rules",
+  "version": "0.1.0",
+  "description": "Deterministic settlement-evidence matching engine. Same inputs plus same policy version always yield the same verdict, on any machine, forever.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "policies",
+    "fixtures",
+    "keys"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node tools/sign-fixtures.mjs --check && node --test 'test/*.test.ts'",
+    "typecheck": "tsc -p tsconfig.json",
+    "keys": "node tools/make-demo-keys.mjs",
+    "sign": "node tools/sign-fixtures.mjs"
+  },
+  "dependencies": {
+    "@stonehash/attest-verify": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3"
+  }
+}

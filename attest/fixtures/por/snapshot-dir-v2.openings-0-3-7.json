@@ -1,0 +1,144 @@
+{
+  "schema": "stonehash.por-openings.v1",
+  "openings": [
+    {
+      "leaf_index": 0,
+      "leaf": {
+        "user_ref_hash": "14fa7b21b725f522eaa4b9c00ed172b40ad376618f7e8a143efe560e5e97eabe",
+        "salt": "2c2b00a11e5b3a1792a6a5b1b06285786234e32d1e7d1aed911906799c2719b9",
+        "balances": {
+          "BTC": "1000000",
+          "ETH": "300000000000000000",
+          "USDT": "99999999"
+        }
+      },
+      "siblings": [
+        {
+          "hash": "724eaabf29508558160e58aed485618192b33b9bc94c7398b2e65256d27b9b9a",
+          "sums": {
+            "ETH": "1250000000000000000"
+          },
+          "dir": "right"
+        },
+        {
+          "hash": "25b5f86ca06b6315f7985b9985ecdd31ac5a5ec632148209a246bd80fc618f82",
+          "sums": {
+            "USDT": "4200500000",
+            "BTC": "2112345678"
+          },
+          "dir": "right"
+        },
+        {
+          "hash": "7003cf0a214b200852aa400ab7697c40df504852b025f019d1663344974458b9",
+          "sums": {
+            "ETH": "112500000000000000000",
+            "USDT": "1510250001",
+            "BTC": "50000001"
+          },
+          "dir": "right"
+        },
+        {
+          "hash": "7e9d909f2e1f549ff1654328b09fde4ed619490cb83c81a08de0249805616b37",
+          "sums": {
+            "ETH": "1",
+            "USDT": "250000000000",
+            "BTC": "300012345"
+          },
+          "dir": "right"
+        }
+      ]
+    },
+    {
+      "leaf_index": 3,
+      "leaf": {
+        "user_ref_hash": "695ea9f119d561a56c8bf51c35b0b320f97b7593552d371cd60931d75935fa30",
+        "salt": "c9876e616c8af0c10961ed6ece92016e175a196cd432f5b3e0328125bb3c33e8",
+        "balances": {
+          "BTC": "2112345678"
+        }
+      },
+      "siblings": [
+        {
+          "hash": "bd1f693dc3f29e06cd0f0c7ae5243801d9f81be0df9b58dd4e38412e41c027eb",
+          "sums": {
+            "USDT": "4200500000"
+          },
+          "dir": "left"
+        },
+        {
+          "hash": "b845879ccd1570117002b501fb720c402842ccfe34df0f69ed833d409dc9d37a",
+          "sums": {
+            "BTC": "1000000",
+            "ETH": "1550000000000000000",
+            "USDT": "99999999"
+          },
+          "dir": "left"
+        },
+        {
+          "hash": "7003cf0a214b200852aa400ab7697c40df504852b025f019d1663344974458b9",
+          "sums": {
+            "ETH": "112500000000000000000",
+            "USDT": "1510250001",
+            "BTC": "50000001"
+          },
+          "dir": "right"
+        },
+        {
+          "hash": "7e9d909f2e1f549ff1654328b09fde4ed619490cb83c81a08de0249805616b37",
+          "sums": {
+            "ETH": "1",
+            "USDT": "250000000000",
+            "BTC": "300012345"
+          },
+          "dir": "right"
+        }
+      ]
+    },
+    {
+      "leaf_index": 7,
+      "leaf": {
+        "user_ref_hash": "b33d9adeedc452cca18f0999354d02613b1809eccc5296048b77e20c7c303604",
+        "salt": "910d5a216cea1be7175950899cbc2b1f69997a3086350857041b62fe9790f949",
+        "balances": {
+          "BTC": "1"
+        }
+      },
+      "siblings": [
+        {
+          "hash": "4d41bac53168acd395182a478412f22e6cc5671ff9b9258d2d7b1c445630dd12",
+          "sums": {
+            "USDT": "10000000"
+          },
+          "dir": "left"
+        },
+        {
+          "hash": "cefa39ef058d0b5404211bb8aceb7e45104ac88d2bd185c7b8034cae794b3f46",
+          "sums": {
+            "ETH": "112500000000000000000",
+            "USDT": "1500250001",
+            "BTC": "50000000"
+          },
+          "dir": "left"
+        },
+        {
+          "hash": "b44b98b05e3e0dce6c2cb3d2ef66dba43ea6f4c74651de02810b89b18336e70e",
+          "sums": {
+            "BTC": "2113345678",
+            "ETH": "1550000000000000000",
+            "USDT": "4300499999"
+          },
+          "dir": "left"
+        },
+        {
+          "hash": "7e9d909f2e1f549ff1654328b09fde4ed619490cb83c81a08de0249805616b37",
+          "sums": {
+            "ETH": "1",
+            "USDT": "250000000000",
+            "BTC": "300012345"
+          },
+          "dir": "right"
+        }
+      ]
+    }
+  ]
+}

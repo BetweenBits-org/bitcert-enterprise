@@ -1,0 +1,13 @@
+{
+  "name": "stonehash-attest",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "pnpm -r --no-bail test",
+    "typecheck": "pnpm -r --no-bail typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

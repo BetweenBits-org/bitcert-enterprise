@@ -1,0 +1,491 @@
+{
+ "note": "Differences between the reference service and the Java one that are known. `why` is either a step that is not ported yet, or a row of docs/JAVA-INTENDED-DIFFERENCES.md. `case` names one case (or, ending in *, every case whose name starts so); `path` names what differs (or, ending in *, everything under a prefix: `$.*` is the whole body); `pathMatches` is a pattern instead, for a field of whichever row of a list. `ofSeed` narrows an entry to the object whose `id` is one of these seeded ids (parity/seed.json), `ref` / `java` to these two values. An entry that no longer occurs fails the run, so the list cannot go stale. `audit` lists the audit rows that differ for the same reasons (tools/compare-audit.mjs).",
+ "differences": [
+  {
+   "case": "attest: *",
+   "pathMatches": "^\\$(\\.data\\[\\d+\\])?\\.bundle_available$",
+   "ofSeed": [
+    "ids.inscription.confirmed",
+    "ids.inscription.submitted"
+   ],
+   "ref": false,
+   "java": true,
+   "why": "D-08: an inscription is not swept into a batch, and its bundle is available from the start; the reference says so only once its batcher has put the record into a batch"
+  },
+  {
+   "case": "attest: a document whose content type does not fit in one push as bytes",
+   "path": "$.message",
+   "why": "D-09: a content type of more than 520 bytes is refused as one that does not fit in one push; the reference measures characters (261), accepts it and refuses the document for its size. (With a document under the limit the reference would go on to the wallet with it: the case carries one over the limit, so that neither service can.)"
+  },
+  {
+   "case": "attest: a document over the limit, its content type UTF-8 on the wire",
+   "path": "$.message",
+   "why": "D-09: the header's 262 bytes are 262 characters, 524 bytes in the script — refused as a content type that does not fit in one push; the reference counts 262 characters, accepts the content type and refuses the document for its size"
+  },
+  {
+   "case": "attest: a body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "attest: a body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "attest: a signed body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "attest: a signed body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "attest: an issuer-key body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "attest: an issuer-key body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "public: a body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "public: a body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "keys: a sign-up body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "keys: a sign-up body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "attest: a descriptor nested 1,200 deep",
+   "path": "status",
+   "why": "D-02: JSON nested deeper than 1,000 levels is refused; the reference stores the record"
+  },
+  {
+   "case": "attest: a descriptor nested 1,200 deep",
+   "path": "$.*",
+   "why": "D-02: JSON nested deeper than 1,000 levels is refused; the reference stores the record"
+  },
+  {
+   "case": "attest: a statement with a signature that is a number",
+   "path": "$.message",
+   "why": "D-03: the reference answers with the JavaScript engine's own complaint; here it is a sentence a client can act on"
+  },
+  {
+   "case": "attest: a statement with a key that is a number",
+   "path": "$.message",
+   "why": "D-03: the reference answers with the JavaScript engine's own complaint; here it is a sentence a client can act on"
+  },
+  {
+   "case": "attest: a statement without its document",
+   "path": "$.message",
+   "why": "D-03: the reference answers with the JavaScript engine's own complaint; here it is a sentence a client can act on"
+  },
+  {
+   "case": "attest: a statement whose document is null",
+   "path": "$.message",
+   "why": "D-03: the reference answers with the JavaScript engine's own complaint; here it is a sentence a client can act on"
+  },
+  {
+   "case": "attest: a statement without its issuer",
+   "path": "$.message",
+   "why": "D-03: the reference answers with the JavaScript engine's own complaint; here it is a sentence a client can act on"
+  },
+  {
+   "case": "attest: a statement with a time only the engine reads",
+   "path": "$.error",
+   "why": "D-04: a time that is not ISO 8601 is refused as the statement it is; the reference read it and went on to the signature"
+  },
+  {
+   "case": "attest: a statement with a time only the engine reads",
+   "path": "$.message",
+   "why": "D-04: a time that is not ISO 8601 is refused as the statement it is; the reference read it and went on to the signature"
+  },
+  {
+   "case": "keys: a slug longer than the column",
+   "path": "$.message",
+   "why": "D-01: what went wrong inside is not answered; the reference repeats the database's sentence"
+  },
+  {
+   "case": "console: the audit trail from a time only the engine reads*",
+   "path": "status",
+   "why": "D-04: a time that is not ISO 8601 is refused as the filter the sentence has always described; the reference took whatever the JavaScript engine reads"
+  },
+  {
+   "case": "console: the audit trail from a time only the engine reads*",
+   "path": "$.*",
+   "why": "D-04: a time that is not ISO 8601 is refused as the filter the sentence has always described; the reference took whatever the JavaScript engine reads"
+  },
+  {
+   "case": "console: a signed body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "console: a signed body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "console: activating with a body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "console: activating with a body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "console: activating settlements with no id and a country that is a number",
+   "path": "status",
+   "why": "D-11: a country that is not text is answered with the sentence the route has for a country it cannot read; the reference fails with the JavaScript engine's own complaint (a 500)"
+  },
+  {
+   "case": "console: activating settlements with no id and a country that is a number",
+   "path": "$.*",
+   "why": "D-11: a country that is not text is answered with the sentence the route has for a country it cannot read; the reference fails with the JavaScript engine's own complaint (a 500)"
+  },
+  {
+   "case": "console: the audit trail after the run",
+   "pathMatches": "^\\$\\.data\\[\\d+\\]\\.status$",
+   "ref": 500,
+   "java": 400,
+   "why": "D-06, D-11: the requests above that the reference failed with a 500 are in the audit trail with the status each service answered"
+  },
+  {
+   "case": "evidence: sandbox evidence: a body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "evidence: sandbox evidence: a body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "evidence: a package: a body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "evidence: a package: a body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "evidence: verifying a package: a body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "evidence: verifying a package: a body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "console: another signing key, with a body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "console: another signing key, with a body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "evidence: where the engine gave up: *",
+   "path": "$.message",
+   "why": "D-01: where the reference failed inside its runtime it answers with the runtime's own complaint about its source; here that is a fixed sentence, and the cause is in the log"
+  },
+  {
+   "case": "evidence: worded by the engine: *",
+   "path": "$.message",
+   "why": "D-03: the reference words this refusal with the JavaScript engine's own complaint; here it is a sentence about the document"
+  },
+  {
+   "case": "evidence: a settlement time only the engine reads: *",
+   "path": "$.*",
+   "why": "D-12: a time that is not written the ISO 8601 way is reported as unparseable; the reference measured the settlement window against whatever the JavaScript engine made of it"
+  },
+  {
+   "case": "evidence: an archive time only the engine reads: *",
+   "path": "*",
+   "why": "D-04: a time that is not written the ISO 8601 way is not a valid instant (400 invalid_timestamp); the reference took whatever the JavaScript engine reads and made the archive"
+  },
+  {
+   "case": "evidence: a currency that is an object with a member named toString",
+   "path": "$.message",
+   "why": "D-03: the reference words this refusal with the JavaScript engine's own complaint; here it is a sentence about the document"
+  },
+  {
+   "case": "evidence: an archive: *",
+   "path": "archive: packed bytes",
+   "why": "D-15: the members are the same byte for byte and so is every field of the ZIP around them; the packed bytes are each runtime's own DEFLATE, and with them the archive's digest in x-evidence-sha256"
+  },
+  {
+   "case": "por: where the engine gave up: *",
+   "path": "$.message",
+   "why": "D-01: the reference failed inside its runtime and answered with the runtime's complaint about its own code; here the status is the same and the message is \"internal error\""
+  },
+  {
+   "case": "por: a statement whose as-of time is *",
+   "path": "$.error",
+   "why": "D-04: an as-of time has to be text written the ISO 8601 way, so the statement is refused for its shape; the reference read the time with the JavaScript engine, took the statement, and refused it at the next check (the signature is over another statement)"
+  },
+  {
+   "case": "por: a statement whose as-of time is *",
+   "path": "$.message",
+   "why": "D-04: an as-of time has to be text written the ISO 8601 way, so the statement is refused for its shape; the reference read the time with the JavaScript engine, took the statement, and refused it at the next check (the signature is over another statement)"
+  },
+  {
+   "case": "por: worded by the engine: *",
+   "pathMatches": "^\\$\\.problems\\[\\d+\\]$",
+   "why": "D-03: the reference caught its runtime's complaint and passed it on as the problem with the opening; here the problem is a sentence about the opening"
+  },
+  {
+   "case": "por: the snapshots of an organisation, newest first",
+   "pathMatches": "^\\$\\.data\\[\\d+\\]\\.problems\\[\\d+\\]$",
+   "why": "D-03: the reference caught its runtime's complaint and passed it on as the problem with the opening; here the problem is a sentence about the opening"
+  },
+  {
+   "case": "por: reserves: an answer the engine could not read: *",
+   "pathMatches": "measurements\\[\\d+\\]\\.detail$",
+   "why": "D-16: the reserve node's answer was not something a balance can be read from, and the reference reports its runtime's complaint about it; here the report says what was wrong with the answer"
+  },
+  {
+   "case": "por: the snapshots of an organisation, newest first",
+   "pathMatches": "^\\$\\.data\\[\\d+\\]\\.reserves\\.measurements\\[\\d+\\]\\.detail$",
+   "why": "D-16: the reserve node's answer was not something a balance can be read from, and the reference reports its runtime's complaint about it; here the report says what was wrong with the answer"
+  },
+  {
+   "case": "remit-b1-routes: register: a body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "remit-b1-routes: register: a body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "remit-b1-routes: deactivate: a body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "remit-b1-routes: deactivate: a body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "remit-b1-routes: quote: a body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "remit-b1-routes: quote: a body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "remit-b1-routes: instruction: a body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "remit-b1-routes: instruction: a body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "remit-b1-routes: manifest: a body that is null",
+   "path": "status",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "remit-b1-routes: manifest: a body that is null",
+   "path": "$.*",
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "case": "remit-b1-routes: deactivate: an address that is *",
+   "path": "$.message",
+   "why": "D-01: the reference failed inside its runtime (an e-mail address that is not text has no lower case) and answered with the runtime's complaint about its own code; here the status is the same and the message is \"internal error\""
+  },
+  {
+   "case": "remit-b1-routes: quote: an amount that is a *",
+   "path": "$.message",
+   "why": "D-01: an amount that is a number or a list got past the reference's pattern and stopped it inside its arithmetic; it answered with the runtime's complaint about its own code. Here the status is the same and the message is \"internal error\""
+  },
+  {
+   "case": "remit-b1-routes: ledger: state that names none",
+   "path": "$.message",
+   "why": "D-01: commas with nothing between them leave the reference's statement with an empty list, and it answers with the database's sentence about its SQL; here the status is the same and the message is \"internal error\""
+  },
+  {
+   "case": "remit-b1-routes: instruction: a key of 192 characters*",
+   "path": "$.error",
+   "why": "D-19: an Idempotency-Key longer than the 191 characters its column holds is refused before the body is read (400 invalid_idempotency_key); the reference goes on to judge the request — and, had it been acceptable, would have accepted the settlement and then failed with a 500 on storing the answer"
+  },
+  {
+   "case": "remit-b1-routes: instruction: a key of 192 characters*",
+   "path": "$.message",
+   "why": "D-19: an Idempotency-Key longer than the 191 characters its column holds is refused before the body is read (400 invalid_idempotency_key); the reference goes on to judge the request — and, had it been acceptable, would have accepted the settlement and then failed with a 500 on storing the answer"
+  },
+  {
+   "case": "remit-b1-routes: instruction: a payment id that is a list of one id",
+   "path": "$.error",
+   "why": "D-18: a payment id that is not text is refused as no payment id (400 invalid_payment_id); the reference's pattern check reads the list as its one member, lets it through, and refuses the instruction further on"
+  },
+  {
+   "case": "remit-b1-routes: instruction: a payment id that is a list of one id",
+   "path": "$.message",
+   "why": "D-18: a payment id that is not text is refused as no payment id (400 invalid_payment_id); the reference's pattern check reads the list as its one member, lets it through, and refuses the instruction further on"
+  }
+ ],
+ "audit": [
+  {
+   "method": "POST",
+   "path": "/v1/attestations",
+   "reference": 500,
+   "java": 400,
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/attestations/signed",
+   "reference": 500,
+   "java": 400,
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/issuer-keys",
+   "reference": 500,
+   "java": 400,
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/attestations",
+   "reference": 201,
+   "java": 400,
+   "why": "D-02: JSON nested deeper than 1,000 levels is refused; the reference stores the record"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/console/attestations/signed",
+   "reference": 500,
+   "java": 400,
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/console/products",
+   "reference": 500,
+   "java": 400,
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/console/products",
+   "reference": 500,
+   "java": 400,
+   "why": "D-11: a country that is not text is answered with the sentence the route has for a country it cannot read; the reference fails with the JavaScript engine's own complaint (a 500)"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/console/sandbox/evidence",
+   "reference": 500,
+   "java": 200,
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/console/sandbox/package",
+   "reference": 500,
+   "java": 400,
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/console/sandbox/package/verify",
+   "reference": 500,
+   "java": 400,
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/console/institutions/VN-BANK-PARITY/signing-key",
+   "reference": 500,
+   "java": 400,
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/settlements/bundle",
+   "reference": 200,
+   "java": 400,
+   "why": "D-04: a time that is not written the ISO 8601 way is not a valid instant (400 invalid_timestamp); the reference took whatever the JavaScript engine reads and made the archive"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/settlements/bundle",
+   "reference": 200,
+   "java": 400,
+   "why": "D-04: a time that is not written the ISO 8601 way is not a valid instant (400 invalid_timestamp); the reference took whatever the JavaScript engine reads and made the archive"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/settlements/bundle",
+   "reference": 200,
+   "java": 400,
+   "why": "D-04: a time that is not written the ISO 8601 way is not a valid instant (400 invalid_timestamp); the reference took whatever the JavaScript engine reads and made the archive"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/settlements/bundle",
+   "reference": 200,
+   "java": 400,
+   "why": "D-04: a time that is not written the ISO 8601 way is not a valid instant (400 invalid_timestamp); the reference took whatever the JavaScript engine reads and made the archive"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/quotes",
+   "reference": 500,
+   "java": 400,
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/settlements",
+   "reference": 500,
+   "java": 400,
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  },
+  {
+   "method": "POST",
+   "path": "/v1/manifests/daily",
+   "reference": 500,
+   "java": 400,
+   "why": "D-06: a body that is JSON null has no fields, so the route answers as it does for an empty object; the reference fails with a 500"
+  }
+ ]
+}

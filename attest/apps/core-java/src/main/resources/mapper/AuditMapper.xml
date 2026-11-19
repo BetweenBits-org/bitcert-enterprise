@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonehash.attest.core.audit.AuditMapper">
+
+  <insert id="insert">
+    INSERT INTO audit_log
+      (id, org_id, at, actor_type, actor_id, actor_label, service, method, path, status, duration_ms)
+    VALUES (#{id}, #{orgId}, #{at}, #{actorType}, #{actorId}, #{actorLabel}, #{service}, #{method}, #{path}, #{status}, #{durationMs})
+  </insert>
+
+
+  <!-- Newest first, the id breaking ties: the order a cursor resumes in. `from` is inclusive and `to` exclusive, so day ranges chain. -->
+  <select id="search" resultType="java.util.LinkedHashMap">
+    SELECT id, at, actor_type, actor_id, actor_label, service, method, path, status, duration_ms
+      FROM audit_log
+     WHERE org_id = #{orgId}
+    <if test="service != null">AND service = #{service}</if>
+    <if test="actorType != null">AND actor_type = #{actorType}</if>
+    <if test="from != null">AND at &gt;= #{from}</if>
+    <if test="to != null">AND at &lt; #{to}</if>
+    <if test="like != null">AND UPPER(path) LIKE #{like} ESCAPE '!'</if>
+    <if test="cursorAt != null">AND (at &lt; #{cursorAt} OR (at = #{cursorAt} AND id &lt; #{cursorId}))</if>
+     ORDER BY at DESC, id DESC LIMIT #{limit}
+  </select>
+</mapper>

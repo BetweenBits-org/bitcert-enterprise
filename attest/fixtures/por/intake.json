@@ -1,0 +1,1273 @@
+{
+  "about": "Reading a balance export. `rows` are in order of first appearance; a file with any problem yields no rows. `line` is the 1-based line of the file, 0 for a problem with the file as a whole. In a row, an asset that is absent and an asset given as \"0\" say the same thing, and rows are compared with that in mind: `cases` (the long and wide layouts, which every port reads) write a wide row out in full, as they always have; `sheet_cases` and `json_cases` write only what the account holds. `sheet_cases` are for the sheet layout and `json_cases` for a JSON array of accounts, where `line` is the position of the account in the array, counted from one; a port may leave either reader out and skips its list.",
+  "cases": [
+    {
+      "name": "the long layout",
+      "file": "intake/long.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": true,
+      "layout": "long",
+      "data_rows": 20,
+      "accounts": 12,
+      "zero_balance_accounts": 1,
+      "totals": {
+        "BTC": "2463358024",
+        "ETH": "114050000000000000001",
+        "USDT": "255810750000"
+      },
+      "holders": {
+        "BTC": 6,
+        "ETH": 5,
+        "USDT": 6
+      },
+      "ignored_columns": [],
+      "file_sha256": "51874c3b96fe045f2af5c462b5a55dc7c868c3fb88e54bab39886bf4d210ab3a",
+      "rows": [
+        {
+          "user_ref": "U-100001",
+          "balances": {
+            "BTC": "50000000",
+            "ETH": "12500000000000000000",
+            "USDT": "1500250000"
+          }
+        },
+        {
+          "user_ref": "U-100002",
+          "balances": {
+            "BTC": "12345"
+          }
+        },
+        {
+          "user_ref": "U-100003",
+          "balances": {
+            "ETH": "1",
+            "USDT": "250000000000"
+          }
+        },
+        {
+          "user_ref": "U-100004",
+          "balances": {
+            "BTC": "300000000",
+            "USDT": "0"
+          }
+        },
+        {
+          "user_ref": "U-100005",
+          "balances": {
+            "ETH": "1250000000000000000"
+          }
+        },
+        {
+          "user_ref": "U-100006",
+          "balances": {
+            "BTC": "1000000",
+            "ETH": "300000000000000000",
+            "USDT": "99999999"
+          }
+        },
+        {
+          "user_ref": "U-100007",
+          "balances": {
+            "USDT": "10000000"
+          }
+        },
+        {
+          "user_ref": "U-100008",
+          "balances": {
+            "BTC": "2112345678"
+          }
+        },
+        {
+          "user_ref": "U-100009",
+          "balances": {
+            "ETH": "100000000000000000000",
+            "USDT": "1"
+          }
+        },
+        {
+          "user_ref": "U-100010",
+          "balances": {
+            "BTC": "1"
+          }
+        },
+        {
+          "user_ref": "U-100011",
+          "balances": {
+            "USDT": "4200500000"
+          }
+        },
+        {
+          "user_ref": "U-100012",
+          "balances": {
+            "BTC": "0",
+            "ETH": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "the wide layout — the same ledger",
+      "file": "intake/wide.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": true,
+      "layout": "wide",
+      "data_rows": 12,
+      "accounts": 12,
+      "zero_balance_accounts": 1,
+      "totals": {
+        "BTC": "2463358024",
+        "ETH": "114050000000000000001",
+        "USDT": "255810750000"
+      },
+      "holders": {
+        "BTC": 6,
+        "ETH": 5,
+        "USDT": 6
+      },
+      "ignored_columns": [],
+      "file_sha256": "1aacc50834d279746f1dfa9d4dc21ecb511566a4af6e3fc0839952aef4b37daf",
+      "rows": [
+        {
+          "user_ref": "U-100001",
+          "balances": {
+            "BTC": "50000000",
+            "ETH": "12500000000000000000",
+            "USDT": "1500250000"
+          }
+        },
+        {
+          "user_ref": "U-100002",
+          "balances": {
+            "BTC": "12345",
+            "ETH": "0",
+            "USDT": "0"
+          }
+        },
+        {
+          "user_ref": "U-100003",
+          "balances": {
+            "BTC": "0",
+            "ETH": "1",
+            "USDT": "250000000000"
+          }
+        },
+        {
+          "user_ref": "U-100004",
+          "balances": {
+            "BTC": "300000000",
+            "ETH": "0",
+            "USDT": "0"
+          }
+        },
+        {
+          "user_ref": "U-100005",
+          "balances": {
+            "BTC": "0",
+            "ETH": "1250000000000000000",
+            "USDT": "0"
+          }
+        },
+        {
+          "user_ref": "U-100006",
+          "balances": {
+            "BTC": "1000000",
+            "ETH": "300000000000000000",
+            "USDT": "99999999"
+          }
+        },
+        {
+          "user_ref": "U-100007",
+          "balances": {
+            "BTC": "0",
+            "ETH": "0",
+            "USDT": "10000000"
+          }
+        },
+        {
+          "user_ref": "U-100008",
+          "balances": {
+            "BTC": "2112345678",
+            "ETH": "0",
+            "USDT": "0"
+          }
+        },
+        {
+          "user_ref": "U-100009",
+          "balances": {
+            "BTC": "0",
+            "ETH": "100000000000000000000",
+            "USDT": "1"
+          }
+        },
+        {
+          "user_ref": "U-100010",
+          "balances": {
+            "BTC": "1",
+            "ETH": "0",
+            "USDT": "0"
+          }
+        },
+        {
+          "user_ref": "U-100011",
+          "balances": {
+            "BTC": "0",
+            "ETH": "0",
+            "USDT": "4200500000"
+          }
+        },
+        {
+          "user_ref": "U-100012",
+          "balances": {
+            "BTC": "0",
+            "ETH": "0",
+            "USDT": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "CRLF, a byte-order mark, quoted fields, an extra column",
+      "file": "intake/dialect.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": true,
+      "layout": "long",
+      "data_rows": 3,
+      "accounts": 3,
+      "zero_balance_accounts": 0,
+      "totals": {
+        "BTC": "50000000",
+        "ETH": "1000000000000000000",
+        "USDT": "2500000"
+      },
+      "holders": {
+        "BTC": 1,
+        "ETH": 1,
+        "USDT": 1
+      },
+      "ignored_columns": [
+        "updated_at"
+      ],
+      "file_sha256": "01efd033528da1acf7de553f00af1aa736d3d8aebc6bf63b088992ff6c367468",
+      "rows": [
+        {
+          "user_ref": "kim, 민수",
+          "balances": {
+            "BTC": "50000000"
+          }
+        },
+        {
+          "user_ref": "say \"hi\"",
+          "balances": {
+            "ETH": "1000000000000000000"
+          }
+        },
+        {
+          "user_ref": "plain",
+          "balances": {
+            "USDT": "2500000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "columns under other names, semicolons, smallest units",
+      "file": "intake/mapped.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "base",
+        "columns": {
+          "account": "user_id",
+          "asset": "currency",
+          "balance": "amount"
+        },
+        "delimiter": ";"
+      },
+      "ok": true,
+      "layout": "long",
+      "data_rows": 2,
+      "accounts": 2,
+      "zero_balance_accounts": 0,
+      "totals": {
+        "BTC": "50000000",
+        "ETH": "0",
+        "USDT": "7"
+      },
+      "holders": {
+        "BTC": 1,
+        "ETH": 0,
+        "USDT": 1
+      },
+      "ignored_columns": [],
+      "file_sha256": "3d6ec52473fde34c3c9e6dcd00d217fe405996bff9b7ee61d07810cf930ac53f",
+      "rows": [
+        {
+          "user_ref": "u1",
+          "balances": {
+            "BTC": "50000000"
+          }
+        },
+        {
+          "user_ref": "u2",
+          "balances": {
+            "USDT": "7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wide, with a column named as ignorable",
+      "file": "intake/wide-ignore.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal",
+        "ignore_columns": [
+          "memo"
+        ]
+      },
+      "ok": true,
+      "layout": "wide",
+      "data_rows": 2,
+      "accounts": 2,
+      "zero_balance_accounts": 0,
+      "totals": {
+        "BTC": "100000000",
+        "ETH": "2000000000000000000",
+        "USDT": "500000"
+      },
+      "holders": {
+        "BTC": 1,
+        "ETH": 1,
+        "USDT": 1
+      },
+      "ignored_columns": [
+        "memo"
+      ],
+      "file_sha256": "d51dea775ca30091d9236a077091943599ea8ca4911b29e79596c98e3b8f35ec",
+      "rows": [
+        {
+          "user_ref": "u1",
+          "balances": {
+            "BTC": "100000000",
+            "ETH": "0",
+            "USDT": "500000"
+          }
+        },
+        {
+          "user_ref": "u2",
+          "balances": {
+            "BTC": "0",
+            "ETH": "2000000000000000000",
+            "USDT": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "every row has something wrong with it",
+      "file": "intake/bad-rows.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 2,
+          "code": "amount_precision"
+        },
+        {
+          "line": 3,
+          "code": "amount_negative"
+        },
+        {
+          "line": 4,
+          "code": "account_whitespace"
+        },
+        {
+          "line": 5,
+          "code": "account_empty"
+        },
+        {
+          "line": 6,
+          "code": "field_count"
+        },
+        {
+          "line": 7,
+          "code": "amount_exponent"
+        },
+        {
+          "line": 8,
+          "code": "amount_empty"
+        },
+        {
+          "line": 9,
+          "code": "unknown_asset"
+        },
+        {
+          "line": 10,
+          "code": "unknown_asset"
+        },
+        {
+          "line": 12,
+          "code": "duplicate_row"
+        }
+      ]
+    },
+    {
+      "name": "wide: an unknown column, and a declared asset with no column",
+      "file": "intake/bad-wide-header.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 1,
+          "code": "header_unknown_column"
+        },
+        {
+          "line": 1,
+          "code": "header_missing_asset"
+        }
+      ]
+    },
+    {
+      "name": "wide: the same account twice",
+      "file": "intake/bad-wide-duplicate.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 3,
+          "code": "duplicate_account"
+        }
+      ]
+    },
+    {
+      "name": "no account column",
+      "file": "intake/bad-header.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 1,
+          "code": "header_no_account"
+        }
+      ]
+    },
+    {
+      "name": "a header that matches neither layout",
+      "file": "intake/bad-unrecognised.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 1,
+          "code": "header_unrecognised"
+        }
+      ]
+    },
+    {
+      "name": "an unpaired quote",
+      "file": "intake/bad-quote.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 2,
+          "code": "csv_syntax"
+        }
+      ]
+    },
+    {
+      "name": "not UTF-8",
+      "file": "intake/bad-encoding.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 0,
+          "code": "file_encoding"
+        }
+      ]
+    },
+    {
+      "name": "a header and nothing else",
+      "file": "intake/bad-empty.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 0,
+          "code": "no_accounts"
+        }
+      ]
+    }
+  ],
+  "sheet_cases": [
+    {
+      "name": "the sheet layout — the same ledger",
+      "file": "intake/sheet.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": true,
+      "layout": "sheet",
+      "data_rows": 12,
+      "accounts": 12,
+      "zero_balance_accounts": 1,
+      "totals": {
+        "BTC": "2463358024",
+        "ETH": "114050000000000000001",
+        "USDT": "255810750000"
+      },
+      "holders": {
+        "BTC": 6,
+        "ETH": 5,
+        "USDT": 6
+      },
+      "ignored_columns": [
+        "rn",
+        "BTC",
+        "vl_BTC",
+        "m_BTC",
+        "pm_BTC",
+        "ETH",
+        "vl_ETH",
+        "m_ETH",
+        "pm_ETH",
+        "USDT",
+        "vl_USDT",
+        "m_USDT",
+        "pm_USDT",
+        "total_net_balance_usdt"
+      ],
+      "file_sha256": "2551d039ca508e3e60472620f87330dc1d2cc0351d8bd008a09579ec9c04c882",
+      "rows": [
+        {
+          "user_ref": "U-100001",
+          "balances": {
+            "BTC": "50000000",
+            "ETH": "12500000000000000000",
+            "USDT": "1500250000"
+          }
+        },
+        {
+          "user_ref": "U-100002",
+          "balances": {
+            "BTC": "12345"
+          }
+        },
+        {
+          "user_ref": "U-100003",
+          "balances": {
+            "ETH": "1",
+            "USDT": "250000000000"
+          }
+        },
+        {
+          "user_ref": "U-100004",
+          "balances": {
+            "BTC": "300000000"
+          }
+        },
+        {
+          "user_ref": "U-100005",
+          "balances": {
+            "ETH": "1250000000000000000"
+          }
+        },
+        {
+          "user_ref": "U-100006",
+          "balances": {
+            "BTC": "1000000",
+            "ETH": "300000000000000000",
+            "USDT": "99999999"
+          }
+        },
+        {
+          "user_ref": "U-100007",
+          "balances": {
+            "USDT": "10000000"
+          }
+        },
+        {
+          "user_ref": "U-100008",
+          "balances": {
+            "BTC": "2112345678"
+          }
+        },
+        {
+          "user_ref": "U-100009",
+          "balances": {
+            "ETH": "100000000000000000000",
+            "USDT": "1"
+          }
+        },
+        {
+          "user_ref": "U-100010",
+          "balances": {
+            "BTC": "1"
+          }
+        },
+        {
+          "user_ref": "U-100011",
+          "balances": {
+            "USDT": "4200500000"
+          }
+        },
+        {
+          "user_ref": "U-100012",
+          "balances": {}
+        }
+      ]
+    },
+    {
+      "name": "sheet: a debt that is not zero is refused, however it is written",
+      "file": "intake/bad-sheet-debt.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 3,
+          "code": "debt_not_supported"
+        },
+        {
+          "line": 4,
+          "code": "debt_not_supported"
+        }
+      ]
+    },
+    {
+      "name": "sheet: the balance of an undeclared asset, and a column of no known kind",
+      "file": "intake/bad-sheet-header.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 1,
+          "code": "header_unknown_column"
+        },
+        {
+          "line": 1,
+          "code": "header_unknown_column"
+        }
+      ]
+    },
+    {
+      "name": "sheet: a debt cell the amount rules cannot read",
+      "file": "intake/bad-sheet-debt-format.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 2,
+          "code": "amount_negative"
+        },
+        {
+          "line": 3,
+          "code": "amount_format"
+        },
+        {
+          "line": 4,
+          "code": "amount_precision"
+        }
+      ]
+    },
+    {
+      "name": "two assets called e_x and d_x are a wide file, not a sheet",
+      "file": "intake/wide-e-d-names.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "e_x",
+            "decimals": 0
+          },
+          {
+            "symbol": "d_x",
+            "decimals": 0
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": true,
+      "layout": "wide",
+      "data_rows": 2,
+      "accounts": 2,
+      "zero_balance_accounts": 0,
+      "totals": {
+        "e_x": "1",
+        "d_x": "5"
+      },
+      "holders": {
+        "e_x": 1,
+        "d_x": 2
+      },
+      "ignored_columns": [],
+      "file_sha256": "599e8383dcd49888883185f3f5419bd65e275026f6c29f6d2278a30403adb4c9",
+      "rows": [
+        {
+          "user_ref": "u1",
+          "balances": {
+            "e_x": "1",
+            "d_x": "2"
+          }
+        },
+        {
+          "user_ref": "u2",
+          "balances": {
+            "d_x": "3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "sheet: a declared asset with no equity column",
+      "file": "intake/bad-sheet-missing.csv",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 1,
+          "code": "header_missing_asset"
+        }
+      ]
+    }
+  ],
+  "json_cases": [
+    {
+      "name": "accounts as JSON — the same ledger",
+      "file": "intake/accounts.json",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": true,
+      "layout": "json",
+      "data_rows": 12,
+      "accounts": 12,
+      "zero_balance_accounts": 1,
+      "totals": {
+        "BTC": "2463358024",
+        "ETH": "114050000000000000001",
+        "USDT": "255810750000"
+      },
+      "holders": {
+        "BTC": 6,
+        "ETH": 5,
+        "USDT": 6
+      },
+      "ignored_columns": [],
+      "rows": [
+        {
+          "user_ref": "U-100001",
+          "balances": {
+            "BTC": "50000000",
+            "ETH": "12500000000000000000",
+            "USDT": "1500250000"
+          }
+        },
+        {
+          "user_ref": "U-100002",
+          "balances": {
+            "BTC": "12345"
+          }
+        },
+        {
+          "user_ref": "U-100003",
+          "balances": {
+            "ETH": "1",
+            "USDT": "250000000000"
+          }
+        },
+        {
+          "user_ref": "U-100004",
+          "balances": {
+            "BTC": "300000000"
+          }
+        },
+        {
+          "user_ref": "U-100005",
+          "balances": {
+            "ETH": "1250000000000000000"
+          }
+        },
+        {
+          "user_ref": "U-100006",
+          "balances": {
+            "BTC": "1000000",
+            "ETH": "300000000000000000",
+            "USDT": "99999999"
+          }
+        },
+        {
+          "user_ref": "U-100007",
+          "balances": {
+            "USDT": "10000000"
+          }
+        },
+        {
+          "user_ref": "U-100008",
+          "balances": {
+            "BTC": "2112345678"
+          }
+        },
+        {
+          "user_ref": "U-100009",
+          "balances": {
+            "ETH": "100000000000000000000",
+            "USDT": "1"
+          }
+        },
+        {
+          "user_ref": "U-100010",
+          "balances": {
+            "BTC": "1"
+          }
+        },
+        {
+          "user_ref": "U-100011",
+          "balances": {
+            "USDT": "4200500000"
+          }
+        },
+        {
+          "user_ref": "U-100012",
+          "balances": {}
+        }
+      ]
+    },
+    {
+      "name": "JSON: an amount given as a number, an undeclared asset, an account twice, a negative amount",
+      "file": "intake/bad-accounts.json",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 1,
+          "code": "amount_not_text"
+        },
+        {
+          "line": 2,
+          "code": "unknown_asset"
+        },
+        {
+          "line": 4,
+          "code": "duplicate_account"
+        },
+        {
+          "line": 5,
+          "code": "amount_negative"
+        },
+        {
+          "line": 6,
+          "code": "json_shape"
+        },
+        {
+          "line": 7,
+          "code": "json_shape"
+        }
+      ]
+    },
+    {
+      "name": "JSON: both spellings of a field, and a key written twice",
+      "file": "intake/bad-accounts-ambiguous.json",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 1,
+          "code": "json_shape"
+        },
+        {
+          "line": 2,
+          "code": "json_shape"
+        },
+        {
+          "line": 3,
+          "code": "json_duplicate_key"
+        },
+        {
+          "line": 4,
+          "code": "json_duplicate_key"
+        }
+      ]
+    },
+    {
+      "name": "JSON: not an array",
+      "file": "intake/bad-shape.json",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 0,
+          "code": "json_shape"
+        }
+      ]
+    },
+    {
+      "name": "JSON: not JSON",
+      "file": "intake/bad-syntax.json",
+      "options": {
+        "assets": [
+          {
+            "symbol": "BTC",
+            "decimals": 8
+          },
+          {
+            "symbol": "ETH",
+            "decimals": 18
+          },
+          {
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        ],
+        "amounts": "decimal"
+      },
+      "ok": false,
+      "problems": [
+        {
+          "line": 0,
+          "code": "json_syntax"
+        }
+      ]
+    }
+  ]
+}

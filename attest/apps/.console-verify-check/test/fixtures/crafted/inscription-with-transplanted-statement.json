@@ -1,0 +1,41 @@
+{
+  "schema": "bitcert-proof-bundle/v1",
+  "bitcoin_network": "regtest",
+  "generated_at": "2026-11-18T08:20:11.476Z",
+  "record": {
+    "kind": "attestation",
+    "leaf_bytes": "979d9ff7d9c0597ee5d78848a1e4919289e9e87069a04f38a88ea8e197e3b883",
+    "preimage": {
+      "scheme": "sha256-signed-statement/v1",
+      "content_type": "text/plain",
+      "statement": {
+        "schema": "stonehash-attestation-statement/v1",
+        "document": {
+          "sha256": "2501eb8971aa496e86ed71f19b1d03b4738d594da148ea5620b0ed054e75a9e1",
+          "content_type": "text/plain"
+        },
+        "issuer": {
+          "key_id": "73c74988-c8b8-43ee-b823-3633f4c6213f",
+          "algorithm": "ES256",
+          "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEiQicJc6wPzI7crh+TBpBKcck3ak4hiVij/N7Mvs4bsksze/YaTKtODmKzJlXlzmtHvGEJA3q2BZyO4SS355wxg=="
+        },
+        "issued_at": "2026-11-18T08:20:07Z",
+        "signature": "85vjPiADUPGyInueGi2ZgwMuknaP-clX5W9doob_5ftoqZJSLMSDt_qSs3t6JiP3-3QacNidKhviDxPMeNOPtg"
+      }
+    },
+    "descriptor": {
+      "attestation_id": "fea10e7a-dc28-4a23-a11f-d5c093585e5b"
+    }
+  },
+  "anchor": {
+    "reveal_txid": "f65bab1764069b43bf88f6de9a34d920ba28e9e84d4c2313282e1afae86474e7",
+    "reveal_tx_hex": "02000000000101dcba264eae3898fb1126efb179edec759bee73937c8f45daa2768507031fd1c70000000000fdffffff020000000000000000226a20979d9ff7d9c0597ee5d78848a1e4919289e9e87069a04f38a88ea8e197e3b883e803000000000000225120a93571c4c3c9f78b684887e76fd8db4d593083da0f3ecfff3314316a7e0e3b300340cedc173e9eec22990e3c8b85854cd6ecf5a5a1f7a97ce66308012a412a30d19273e14184e7d7e24cec21e7d1bf1254a5fbd71b60e96b60f1b0005cea46a7d5e794203e9d90646ef6cc02272f1f169da462b81d69570097940bfd2e4755bef022edf4ac006304626372740a746578742f706c61696e4c5d53746f6e65486173682041747465737420636f6e736f6c65207465737420646f63756d656e742028696e736372697074696f6e290a54686573652062797465732061726520696e7369646520746865207472616e73616374696f6e2e0a6821c050929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac000000000",
+    "op_return_payload_hex": "979d9ff7d9c0597ee5d78848a1e4919289e9e87069a04f38a88ea8e197e3b883",
+    "witness_envelope": {
+      "input_index": 0,
+      "content_type": "text/plain",
+      "protocol_tag": "bcrt"
+    }
+  },
+  "commit_txid": "c7d11f03078576a2da458f7c9373ee9b75eced79b1ef2611fb9838ae4e26badc"
+}

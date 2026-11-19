@@ -1,0 +1,231 @@
+{
+ "lens": "plan-and-stack",
+ "summary": "The scope, the contracts and the session split can be executed as written, and most stack defaults hold: Spring MVC, MyBatis, Flyway and Maven are sound, and Java 17 as the language level matches Spring Boot 4's minimum. The parallel-run, cut-over and rollback steps are not safe as written. Four things must change before work starts. (1) The stack table says to reuse `.env` as is, but its defaults (`STONEHASH_DB_URL`, `BITCOIND_WALLET=attest`) point Java at the production schema and the live wallet. (2) Validation on a production replica must switch off outbound side effects (broadcasts, pending webhooks, partner calls) and compare against a second TypeScript instance, not `:8787`. (3) A rollback rule is missing. Flyway's free edition has no undo, so the rollback window must allow only additive migrations, and a rollback must mean restarting TypeScript on the same schema, not restoring a backup. (4) Times are ISO VARCHAR strings compared as text, so Java must write exactly the `toISOString()` shape. Next: the Flyway takeover needs a V1 baseline taken from the live schema and checked by a schema diff, a decision on the three boot-time data jobs, and migration as a separate step, because Spring Boot runs `migrate()` on startup by default. TypeScript changes made during the port need a matching contract test and migration. Stack facts checked on 2026-11-18: only Spring Boot 4.1 (OSS to 2027-07-31) and 4.0 (OSS ends 2026-12-31) are in open-source support, so 4.1.x should be pinned. Calling 21 the latest LTS is wrong; the latest is 25. BouncyCastle 1.85 and later has `BIP340Signer` but no BIP341, so the taproot code must still be ported. Remittance, the riskiest phase, should start alongside the others once the interfaces are fixed, and the double-entry ledger, which has no TypeScript counterpart, should come out of the port's completion criteria.",
+ "findings": [
+  {
+   "id": "PS-01",
+   "severity": "must-fix",
+   "kind": "risk",
+   "where_in_doc": "2장 표 '설정' 행: '환경 변수 이름을 지금과 동일하게 … `.env`를 그대로 사용'",
+   "problem": "Reusing the live core's .env makes the Java core open the production schema and spend from the production 'attest' wallet. config.ts gives the wallet a default of 'attest', and the DB URL comes from that .env. Section 6 forbids both, but the stack table tells the executing session the opposite. A Java worker started this way runs against the same schema and wallet as the live TypeScript core, which is the double-runner case the document warns about. Phase 2's regtest check also names no wallet.",
+   "evidence": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/config.ts:322 dbUrl: str('STONEHASH_DB_URL', '')",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/config.ts:329 wallet: str('BITCOIND_WALLET', 'attest')",
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:57 '`.env`를 그대로 사용'",
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:189-190,195-196 (운영 스키마·attest 지갑 금지, 같은 스키마 동시 접속 금지)",
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:171 (2단계 완료 조건: regtest 접수→앵커, 지갑 미지정)"
+   ],
+   "confidence": "high",
+   "proposed_text": "| 설정 | 환경 변수 이름과 기본값은 지금과 같게 둡니다. 단, 개발·병행 검증 동안에는 `apps/core/.env`를 읽지 않고 `core-java/.env.dev`(`STONEHASH_DB_URL=…/stonehash_test_corejava`, `BITCOIND_WALLET=attest_corejava`, 포트 `8790`)를 씁니다. Java 코어는 DB 이름이 `stonehash_attest`이거나 지갑이 `attest`이면 전환 승인 표시(예: `STONEHASH_CUTOVER_APPROVED=1`) 없이는 기동하지 않습니다. 별도 지갑 생성과 자금용 블록 생성은 공유 regtest 체인을 바꾸므로 소유자에게 한 줄 알리고 합니다. | 운영 `.env`의 값은 운영 스키마와 운영 지갑을 가리킵니다. 그대로 쓰는 것은 6단계 전환 때뿐입니다 |"
+  },
+  {
+   "id": "PS-02",
+   "severity": "must-fix",
+   "kind": "risk",
+   "where_in_doc": "5장 'Java 코어를 다른 포트에 나란히 띄우고', 6단계 '운영 DB 복제본으로 병행 검증', 6장 '병행 검증은 복제한 스키마에서 합니다'",
+   "problem": "A replica of production carries rows the live core is still working on: open or sealed batches, webhooks in 'pending' with a due `next_attempt_at`, and in-flight remittances. The TypeScript workers start unconditionally at boot with a plain timer and no lock, and a Java 'worker' profile would do the same. Against a replica it would seal and broadcast those batches again (on the shared bitcoind), deliver the same webhooks again to the demo customers, and call the partner simulator again. The document also never names the reference instance for 'responses match the existing server'. Sending write requests to the live `:8787` would put test data into production.",
+   "evidence": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/worker.ts:55 this.timer = setInterval(() => { void this.tick(); }, this.opts.tickMs)",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/main.ts:138-152 BatchWorker created and worker.start(); remitWorker?.start() at boot",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/remit/webhook.ts:79 WHERE status = 'pending' AND next_attempt_at <= ? ORDER BY created_at LIMIT 20",
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:159,176,182,196"
+   ],
+   "confidence": "high",
+   "proposed_text": "- **병행 검증의 외부 부작용 차단.** 복제 스키마에는 운영 코어가 아직 처리 중인 행(미앵커 배치, `pending` 웹훅, 진행 중 송금)이 들어 있을 수 있습니다. 복제본에 붙인 Java 워커는 브로드캐스트를 끄거나 별도 지갑만 씁니다. 웹훅·파트너 호출은 기록만 하는 수신기로 보냅니다. 복제 시점에 이미 있던 대기 작업은 Java가 처리하지 않습니다.\n- **대조 기준 인스턴스.** '기존 서버와 일치'의 기존 서버는 운영 `:8787`이 아닙니다. 같은 복제본을 한 벌 더 떠서 붙인 두 번째 TypeScript 코어(별도 포트, 워커 끔)입니다. 운영 `:8787`에는 쓰기 요청을 보내지 않습니다."
+  },
+  {
+   "id": "PS-03",
+   "severity": "must-fix",
+   "kind": "gap",
+   "where_in_doc": "5장 6단계 '기존 코어는 롤백용 보존' (롤백 규칙 없음)",
+   "problem": "The document has no cut-over order and no rollback rule. Flyway's free edition has no undo. Restoring a backup loses every record written while Java ran, which breaks contract 3. Restarting the TypeScript core on a schema that Java has changed works only if Java kept to TypeScript-readable shapes: additive schema changes only, and no state values TypeScript does not know. The TypeScript core also runs its own DDL and data fixes against whatever schema it opens. In-flight remittances at cut-over are not addressed.",
+   "evidence": [
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:36 (전환으로 한 건도 잃으면 안 됨)",
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:176 '기존 코어는 롤백용 보존'",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/db.ts:987-1016 (TS boot: CREATE IF NOT EXISTS, ADD COLUMN, CREATE INDEX, CLEAR_ORG_EXPIRY on every open)",
+    "https://documentation.red-gate.com/fd/database-version-support-143754067.html ('undo (Flyway Teams+)')"
+   ],
+   "confidence": "high",
+   "proposed_text": "- **전환 순서.** TypeScript 코어(API·워커)를 완전히 멈춤 → 일관 백업(`mysqldump --single-transaction`) → `flyway baseline` 후 `migrate` → Java 기동. 두 코어가 같은 스키마에 동시에 붙는 순간은 없습니다. 송금은 전환 전에 신규 접수를 멈추고, 비종결 송금과 대기 웹훅이 0건이 된 뒤 넘깁니다.\n- **롤백 기간(기본 14일) 규칙.** Flyway 무료판에는 undo가 없습니다. 이 기간의 마이그레이션은 확장만 합니다(새 표, NULL 허용 새 열). 기존 열의 타입·이름·의미를 바꾸는 변경과, 기존 상태 열에 TypeScript가 모르는 값을 쓰는 변경은 기간 뒤로 미룹니다. 미룰 수 없으면 롤백 절차에 해당 행의 정리 방법을 적습니다.\n- **롤백은 백업 복원이 아닙니다.** Java를 멈추고 같은 스키마에 TypeScript 코어를 다시 띄웁니다. 백업 복원은 Java 기간의 기록을 잃으므로(계약 3) 마지막 수단이며 소유자 승인이 필요합니다."
+  },
+  {
+   "id": "PS-04",
+   "severity": "must-fix",
+   "kind": "parity-trap",
+   "where_in_doc": "4장 '기존 표와 API의 시각 표현(ISO 문자열)은 호환을 유지합니다'",
+   "problem": "Every existing time column is a VARCHAR(40) holding `Date.toISOString()` output: always 3 fraction digits and a trailing Z. The code compares these columns and sorts them as text (session expiry, free-tier cleanup, webhook scheduling, keyset paging). Java's `Instant.toString()`, and Jackson's default output, write 0, 3, 6 or 9 fraction digits, and on Linux `Instant.now()` usually gives 6. Rows in mixed formats compare and sort wrongly ('Z' > '.' > digits), so paging can skip or repeat rows. TypeScript would also misread Java-written rows after a rollback. 'ISO 문자열' does not pin the format.",
+   "evidence": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/service.ts:90 const nowIso = (): string => new Date().toISOString();",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/service.ts:411-413 \"... AND expires_at < ?\" with now.toISOString()",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/account.ts:209 DELETE FROM sessions WHERE expires_at <= ?",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/remit/webhook.ts:79 next_attempt_at <= ? ORDER BY created_at",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/remit/store.ts:248 keyset-paged ledger view; db.ts:738 audit_log_org_at(org_id, at, id)",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/db.ts:426-682 created_at VARCHAR(40) on every table"
+   ],
+   "confidence": "high",
+   "proposed_text": "- **시각 문자열은 바이트까지 같게.** 기존 표와 API의 시각은 TypeScript `Date.toISOString()`과 같은 `yyyy-MM-dd'T'HH:mm:ss.SSS'Z'`(UTC, 밀리초 3자리 고정)로만 씁니다. `Instant.toString()`과 Jackson 기본 직렬화는 소수 자릿수가 0·3·6·9자리로 바뀝니다. 그러면 문자열 비교(`expires_at <= ?`, `next_attempt_at <= ?`)와 `(시각, id)` 키셋 페이지가 틀어지고, 롤백 때 TypeScript가 그 행을 잘못 읽습니다. 형식 함수는 하나만 두고, 계약 테스트에 형식 검사(정규식)를 넣습니다."
+  },
+  {
+   "id": "PS-05",
+   "severity": "should-fix",
+   "kind": "gap",
+   "where_in_doc": "2장 '스키마 변경 | Flyway', 5장 0단계 '현행 스키마를 그대로 담은 Flyway 기준선' / 완료 조건",
+   "problem": "Today the schema is built at boot. There are CREATE TABLE IF NOT EXISTS statements, 17 ADD COLUMN checks against information_schema (appended without AFTER, so production column order and history differ from a fresh CREATE), and index creation by catalogue lookup. Phase 0's completion check (/healthz, /v1/meta) never verifies the baseline. Production will be registered with `baseline`, so V1 never runs there, and only a schema diff proves V1 equals production. Three boot-time data jobs (CLEAR_ORG_EXPIRY on every open, backfillSourceRefs, backfillSnapshotKeys) have no plan under 'no DDL at boot'.",
+   "evidence": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/db.ts:987-1012 (CREATE TABLE loop, ADD COLUMN via information_schema, CREATE INDEX via information_schema.statistics)",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/db.ts:758-759,1014 CLEAR_ORG_EXPIRY run on every open",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/main.ts:88 store.backfillSourceRefs(); main.ts:112 backfillSnapshotKeys",
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:137,168"
+   ],
+   "confidence": "high",
+   "proposed_text": "0단계 완료 조건에 더함: \"Flyway `V1`은 `db.ts`가 아니라 운영 스키마의 `SHOW CREATE TABLE`(읽기 전용)에서 뽑는다. 빈 스키마에 `V1`을 적용한 결과와 운영 스키마의 `information_schema.columns`·`statistics`(열 타입·NULL·기본값·콜레이션, 인덱스 이름·열)를 비교해 차이가 0이어야 한다.\" 4장에 더함: \"부팅 시 자료 작업 세 가지(`CLEAR_ORG_EXPIRY`, `backfillSourceRefs`, `backfillSnapshotKeys`)는 Java 부팅으로 옮기지 않는다. 전환 직전 점검 쿼리로 남은 대상이 0건(복구 불가로 기록된 행 제외)임을 확인한다. 조직 기록에 `expires_at`을 쓰지 않는다는 규칙은 테스트로 지킨다.\""
+  },
+  {
+   "id": "PS-06",
+   "severity": "should-fix",
+   "kind": "gap",
+   "where_in_doc": "6장 '기존 TypeScript 코어의 수정은 계속할 수 있습니다. 다만 … 변경 기록에 한 줄을 남겨'",
+   "problem": "A change-log line is the only guard against drift. The schema already drifted within one day: the analysis counted 12 boot-created indexes, and db.ts now creates 14. A TypeScript DDL change made after V1 silently changes the schema Java will baseline. The port is estimated at 70–90 person-days, the owner may launch on the current stack, and c7 chose to fix the remit cancel and send races only in Java. Those races would stay live in production TypeScript the whole time.",
+   "evidence": [
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:194 (변경 기록 한 줄)",
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:123 (TypeScript에서 따로 고치지 않고 이 전환에서 고치자)",
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:211,222 (현 스택 선출시 선택지, 70~90인일)",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/db.ts:724-739 (14 MYSQL_INDEXES) vs /home/ubuntu/bitcert-attest/docs/analysis-2026-11-18/database.json ('12 secondary indexes via catalogue')",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/db.ts:761-813 ADDED_COLUMNS"
+   ],
+   "confidence": "high",
+   "proposed_text": "- **전환 중 TypeScript 수정 규칙.** ① 계약·동작을 바꾸는 수정은 외부 주소로 도는 블랙박스 계약 테스트를 함께 넣어야 운영에 올립니다. 변경 기록 줄에는 그 테스트 이름을 적습니다. ② 스키마를 바꾸는 수정(`ADDED_COLUMNS`, `MYSQL_INDEXES`, 새 표)은 같은 날 Java에 같은 내용의 `V*` 마이그레이션을 더합니다. 전환 전까지 운영 스키마의 주인은 TypeScript 부팅 DDL입니다. ③ 이미 Java로 옮긴 영역을 수정하면 담당 세션(a7/c7)에 바로 알립니다. ④ 현 스택으로 먼저 출시하기로 하면 4장 1번의 취소·전송 지시 경합은 TypeScript에서도 조건부 갱신으로 먼저 막습니다."
+  },
+  {
+   "id": "PS-07",
+   "severity": "should-fix",
+   "kind": "ambiguity",
+   "where_in_doc": "5장 '같은 입력에 대한 응답이 기존 서버와 일치하면 끝난 것으로 봅니다'",
+   "problem": "As written, the completion check cannot be applied. Responses carry per-request IDs, timestamps, signatures and txids, so they never match byte for byte. Section 4 also requires deliberate behaviour changes: conditional cancel, an 'in confirmation' state, READ COMMITTED, and request validation that adds new 400 responses. Under the literal parity rule those count as failures. Without a stated comparison rule and a list of intended differences, every phase stays 'not done' or gets judged by impression.",
+   "evidence": [
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:157",
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:122,125,128-129 (의도된 동작 변경)",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/service.ts:90 (요청마다 생성되는 시각)"
+   ],
+   "confidence": "high",
+   "proposed_text": "'응답 일치'는 이렇게 판정합니다. 상태 코드, 오류 코드(`error`), 필드 이름·타입·시각 형식, 결정적 값(해시, 커밋, Merkle 루트·경로, BC01 바이트)은 같아야 합니다. ID·시각·서명·txid처럼 매번 달라지는 값은 형식만 비교하고, 서명은 검증 통과로 대신합니다. 4장 때문에 일부러 달라지는 응답(조건부 취소, 확인 중 상태, 새 요청 검증 오류 등)은 '의도된 차이' 표에 요청·기존 응답·새 응답을 적어 둡니다. 표에 없는 차이는 결함으로 봅니다."
+  },
+  {
+   "id": "PS-08",
+   "severity": "should-fix",
+   "kind": "risk",
+   "where_in_doc": "5장 표 순서(5단계 송금이 마지막), 4장 5번 '불변 복식부기 원장'",
+   "problem": "Remittance is the largest area (3,662 lines) and the riskiest, since it is a redesign with a job queue, idempotency, new states and concurrency. It sits last in a numbered table, so it reads as starting after phases 1–4, although its only stated precondition is the common-layer interface. The ledger (4장 item 5) is a new feature: none of the 21 tables is a ledger or journal table, and 'ledger' in the remit code only names the payments list view. It has no reference implementation to compare against, which conflicts with the parity criterion and widens a language port into a product change.",
+   "evidence": [
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:76 (표 21개 — 원장·분개 표 없음)",
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:127,166-176,197",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/remit/store.ts:210,248 ('ledger' = keyset-paged payments list view)"
+   ],
+   "confidence": "medium",
+   "proposed_text": "- 단계 번호는 착수 순서가 아니라 묶음입니다. 5단계(송금, c7)는 0단계에서 공통 인터페이스(DB 트랜잭션, 라우터, 오류 본문, 인증, 감사)가 확정되면 1~4단계와 나란히 시작합니다. 송금 재설계(4장 1~4번)는 코드를 쓰기 전에 상태 전이표·작업 큐 표·단계별 멱등키를 문서로 검토받습니다.\n- 4장 5번 복식부기 원장은 TypeScript에 대응 구현도 표도 없는 새 기능이라 대조할 기준이 없습니다. 이 전환의 완료 조건에서 빼고 '실자금 투입 전' 관문으로 따로 둡니다."
+  },
+  {
+   "id": "PS-09",
+   "severity": "should-fix",
+   "kind": "gap",
+   "where_in_doc": "2장 '구조 | … 역할은 프로필로 분리(`api`, `worker`)', 5장 2단계 완료 조건",
+   "problem": "Both TypeScript workers are bare timers. The batch worker takes no lease or lock at all, and the only FOR UPDATE in the remit code is the org row at intake. Splitting roles into profiles invites running more than one worker or api instance. Phase 5 tests 'two workers claiming', but phase 2 (seal → anchor) has no such test, though a double seal or double broadcast is the main batch risk. The rate limiter keeps its counts in memory, so with N api instances the effective limit becomes N times the configured one.",
+   "evidence": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/worker.ts:55 setInterval tick, no lock",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/remit/worker.ts:28 setInterval tick, no lock",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/remit/store.ts:393 SELECT id FROM orgs WHERE id = ? FOR UPDATE (only lock)",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/http/ratelimit.ts:21 private readonly hits = new Map<…>()",
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:50,171,175"
+   ],
+   "confidence": "high",
+   "proposed_text": "- **인스턴스 수 규칙.** 배치 워커와 송금 워커는 DB 리스 행(이름·소유자·만료 시각을 조건부 UPDATE로 잡음, DB 제품 무관)을 잡은 인스턴스 하나만 일합니다. 2단계 완료 조건에 '워커 2개를 띄워도 배치 하나가 한 번만 봉인·브로드캐스트됨'을 더합니다. 속도 제한은 지금 메모리에 있으므로, 공유 저장소로 옮기기 전까지 `api` 인스턴스는 하나만 띄웁니다."
+  },
+  {
+   "id": "PS-10",
+   "severity": "should-fix",
+   "kind": "ambiguity",
+   "where_in_doc": "2장 '스키마 변경 | Flyway. 부팅할 때 DDL을 실행하지 않음'",
+   "problem": "Spring Boot's default contradicts this row: with the Flyway module on the classpath, it calls `Flyway.migrate()` at startup. Every `api` and `worker` instance would then run DDL at boot unless the document says otherwise. Bank delivery normally needs DDL applied by a DBA with a separate account, which also argues for a separate migrate step and a version check at boot. MySQL needs the extra `flyway-mysql` module, and the allow-list does not name it.",
+   "evidence": [
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:53,59",
+    "https://docs.spring.io/spring-boot/how-to/data-initialization.html ('To automatically run Flyway database migrations on startup, add the appropriate Flyway module…'; 'Spring Boot calls Flyway.migrate()…'; 'use … org.flywaydb:flyway-mysql with MySQL')"
+   ],
+   "confidence": "high",
+   "proposed_text": "| 스키마 변경 | Flyway(`flyway-mysql` 모듈 포함). 마이그레이션은 한 번 실행하고 끝나는 `migrate` 실행으로만 합니다. `api`·`worker` 프로필은 `spring.flyway.enabled=false`로 두고, 기동 때 `flyway_schema_history`의 최신 버전이 앱이 기대하는 버전과 다르면 기동을 거부합니다. 앱 DB 계정에는 DDL 권한을 주지 않습니다 | Spring Boot는 Flyway가 클래스패스에 있으면 기동 때 `migrate()`를 자동 실행합니다. 은행 납품 때는 DBA가 같은 스크립트를 적용합니다 |"
+  },
+  {
+   "id": "PS-11",
+   "severity": "should-fix",
+   "kind": "wrong-fact",
+   "where_in_doc": "2장 '언어 수준 | Java 17', '프레임워크 | … 버전은 착수 시점에 … 확인'; 7장 'Java 버전 | 17 | 21 (은행 요구가 없다면 최신 LTS)'",
+   "problem": "On 2026-11-18 only Spring Boot 4.1 (OSS support to 2027-07-31) and 4.0 (OSS support ends 2026-12-31) are in open-source support. 3.5 left OSS support on 2026-06-30, so the familiar 3.x line would start out of support, and 4.0 ends six weeks after start. Boot 4.1 requires Java 17 at minimum and runs up to Java 27, so 17 is a sound language level. But 21 is not the latest LTS; that is 25. For bank installs the real constraint is the servlet container, not the JDK: Boot 4.x needs Servlet 6.1 (Tomcat 11), so the deliverable should be an executable jar rather than a WAR on an existing bank WAS. `mybatis-spring-boot-starter` 4.0.x exists for Boot 4.",
+   "evidence": [
+    "https://endoflife.date/spring-boot (4.1: OSS ends 2027-07-31; 4.0: 2026-12-31; 3.5: ended 2026-06-30)",
+    "https://docs.spring.io/spring-boot/system-requirements.html (Spring Boot 4.1.2: 'requires at least Java 17', 'compatible with versions up to and including Java 27', Tomcat 11.0 / Servlet 6.1, Maven 3.6.3+)",
+    "https://mybatis.org/spring/boot.html (search result: starter 4.0.0 shown in the Gradle example)",
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:47-48,216"
+   ],
+   "confidence": "high",
+   "proposed_text": "| 프레임워크 | Spring Boot 4.1.x, 서블릿 방식. 2026-11 기준 OSS 지원 계열은 4.1(2027-07-31까지)과 4.0(2026-12-31 종료)뿐이고, 3.5는 2026-06-30에 OSS 지원이 끝났습니다. MyBatis는 `mybatis-spring-boot-starter` 4.0.x | 산출물은 내장 Tomcat 실행 jar입니다. 4.x는 Servlet 6.1(Tomcat 11) 이상이 필요해, 은행의 기존 WAS에 WAR로 올리는 방식은 범위 밖입니다 |\n7장: | Java 버전 | 17(Boot 4의 최소, 실행은 21 또는 25) | 21 또는 25(최신 LTS는 25) |"
+  },
+  {
+   "id": "PS-12",
+   "severity": "should-fix",
+   "kind": "wrong-fact",
+   "where_in_doc": "2장 'DB | … SQL은 특정 DB 전용 기능 없이 작성'",
+   "problem": "This row conflicts with the row above it ('DB 제품별 SQL 분기 가능'), and the rule cannot be met. The inherited schema and queries are MySQL-specific: InnoDB with utf8mb4_bin on every table and the connection, an AUTO_INCREMENT `rowseq`, MEDIUMTEXT, LIMIT in the webhook claim, FOR UPDATE at intake. Section 4's job-queue claim needs skip-locked semantics. Oracle stores '' as NULL, and the code writes empty strings (user_agent). The document should name the branch points and how to split them (MyBatis `databaseId`, Flyway `{vendor}` folders), and pin the binary collation so keys and idempotency keys stay case-sensitive.",
+   "evidence": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/db.ts:427 ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/db.ts:452 rowseq BIGINT NOT NULL AUTO_INCREMENT UNIQUE; db.ts:779 MEDIUMTEXT; db.ts:978 charset: 'utf8mb4_bin'",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/account.ts:172 (userAgent ?? '').slice(0, 200)",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/remit/webhook.ts:79 LIMIT 20; remit/store.ts:393 FOR UPDATE",
+    "https://docs.spring.io/spring-boot/how-to/data-initialization.html (spring.flyway.locations=classpath:db/migration/{vendor})"
+   ],
+   "confidence": "high",
+   "proposed_text": "| DB | MySQL 8.4 LTS 목표(현재 8.0.46). 표준 SQL을 우선하되, 제품마다 다를 수밖에 없는 것은 분기 지점으로 모읍니다: 행 수 제한(`LIMIT`/`FETCH FIRST`), 작업 선점(`FOR UPDATE SKIP LOCKED`), 자동 증가(`rowseq`)/시퀀스, upsert, 큰 텍스트(`MEDIUMTEXT`/`CLOB`), 빈 문자열(Oracle은 NULL로 저장). 매퍼는 MyBatis `databaseId`로, 마이그레이션은 `db/migration/{vendor}`로 나눕니다. 지금은 MySQL 것만 만듭니다. MySQL은 표와 연결 모두 `utf8mb4_bin`으로 고정합니다 | MySQL 기본 콜레이션은 대소문자를 구분하지 않아 키·멱등키가 겹칩니다 |"
+  },
+  {
+   "id": "PS-13",
+   "severity": "should-fix",
+   "kind": "wrong-fact",
+   "where_in_doc": "2장 '암호' 행: 'Schnorr·탭루트는 BouncyCastle 또는 기존 구현 이식 중 택일'",
+   "problem": "This is not an either/or. BouncyCastle (1.85 and later; current API 1.87) ships `org.bouncycastle.crypto.signers.BIP340Signer` with x-only keys and 64-byte signatures, but it has no BIP341 support: no key tweak, script tree, sighash or control block. Those parts must be ported from btc/taproot.ts whichever way the choice goes. The TypeScript curve math is hand-written BigInt code that does not need porting. BC signs with random aux_rand by default and offers deterministic mode only with aux = 0^32, so reproducing signing vectors needs a fixed SecureRandom.",
+   "evidence": [
+    "https://downloads.bouncycastle.org/java/docs/bcprov-jdk18on-javadoc/org/bouncycastle/crypto/signers/BIP340Signer.html ('Schnorr signatures for secp256k1 per BIP-340'; randomized by default; BIP340Signer(boolean deterministic) = aux_rand 0^32; no BIP-341 methods)",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/btc/taproot.ts:28 import { bigintTo32, bytesToBigint, G, liftX, pointAdd, pointMul, taggedHash, xOnly, N } from './secp256k1.ts'",
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:54"
+   ],
+   "confidence": "high",
+   "proposed_text": "| 암호 | JCA(P-256, SHA-256, HMAC, AES-GCM, ECDH)에 BouncyCastle(1.85 이상)을 더합니다: scrypt는 `SCrypt.generate`, BIP340 Schnorr는 `BIP340Signer`. 탭루트(BIP341: 키 트윅, 스크립트 트리, sighash, control block)는 BouncyCastle에 없으므로 `btc/taproot.ts`를 이식합니다. 곡선 연산은 `btc/secp256k1.ts`를 옮기지 않고 BouncyCastle 것을 씁니다 | 기존 `inscription`·`schnorr` 벡터와 BIP340 공식 벡터로 검증합니다. BouncyCastle은 기본이 무작위 서명이고 결정적 모드는 aux=0만 지원하므로, 서명 벡터는 aux_rand를 고정한 `SecureRandom`을 `ParametersWithRandom`으로 넣어 재현합니다 |"
+  },
+  {
+   "id": "PS-14",
+   "severity": "should-fix",
+   "kind": "risk",
+   "where_in_doc": "1장 계약 4 '비밀번호 해시(`scrypt$N$r$p$salt$hash`, N=32768·r=8·p=1)'",
+   "problem": "The contract leaves out details needed for byte compatibility: salt and hash are standard padded base64, the salt is 16 bytes, the key is 32 bytes, and verification reads N/r/p and the key length from the stored string, not from constants. Each hash needs about 128·N·r = 32 MiB, which is why Node raises maxmem. Node ran `scryptSync`, so hashes ran one at a time on the event loop. A Java servlet pool (about 200 threads) can run dozens at once and exhaust the heap during a login burst.",
+   "evidence": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/account.ts:46 const SCRYPT = { N: 32_768, r: 8, p: 1, keylen: 32 }",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/account.ts:49-57 (needs ~128·N·r bytes; maxmem = 256·N·r)",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/account.ts:78-82 randomBytes(16) … salt.toString('base64'), hash.toString('base64')].join('$')",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/account.ts:92-101 parts from stored string; scryptSync(password, Buffer.from(saltB64,'base64'), expected.length, …)"
+   ],
+   "confidence": "high",
+   "proposed_text": "비밀번호 해시 형식은 `scrypt$N$r$p$<솔트 base64>$<해시 base64>`입니다(표준 base64·패딩 포함, 솔트 16바이트, 키 길이 32바이트, 현재 N=32768·r=8·p=1). 검증 때는 N·r·p와 키 길이를 저장 문자열에서 읽고, 비밀번호는 UTF-8 바이트로 넣습니다. 해시 한 번에 약 32MiB를 씁니다. Node는 `scryptSync`라 한 번에 하나씩만 돌았으므로, Java에서는 동시 해시 수를 세마포어로 제한합니다(기본 2)."
+  },
+  {
+   "id": "PS-15",
+   "severity": "nice-to-have",
+   "kind": "gap",
+   "where_in_doc": "2장 의존성 허용 목록, 4장 7번 '생성되는 API 문서를 현행 `openapi.json`과 대조', 5장 '`openapi.test.ts` … Java 쪽 라우트 목록을 읽도록'",
+   "problem": "Section 4 item 7 requires request validation and generated API docs compared against openapi.json, and the docs test must later read the Java routes. The dependency allow-list names neither a validation starter nor an OpenAPI generator, and the document never defines how Java exposes its route list. Without that, the executing session must either add an unlisted dependency or invent a format.",
+   "evidence": [
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:59 (허용 목록)",
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:129",
+    "/home/ubuntu/bitcert-attest/docs/JAVA-BACKEND-MIGRATION.md:183"
+   ],
+   "confidence": "medium",
+   "proposed_text": "의존성 허용 목록에 요청 검증(`spring-boot-starter-validation`)과 API 문서 생성(`springdoc-openapi`, Boot 4 대응판)을 더합니다. 또는 문서 생성 대신 Java가 빌드 때 라우트 목록 파일(메서드·경로)을 내고, `apps/docs/test/openapi.test.ts`가 그 파일을 읽게 합니다. 어느 쪽인지는 0단계에서 정합니다."
+  }
+ ]
+}

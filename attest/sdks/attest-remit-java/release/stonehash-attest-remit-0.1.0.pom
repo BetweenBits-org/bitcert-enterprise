@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.stonehash</groupId>
+  <artifactId>stonehash-attest-remit</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+  <name>StoneHash Attest cross-border settlement SDK</name>
+  <description>The bank's side of the StoneHash Attest settlement corridor: SWIFT messages in, signed payment instructions out, status back as pacs.002. Java 11 or later, no dependencies.</description>
+</project>

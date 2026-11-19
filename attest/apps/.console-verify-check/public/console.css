@@ -1,0 +1,1203 @@
+/*
+ * Sandbox Console styling.
+ *
+ * Shares the Playground's and the Hub's tokens, which in turn come from the
+ * homepage — Red Hat Display, #00A8BA primary, #F7F9FA ground, 10px radius — so
+ * the four surfaces read as one product rather than four projects.
+ *
+ * The state colours follow the same rule as everywhere else in this codebase:
+ * only `confirmed` gets the brand colour. `accepted`, `batched` and
+ * `submitted` are in progress and render neutral, because a green chip on a
+ * record that has not reached the chain tells the customer something untrue
+ * about where their document is.
+ *
+ * No webfont is loaded. The page must work offline and a remote font would be
+ * blocked by the CSP anyway.
+ */
+:root {
+  --brand: #00A8BA;
+  --brand-2: #0074E8;
+  --ink: #020D0F;
+  --ink-2: #424F51;
+  --ink-3: #808687;
+  --rule: #E6E7E7;
+  --rule-2: #D0D2D2;
+  --ground: #ffffff;
+  --ground-2: #F7F9FA;
+  --fail: #C0272D;
+  --fail-bg: #fdf0f0;
+  --pass-bg: #e6f6f8;
+  --inert: #B5B7B7;
+  --inert-bg: #EDEEEE;
+  /*
+   * Caution, in the marketing site's own values (`.at-result.is-changed`).
+   *
+   * Ours was a shade harder and — the part that actually showed — used the
+   * text colour as the border. The homepage never does: it pairs the deep
+   * text with a much softer rule, which is why the same hue reads as a note
+   * there and as an alarm here. `--warn-rule` is that softer edge.
+   */
+  --warn: #9a4b1c;
+  --warn-bg: #fff3e9;
+  --warn-rule: #f0d6bf;
+  --radius: 8px;
+  --radius-tag: 3px;
+  --panel: #173236;
+  --panel-ink: #e1ebec;
+  --panel-rule: #2c474b;
+  /*
+   * The marketing site's near-black. Its hero is the first thing anyone sees
+   * and the reason the brand reads as infrastructure rather than as a SaaS
+   * dashboard; carrying the same surface into the masthead is what ties the
+   * two together. Cyan is the only accent that appears on it.
+   */
+  --dark: #020D0F;
+  --dark-2: #0b1b20;
+  --dark-rule: #22383d;
+  --dark-ink: #ffffff;
+  --dark-ink-2: #9CA9AD;
+  --cyan: #5BDBE8;
+  --panel-dim: #91aaad;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: "Red Hat Display", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+          "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --masthead: 64px;
+}
+
+* { box-sizing: border-box; }
+
+/*
+ * `hidden` must actually hide.
+ *
+ * The UA stylesheet implements the attribute as `display: none`, which any
+ * author rule with a class selector outranks — and both panels below are
+ * `display: grid`. So signing in set `gate.hidden = true` and the sign-in card
+ * stayed on screen above the dashboard, because `.gate` beat `[hidden]`.
+ *
+ * It did not show up before sign-in only because the dashboard happens to be
+ * empty until it is rendered, so it took up no room and looked hidden.
+ */
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--ground-2); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--brand-2); text-underline-offset: 2px; }
+.wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+.main { padding: 32px 24px 72px; }
+.dim { color: var(--ink-3); }
+.mono { font-family: var(--mono); font-size: .9em; }
+.hint { font-size: 13.5px; color: var(--ink-3); line-height: 1.6; }
+
+/* ── masthead ─────────────────────────────────────────────────────────── */
+.masthead { background: var(--ground); border-bottom: 1px solid var(--rule); }
+/*
+ * Full width, left-aligned to the sidebar.
+ *
+ * The bar inherited the centred 1060px `.wrap` from before there was a
+ * sidebar, so the brand floated somewhere between the left edge and the menu
+ * below it and lined up with neither. Its left padding now matches the
+ * sidebar's, which puts the wordmark directly over the first menu item.
+ */
+.masthead .wrap {
+  display: flex; align-items: center; gap: 16px; height: var(--masthead);
+  max-width: none; padding: 0 24px 0 16px;
+}
+/* One right-hand group, so the bar has a single thing pushed right. Two
+   siblings each carrying `margin-left: auto` split the free space between
+   them, which parked the language pair mid-bar instead of at the edge. */
+.topend { margin-left: auto; display: flex; align-items: center; gap: 18px; }
+.topright { display: flex; align-items: center; gap: 14px; }
+.netchip { display: inline-flex; align-items: center; gap: 7px; }
+
+/* A <details> dropdown: open/close and keyboard handling for free, and no
+   inline style, which this page's policy blocks. */
+.acct { position: relative; }
+.acct > summary {
+  list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 12px; border: 1px solid var(--rule); border-radius: 7px;
+  font-size: 13px; background: var(--ground);
+}
+.acct > summary::-webkit-details-marker { display: none; }
+.acct > summary:hover { border-color: var(--brand); }
+.acct[open] > summary { border-color: var(--brand); background: var(--pass-bg); }
+.acct .caret { color: var(--ink-3); font-size: 11px; }
+.acctmenu {
+  position: absolute; right: 0; top: calc(100% + 7px); z-index: 20; width: 272px;
+  background: var(--ground); border: 1px solid var(--rule); border-radius: var(--radius);
+  padding: 14px 16px; box-shadow: 0 10px 28px #020d0f14;
+}
+.acctmenu dl { margin: 0 0 12px; }
+.acctmenu .acctlink { display: block; font-size: 13px; padding: 7px 0; }
+.acctmenu .btn { width: 100%; margin-top: 6px; }
+.brand { font-weight: 500; font-size: 17px; letter-spacing: -.01em; color: var(--ink); text-decoration: none; }
+.brand b { font-weight: 900; }
+.sect {
+  font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-3); background: var(--inert-bg); border: 1px solid var(--rule-2);
+  padding: 3px 9px; border-radius: var(--radius-tag);
+}
+.outbound a:hover { color: var(--ink); }
+
+/* ── sign-in gate ─────────────────────────────────────────────────────── */
+.gate { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 32px; align-items: start; }
+.gatecard, .card {
+  background: var(--ground); border: 1px solid var(--rule); border-radius: var(--radius);
+  padding: 24px;
+}
+.gatecard h1 { font-size: 24px; font-weight: 900; letter-spacing: -.02em; margin: 0 0 8px; }
+.gatecard .lede { color: var(--ink-2); font-size: 15px; margin: 0 0 20px; }
+.gatecard label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 14px; }
+.gatecard input {
+  display: block; width: 100%; margin-top: 5px; padding: 10px 12px;
+  font: inherit; font-size: 15px; color: var(--ink);
+  background: var(--ground); border: 1px solid var(--rule-2); border-radius: var(--radius);
+}
+.gatecard input:focus-visible, .btn:focus-visible, .drop:focus-within, #digest:focus-visible {
+  outline: 2px solid var(--brand); outline-offset: 2px;
+}
+.gatecard .btn { width: 100%; margin-top: 4px; }
+.swap { font-size: 14px; color: var(--ink-3); margin: 16px 0 0; text-align: center; }
+.gateside { padding: 8px 0; }
+.gateside h2 { font-size: 15px; font-weight: 700; margin: 0 0 12px; }
+.gateside ul { margin: 0 0 18px; padding-left: 20px; font-size: 14.5px; color: var(--ink-2); }
+.gateside li { margin-bottom: 7px; }
+
+/* ── dashboard ────────────────────────────────────────────────────────── */
+/* `minmax(0, 1fr)`: a grid child defaults to min-content width, so a card
+   with a wide table grew to the table and the whole page laid out at that
+   width on a phone; with the floor removed the card keeps the viewport and
+   `.tablewrap` scrolls the table inside it. */
+.dash { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.dash > .card { min-width: 0; }
+td.when { white-space: nowrap; }
+/* 앵커링 기록: the product a record came from stays on one line beside it. */
+td.rprod { white-space: nowrap; }
+/* Under the hash, what it is the hash of: the settlement, the snapshot. It asks for no width of its own
+   (`width: 0` takes it out of the column's sizing, `min-width: 100%` then gives it the cell's), so the
+   table is as wide as it was without the line, and a long id is cut short with its whole value in the title. */
+td.rhash .rref { display: block; width: 0; min-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; line-height: 1.35; text-align: left; }
+/* A snapshot opened from its row: the copy button beside the id it copies. */
+#snapview dd .btn { margin-left: 8px; }
+/* Date and time may sit on two lines, but neither half breaks inside. */
+td.when2 { min-width: 86px; }
+td.when2 span { white-space: nowrap; }
+tr.dimrow td { color: var(--ink-3); }
+.card h2 { font-size: 16px; font-weight: 700; margin: 0 0 14px; letter-spacing: -.5px; }
+/*
+ * The mono eyebrow the marketing site puts above every section heading
+ * (`.sh-eyebrow`, `.at-flow-label`, `.at-capability-number`). It is the single
+ * strongest brand tell — small, letter-spaced, monospace — and it is what
+ * makes a page read as built by people who work in a terminal.
+ */
+.eyebrow {
+  display: block; font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 1px; text-transform: uppercase; color: var(--ink-3);
+  margin: 0 0 7px;
+}
+.card p { margin: 0 0 12px; font-size: 14.5px; color: var(--ink-2); max-width: 72ch; }
+.card p:last-child { margin-bottom: 0; }
+.card .lede { color: var(--ink-2); }
+.card.urgent { border-color: var(--brand); background: var(--pass-bg); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+
+dl { margin: 0 0 16px; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 14px; }
+dt { color: var(--ink-3); white-space: nowrap; }
+dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+
+
+code {
+  font-family: var(--mono); font-size: .875em;
+  background: var(--ground-2); border: 1px solid var(--rule);
+  padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere;
+}
+pre.code {
+  margin: 0; padding: 20px 22px; overflow-x: auto;
+  background: var(--panel); border: 1px solid var(--panel-rule); border-radius: var(--radius);
+  color: var(--panel-ink);
+}
+pre.code code {
+  background: none; border: 0; padding: 0; color: inherit;
+  font-size: 12px; line-height: 1.85; white-space: pre;
+}
+
+.keyrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.keyval {
+  flex: 1 1 320px; padding: 10px 12px; font-size: 13.5px;
+  background: var(--ground); border: 1px solid var(--brand); user-select: all;
+}
+
+/* ── buttons ──────────────────────────────────────────────────────────── */
+.btn {
+  font: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer;
+  padding: 10px 18px; border-radius: var(--radius);
+  color: var(--ground); background: var(--ink); border: 1px solid var(--ink);
+  text-decoration: none; display: inline-block; text-align: center;
+}
+.btn:hover { background: var(--ink-2); border-color: var(--ink-2); }
+.btn:disabled { background: var(--inert); border-color: var(--inert); cursor: not-allowed; }
+.btn.ghost { color: var(--ink); background: var(--ground); border-color: var(--rule-2); }
+.btn.ghost:hover { background: var(--ground-2); }
+.btn.small { padding: 5px 11px; font-size: 13px; }
+
+.row { display: flex; gap: 12px; align-items: stretch; margin-bottom: 12px; flex-wrap: wrap; }
+#digest {
+  flex: 1 1 340px; padding: 10px 12px; font-family: var(--mono); font-size: 13px;
+  border: 1px solid var(--rule-2); border-radius: var(--radius); background: var(--ground); color: var(--ink);
+}
+
+.drop {
+  flex: 1 1 100%; display: block; cursor: pointer; padding: 16px;
+  border: 1px dashed var(--rule-2); border-radius: var(--radius); background: var(--ground-2);
+}
+.drop:hover { border-color: var(--brand); }
+.dk { display: block; font-family: var(--mono); font-size: 10px; font-weight: 500;
+      letter-spacing: 1px; text-transform: uppercase; color: var(--ink-3); }
+.dv { display: block; font-size: 14.5px; color: var(--ink-2); margin-top: 3px; }
+
+/* ── state chips ──────────────────────────────────────────────────────── */
+.chip {
+  font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: .7px;
+  text-transform: uppercase;
+  padding: 4px 7px; border-radius: var(--radius-tag); border: 1px solid; white-space: nowrap;
+}
+/* A check that failed is in the fail colour, as the boxes and tiles around it are: among passing chips an
+   unstyled one was the least visible mark on the screen. */
+.chip.bad { color: var(--fail); background: var(--fail-bg); border-color: var(--fail); }
+.chip.ok { color: var(--brand); background: var(--pass-bg); border-color: var(--brand); }
+.chip.wait { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-rule); }
+/* Everything short of confirmed. Neutral on purpose — see the file header. */
+.chip.inert { color: var(--ink-3); background: var(--inert-bg); border-color: var(--rule-2); }
+
+.note {
+  margin: 12px 0 0; padding: 12px 14px; border-radius: var(--radius);
+  font-size: 14px; color: var(--ink-2);
+  background: var(--pass-bg); border: 1px solid var(--brand);
+}
+.note.bad { background: var(--fail-bg); border-color: var(--fail); color: var(--ink); }
+
+/* ── quota ────────────────────────────────────────────────────────────── */
+.quota { margin-bottom: 14px; }
+.qhead { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-size: 13.5px; margin-bottom: 6px; }
+/* A date must move to the next line whole, never break at its hyphens. */
+.qhead > span { white-space: nowrap; }
+.qbar { height: 8px; border-radius: 4px; background: var(--inert-bg); overflow: hidden; }
+.qfill { height: 100%; background: var(--brand); }
+.qfill.full { background: var(--fail); }
+
+/* ── tables ───────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+th { font-size: 12px; font-weight: 700; color: var(--ink-2); background: var(--ground-2); white-space: nowrap; }
+
+/* ── footer ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 820px) {
+  .gate { grid-template-columns: 1fr; }
+  .gateside { order: -1; }
+  .sect { display: none; }
+}
+
+/* ── evaluation sandbox ───────────────────────────────────────────────────
+   Numbered steps rather than tabs: the order is the argument. Pick a record,
+   break it, read what broke, take the result away. A tab strip would let a
+   reader land on "results" with nothing behind it. */
+.sandbox { padding-bottom: 8px; }
+.sbx-head h2 { margin-bottom: 6px; }
+.sbx-head .warn-line {
+  margin-top: 10px; padding: 9px 13px; border-radius: var(--radius);
+  background: var(--warn-bg); border: 1px solid var(--warn-rule); font-size: 13px;
+}
+
+.step { display: flex; gap: 16px; padding: 26px 0; border-top: 1px solid var(--rule); }
+.step:first-of-type { border-top: 0; }
+.step > div { min-width: 0; flex: 1; }
+.step h3 { font-size: 17px; margin: 0 0 7px; }
+.step .n {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center; font: 600 12px var(--mono);
+  background: var(--inert-bg); color: var(--ink-2);
+}
+.step .lede { font-size: 13.5px; color: var(--ink-2); margin: 0 0 14px; max-width: 78ch; }
+.none { font-size: 13px; margin: 6px 0 0; }
+
+.picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.pick {
+  text-align: left; padding: 15px 16px; border: 1px solid var(--rule);
+  border-radius: var(--radius); background: #fff; cursor: pointer; min-width: 0;
+}
+.pick:hover { border-color: var(--brand); }
+.pick.on { border-color: var(--brand); background: var(--pass-bg); }
+.pick b { display: block; font-size: 14px; margin-bottom: 6px; }
+.pick small { font-size: 12px; color: var(--ink-2); line-height: 1.65; }
+
+.scens { display: flex; flex-wrap: wrap; gap: 8px; }
+.scen {
+  display: inline-flex; align-items: center; gap: 9px; padding: 9px 14px;
+  border: 1px solid var(--rule); border-radius: 999px; background: #fff;
+  font-size: 13px; cursor: pointer;
+}
+.scen:hover { border-color: var(--brand); }
+.scen.on { border-color: var(--brand); background: var(--pass-bg); font-weight: 600; }
+.scen .sid { font: 600 11px var(--mono); color: var(--ink-2); }
+.teaches {
+  margin-top: 14px; padding: 13px 15px; border-left: 3px solid var(--brand);
+  background: var(--ground-2); font-size: 13px; line-height: 1.75; color: var(--ink-2);
+}
+
+.tampers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.tamper { border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 15px; min-width: 0; }
+.tamper .th { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.tamper p { font-size: 12.5px; color: var(--ink-2); margin: 7px 0 10px; line-height: 1.7; }
+.tneeds { display: flex; flex-wrap: wrap; gap: 7px; }
+.tneeds select, .tneeds input { font-size: 12.5px; padding: 6px 9px; border: 1px solid var(--rule); border-radius: 5px; }
+.btn.tiny { padding: 5px 12px; font-size: 12px; min-height: 0; }
+.applied { margin-top: 14px; font-size: 13px; }
+.applied ol { margin: 7px 0 0; padding-left: 20px; }
+.applied li { padding: 3px 0; }
+.link { background: 0; border: 0; padding: 0 0 0 8px; color: var(--brand); font-size: 12px; cursor: pointer; text-decoration: underline; }
+
+.runbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 4px 0 20px 42px; }
+.err { color: var(--fail); font-size: 13px; }
+
+/* The two questions, side by side and never merged. */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+.half { padding: 15px 17px; border-radius: var(--radius); border: 1px solid var(--rule); }
+.half.ok { background: var(--pass-bg); border-color: var(--brand); }
+.half.bad { background: var(--fail-bg); border-color: var(--fail); }
+.half.wait { background: var(--warn-bg); border-color: var(--warn-rule); }
+.half .lbl { font-size: 11px; letter-spacing: .6px; text-transform: uppercase; color: var(--ink-2); }
+.half b { display: block; font-size: 17px; margin: 5px 0 6px; }
+.half small { font-size: 12.5px; color: var(--ink-2); line-height: 1.7; }
+
+.axes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.axis { border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px; min-width: 0; }
+.axis.bad { border-color: var(--fail); }
+.axis.wait { border-color: var(--warn-rule); }
+.axis header { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.axis header b { font-size: 14px; }
+.axis .asks { font-size: 12.5px; color: var(--ink-2); margin: 8px 0 0; line-height: 1.7; }
+.fnds { list-style: none; margin: 12px 0 0; padding: 0; }
+.fnd { border-top: 1px solid var(--rule); padding: 11px 0 2px; }
+.fh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.sev { font: 600 10px var(--mono); letter-spacing: .5px; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; background: var(--inert-bg); }
+.sev.blocking { background: var(--fail-bg); color: var(--fail); }
+.sev.warning { background: var(--warn-bg); color: var(--warn); }
+.fnd p { font-size: 12.5px; color: var(--ink-2); margin: 6px 0 0; line-height: 1.7; }
+.fvals { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+.fv { font: 12px var(--mono); border: 1px solid var(--rule); border-radius: 5px; padding: 4px 9px; }
+.fv i { font-style: normal; font-family: var(--sans); font-size: 10px; color: var(--ink-2); margin-right: 7px; }
+.fv.diff { border-color: var(--fail); background: var(--fail-bg); }
+
+.meta { margin-top: 18px; }
+.reimport { margin-top: 18px; }
+.recheck { margin-top: 14px; }
+.rrow { display: flex; gap: 12px; align-items: flex-start; padding: 11px 13px; border: 1px solid var(--rule); border-radius: var(--radius); margin-bottom: 8px; }
+.rrow.ok { border-color: var(--brand); background: var(--pass-bg); }
+.rrow.bad { border-color: var(--fail); background: var(--fail-bg); }
+.rrow.wait { border-color: var(--warn-rule); background: var(--warn-bg); }
+.rrow b { display: block; font-size: 13.5px; }
+.rrow small { display: block; font-size: 12px; color: var(--ink-2); margin-top: 3px; }
+
+.doc { width: 100%; min-height: 190px; padding: 13px; border: 1px solid var(--rule); border-radius: var(--radius); font-size: 12.5px; line-height: 1.7; resize: vertical; }
+
+.log { margin-bottom: 16px; }
+.call { border: 1px solid var(--rule); border-radius: var(--radius); margin-bottom: 7px; }
+.call summary { display: flex; align-items: center; gap: 10px; padding: 10px 13px; cursor: pointer; font-size: 13px; }
+.call summary code { font-size: 12px; }
+.call .code { margin: 0 13px 13px; }
+
+@media (max-width: 900px) {
+  .picker, .tampers, .axes, .split { grid-template-columns: 1fr; }
+  .step { flex-direction: column; gap: 10px; }
+  .runbar { padding-left: 0; }
+}
+
+.fnd .where { font: 11px var(--mono); color: var(--ink-2); margin-top: 6px; display: block; }
+
+/* ── console shell ────────────────────────────────────────────────────────
+   A sidebar and a work area, which is where every operations console lands
+   for the same reason: the destinations stay put while the content changes,
+   so a reader can always see what else is here and where they are in it.
+   Four cards across the top did not do that — they scrolled away, and the
+   page went back to reading as one long settings screen. */
+.shell {
+  display: grid; grid-template-columns: 252px minmax(0, 1fr);
+  align-items: start; min-height: calc(100vh - var(--masthead) - 86px);
+}
+.side {
+  position: sticky; top: 0; align-self: start;
+  display: flex; flex-direction: column; gap: 14px;
+  height: 100vh; padding: 22px 16px 20px;
+  background: var(--ground); border-right: 1px solid var(--rule);
+}
+.work { min-width: 0; padding: 26px 30px 70px; }
+.work > .dash { max-width: 1020px; }
+
+.sections { display: flex; flex-direction: column; gap: 2px; }
+/* The reference is not one of the four sections — it leaves the console —
+   so it takes a little air above it instead of a heading over it. */
+.sec.out { margin-top: 10px; }
+.sec {
+  display: flex; gap: 10px; align-items: center;
+  padding: 8px 10px; border-radius: 7px; text-decoration: none; color: inherit;
+  font-size: 13.5px; line-height: 1.5;
+}
+.sec:hover { background: var(--ground-2); }
+.sec.on { background: var(--pass-bg); color: var(--brand-2); font-weight: 600; }
+.sec .ico { flex-shrink: 0; width: 16px; height: 16px; opacity: .65; }
+.sec.on .ico { opacity: 1; }
+
+.step.bare { padding-top: 4px; border-top: 0; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dk .req { color: var(--fail); font-size: 10px; margin-left: 6px; }
+.dk .opt { color: var(--ink-2); font-size: 10px; font-weight: 400; margin-left: 6px; }
+
+@media (max-width: 1000px) {
+  /* Below a laptop the sidebar costs more width than it earns, so it lies
+     down above the work area and keeps the same order. */
+  .shell { grid-template-columns: 1fr; }
+  .side {
+    position: static; height: auto;
+    border-right: 0; border-bottom: 1px solid var(--rule); padding: 14px 20px;
+  }
+  .sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  /* Laid out as a grid, the extra margin would offset one cell's row. */
+  .sec.out { margin-top: 0; }
+  .work { padding: 20px 20px 60px; }
+  .two { grid-template-columns: 1fr; }
+}
+.warnhint { background: var(--warn-bg); border: 1px solid var(--warn-rule); border-radius: var(--radius); padding: 11px 14px; }
+
+@media (max-width: 620px) {
+  /* The address is the first thing to go; the chip and the caret still say
+     which chain and whose account without it. */
+  .acct > summary { font-size: 0; gap: 0; padding: 7px 10px; }
+  .acct > summary .caret { font-size: 13px; }
+  .acct > summary::before { content: '계정'; font-size: 13px; }
+  .netchip .mono { display: none; }
+}
+
+/* ── the two anchoring modes ──────────────────────────────────────────────
+   Side by side and visually unlike each other, because the difference
+   between them is what leaves the browser. A shared look with a toggle
+   would make the consequential choice read as a preference. */
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: stretch; }
+/*
+ * The pair reads as one choice, so the two cards are the same height and both
+ * buttons sit on the same line. Left to its own content each column ended
+ * somewhere different, which made a deliberate either/or look like a layout
+ * accident.
+ */
+.mode { display: flex; flex-direction: column; gap: 12px; }
+.mode > .row { margin-top: auto; }
+/* The outcome belongs to the button above it, so it is pinned below the row. */
+.mode > .outcome:empty { display: none; }
+/*
+ * `.drop` grows by default so two of them share a `.row` evenly. Inside this
+ * column that made it swallow the whole height difference between the cards —
+ * the shorter card got one enormous dashed box instead of the slack simply
+ * collapsing above the button.
+ */
+.mode > .drop { flex: 0 0 auto; }
+.mode.safe { border-color: var(--brand); }
+/*
+ * The permanent path gets the brand's dark surface, not a warning colour.
+ *
+ * It was burnt orange on cream — the only warm hue anywhere in a palette of
+ * near-black, cyan and grey, so it read as a control borrowed from another
+ * design system rather than as the heavier of two choices.
+ *
+ * Dark is what this brand already uses for weight: the hero, the mastheads,
+ * every code panel. Using it here makes the hierarchy legible without an
+ * alarm — light card is the reversible one, dark card puts the document on a
+ * public chain forever. The caution itself is stated in words, in the block
+ * below, which is where a caution belongs.
+ */
+.mode.heavy {
+  background: var(--dark-2); border-color: var(--dark-rule); color: var(--dark-ink-2);
+}
+.mode.heavy .mh b { color: var(--dark-ink); }
+.mode.heavy p { color: var(--dark-ink-2); }
+.mode.heavy b { color: var(--dark-ink); }
+.mode.heavy code { background: #ffffff0f; border-color: #2d454b; color: #cfe3e9; }
+.mode.heavy .drop { background: #030c1266; border-color: #2d454b; }
+.mode.heavy .drop:hover { border-color: var(--brand); background: #061520aa; }
+.mode.heavy .dk { color: #7f989f; }
+.mode.heavy .dv { color: var(--dark-ink-2); }
+.mode.heavy .limitbox { background: #ffffff08; border-color: #2d454b; }
+.mode.heavy .lrow b { color: var(--dark-ink); }
+.mode.heavy .lrow .dim, .mode.heavy .dim { color: #7f989f; }
+.mode.heavy .digestbox { background: #030c1266; border-color: #2d454b; }
+.mode.heavy .digestval { color: #d8e7ee; }
+.mh { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 2px; }
+.mh b { font-size: 14px; }
+/*
+ * Two contexts, two treatments — and the default has to be the light one.
+ *
+ * This chip marks an inscription. It appears on the dark card *and* in the
+ * records table on white, and restyling it for the dark card alone turned
+ * the table copy into cyan on near-white at 1.5:1 — invisible. The base is
+ * therefore the light caution, and the dark variant is scoped.
+ */
+.chip.warn-chip {
+  color: var(--warn); background: var(--warn-bg); border-color: var(--warn-rule);
+}
+.mode.heavy .chip.warn-chip,
+.masthead .chip.warn-chip {
+  background: #00a8ba1f; border-color: #1d6d79; color: var(--cyan);
+}
+.btn.danger { background: var(--brand); border-color: var(--brand); color: var(--dark); }
+.btn.danger:hover:not(:disabled) { background: #00bed2; border-color: #00bed2; }
+.btn.danger:disabled { background: #2d454b; border-color: #2d454b; color: #6e868c; }
+
+/*
+ * The one place a caution tone survives, in the marketing site's own version
+ * of it — `.at-result.is-changed` on the dark hero. Desaturated amber on
+ * dark reads as "mind this" without the alarm of solid orange on cream.
+ */
+.mode.heavy .warnhint {
+  background: #6f351629; border-color: #8c5b33; color: #ffd0a3;
+}
+.mode.heavy .warnhint b { color: #ffe3c4; }
+
+/* The digest, shown at a size that says "this is the payload". */
+.digestbox {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 11px 13px; border: 1px solid var(--rule); border-radius: var(--radius);
+  background: var(--ground);
+}
+.dlabel { font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
+          text-transform: uppercase; color: var(--ink-3); }
+.digestval {
+  font-size: 12.5px; line-height: 1.6; overflow-wrap: anywhere;
+  background: none; border: 0; padding: 0; color: var(--ink);
+}
+.dmeta { font-size: 11.5px; }
+.paste > summary { font-size: 13px; cursor: pointer; color: var(--ink-2); }
+.paste > summary:hover { color: var(--ink); }
+.paste p { margin: 8px 0; }
+.paste input { width: 100%; }
+
+/* ── verification result ────────────────────────────────────────────────── */
+.links { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 16px 0; }
+.lk {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 12px; border: 1px solid var(--rule); border-radius: var(--radius);
+}
+.lk.ok { border-color: var(--brand); background: var(--pass-bg); }
+.lk.bad { border-color: var(--fail); background: var(--fail-bg); }
+.lk b { font-size: 13px; }
+.lk .dim { font-size: 12px; width: 100%; }
+.vchecks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.vchecks li { display: flex; gap: 9px; align-items: flex-start; font-size: 13.5px; color: var(--ink-2); }
+.vchecks .chip { flex: 0 0 auto; }
+/* What a check found, when it has more to say than its name: on a line of its own under it. */
+.vchecks .vt { min-width: 0; }
+.vchecks .vt .mono { display: block; font-size: 11.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+
+/* ── 검증 ───────────────────────────────────────────────────────────────
+   Two slots and one button, and under the button what the check found. A
+   result that is a statement and its reasons — a refusal, a mismatch — is a
+   box, not checks. */
+#verify .two { margin-bottom: 16px; }
+/* Korean breaks between words here, not inside them; a file name or a hash too long for its line still wraps. */
+#verify { word-break: keep-all; overflow-wrap: break-word; }
+/* The state above its question in every tile, however long the question runs. */
+#v-result .lk { flex-direction: column; align-items: flex-start; }
+#v-result { margin-top: 16px; }
+#verify .drop.over { border-color: var(--brand); border-style: solid; }
+/* A file name with nowhere to break still stays inside its slot. */
+#verify .two > .drop { min-width: 0; }
+#verify .drop .dv { overflow-wrap: anywhere; }
+#verify .drop:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+/* The transaction a reader is told to look up, under the sentence that says so. */
+.half .vtx { display: block; margin-top: 4px; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; word-break: normal; }
+#v-result:empty { margin-top: 0; }
+.split.one { grid-template-columns: 1fr; }
+/* More than one thing was not checked: the first at the verdict's size, the rest listed under it. */
+.half b.also { font-size: 14px; margin: 12px 0 0; }
+.half b.also + small { display: block; margin-top: 4px; }
+/* The checks behind the tiles: closed while everything holds, open when something does not. */
+.vmore { margin: 4px 0 0; }
+.vmore > summary { font-size: 13px; color: var(--ink-2); cursor: pointer; }
+.vmore > summary:hover { color: var(--ink); }
+.vmore > .vchecks { margin-top: 10px; }
+/* What a reason means, above the reason as the checker words it. */
+.vko { display: block; }
+.vbox { padding: 14px 16px; border: 1px solid var(--warn-rule); border-left-width: 3px; border-radius: var(--radius); background: var(--warn-bg); }
+.vbox.bad { border-color: var(--fail); background: var(--fail-bg); }
+.vbox > b { font-size: 15px; }
+.card .vbox > p { margin: 6px 0 0; max-width: none; font-size: 13.5px; line-height: 1.6; color: var(--ink); }
+.vbox .mono { display: block; font-size: 11.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+.vlines { margin: 8px 0 0; padding-left: 18px; font-size: 13.5px; line-height: 1.6; color: var(--ink); overflow-wrap: anywhere; }
+.vlines li { margin-bottom: 6px; }
+.vlines li:last-child { margin-bottom: 0; }
+.vlines .mono { display: block; font-size: 11.5px; color: var(--ink-2); }
+#verify .digestbox { margin-top: 14px; }
+#verify .digestbox + p.hint, #verify .vchecks + p.hint, #verify p.hint + p.hint { margin: 10px 0 0; }
+
+button.link {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--brand-2); text-decoration: underline; font-size: inherit;
+}
+button.link.mono { font-family: var(--mono); font-size: 12.5px; }
+
+@media (max-width: 900px) {
+  .modes { grid-template-columns: 1fr; }
+}
+
+/* The size budget, stated before a file is chosen rather than after. */
+.limitbox {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 11px 13px; border: 1px solid var(--rule); border-radius: var(--radius);
+  background: rgba(255,255,255,.55);
+}
+.lrow { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 13px; }
+.limitbox .hint { margin: 4px 0 0; }
+.digestbox.over { border-color: var(--fail); background: var(--fail-bg); }
+.digestbox.over .dmeta { color: var(--fail); font-weight: 600; }
+
+
+/* Key management table: a destructive action reads as one. */
+.danger-link { color: var(--fail); }
+#key-label { flex: 1 1 240px; }
+
+/* Heading on the left, the one outbound link on the right. Keeps a
+   destination out of the row where the page's actions live. */
+.cardhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.cardhead h2 { margin-bottom: 10px; }
+.cardhead > a { flex-shrink: 0; }
+@media (max-width: 560px) {
+  .cardhead { flex-direction: column; }
+  /* Stacked, the row's link belongs to its heading: close under the title,
+     clear of the numbers beneath. */
+  .prow .cardhead { gap: 0; }
+  .prow .cardhead h2 { margin-bottom: 8px; }
+  .prow .cardhead > a { margin-bottom: 16px; }
+}
+
+/* ── bundle spec ──────────────────────────────────────────────────────────
+   The info affordance next to a download: small, quiet, and obviously not
+   the primary action. */
+.bundlecell { display: inline-flex; align-items: center; gap: 8px; }
+.imark {
+  width: 18px; height: 18px; flex-shrink: 0; padding: 0; cursor: pointer;
+  font-family: var(--mono); font-size: 10px; font-weight: 500; line-height: 1;
+  color: var(--ink-3); background: var(--ground); border: 1px solid var(--rule-2);
+  border-radius: 50%;
+}
+.imark:hover { color: var(--brand-2); border-color: var(--brand-2); }
+.note .imark { display: inline-grid; place-items: center; vertical-align: -3px; }
+
+.specgrp { padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--rule); }
+.specgrp:first-of-type { padding-top: 0; margin-top: 4px; border-top: 0; }
+.specgrp h3 { font-size: 14px; font-weight: 700; letter-spacing: -.3px; margin: 0 0 4px; }
+.specgrp > .dim { font-size: 13.5px; margin: 0 0 12px; max-width: 72ch; }
+
+/* Field on the left, value and its reason on the right. Two columns so the
+   paths line up and the eye can run down them. */
+dl.spec { display: grid; grid-template-columns: minmax(170px, auto) 1fr; gap: 9px 18px; margin: 0; }
+dl.spec dt { white-space: nowrap; }
+dl.spec dt code { font-size: 11.5px; }
+dl.spec dd { margin: 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+dl.spec .sv { font-size: 12.5px; color: var(--ink); overflow-wrap: anywhere; }
+dl.spec small { font-size: 12.5px; color: var(--ink-2); }
+
+.rawjson { margin-top: 20px; }
+.rawjson > summary { font-size: 13px; cursor: pointer; color: var(--ink-2); }
+.rawjson > summary:hover { color: var(--ink); }
+.rawjson pre.code { margin-top: 10px; max-height: 420px; overflow: auto; }
+.rawjson pre.code code { white-space: pre-wrap; }
+
+@media (max-width: 620px) { dl.spec { grid-template-columns: 1fr; gap: 3px 0; }
+  dl.spec dd { margin-bottom: 9px; } }
+
+/* ── the optional signing path ────────────────────────────────────────────
+   A sequence, not a form: the middle step happens on a machine we have no
+   access to, and the layout should say so rather than implying a button
+   here could sign. */
+.mode.signed { border-color: var(--rule-2); grid-column: 1 / -1; }
+.signsteps { list-style: none; counter-reset: sg; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 18px; }
+.signsteps > li { counter-increment: sg; position: relative; padding-left: 34px;
+  display: flex; flex-direction: column; gap: 9px; }
+.signsteps > li::before {
+  content: counter(sg); position: absolute; left: 0; top: 0;
+  width: 22px; height: 22px; display: grid; place-items: center;
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  border: 1px solid var(--rule-2); border-radius: 50%;
+}
+.signsteps > li > b { font-size: 14px; }
+.signsteps .hint, .signsteps p { margin: 0; }
+.signsteps pre.code { font-size: 11.5px; }
+#sg-json { width: 100%; resize: vertical; font-size: 12px; line-height: 1.6;
+  padding: 11px 13px; border: 1px solid var(--rule-2); border-radius: var(--radius);
+  background: var(--ground-2); color: var(--ink); }
+#sg-check .vchecks { margin-top: 10px; }
+
+
+/* ── the dark masthead ────────────────────────────────────────────────────
+   The marketing site opens on `#020D0F` with a cyan accent, and that one
+   surface is most of why it reads as infrastructure rather than as another
+   SaaS dashboard. A white bar above a white sidebar made this host look like
+   a different product; carrying the dark band across ties them together
+   without turning the working area into a dark theme, which a page full of
+   hex digests does not want. */
+.masthead { background: var(--dark); border-bottom: 1px solid var(--dark); }
+.masthead .brand { color: var(--dark-ink); }
+.masthead .sect {
+  color: var(--cyan); border-color: #1d4a52; background: #00a8ba1a;
+}
+.masthead .netchip .chip.wait,
+.masthead .netchip .chip.ok {
+  background: #00a8ba1f; border-color: #1d6d79; color: var(--cyan);
+}
+.acct > summary {
+  color: var(--dark-ink-2); background: #ffffff0a; border-color: #2a4147;
+}
+.acct > summary:hover { color: var(--dark-ink); border-color: #4b6b72; background: #ffffff14; }
+.acct[open] > summary { color: var(--dark-ink); border-color: var(--brand); background: #00a8ba1f; }
+.acct .caret { color: inherit; }
+
+/* ── the sidebar ──────────────────────────────────────────────────────────
+   Dark too, so the masthead is a band and not a hat. The working area stays
+   light: digests, tables and JSON are read here, and light is where they
+   are legible. */
+.side { background: var(--dark-2); border-right-color: var(--dark); }
+.sec { color: var(--dark-ink-2); }
+.sec:hover { background: #ffffff0d; color: var(--dark-ink); }
+.sec.on { background: #00a8ba1f; color: var(--cyan); font-weight: 600; }
+.sec.on .ico { opacity: 1; }
+.sec.out { color: #7c9196; }
+.sec.out:hover { color: var(--dark-ink); }
+
+@media (max-width: 1000px) {
+  .side { border-bottom-color: var(--dark); }
+}
+
+/* ── the section title ────────────────────────────────────────────────────
+   The marketing site pairs a small mono eyebrow with a large, tightly
+   tracked heading, and that pairing is most of its voice. The console had
+   neither at page level: its biggest type was a 16px card heading. */
+.pagehead { margin: 2px 0 4px; }
+.pagehead h1 {
+  font-size: clamp(27px, 2.6vw, 34px); font-weight: 700; letter-spacing: -1.1px;
+  line-height: 1.2; margin: 0 0 8px; color: var(--ink);
+}
+.pagehead p { margin: 0; font-size: 15px; line-height: 1.75; color: var(--ink-2); max-width: 68ch; }
+
+/* ── language toggle ──────────────────────────────────────────────────────
+   The marketing site's KR / EN pair, on the dark masthead. Anchors, not
+   buttons: the other language is a real address and should behave like one. */
+.langs { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.langs i { font-style: normal; color: #3c565c; }
+.lang {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .5px;
+  color: var(--dark-ink-2); text-decoration: none; padding: 2px 1px;
+}
+a.lang:hover { color: var(--dark-ink); }
+.lang.on { color: var(--cyan); font-weight: 500; }
+/* The globe carries the meaning at the edge of the bar, where `KR / EN` sits
+   next to a network badge with no neighbouring word to explain it. Inline SVG
+   on `currentColor` rather than an image: one less asset, and it follows the
+   masthead's ink without a second file to keep in step. */
+.langs .globe { color: #4a686f; display: block; }   /* 3.3:1 on the bar */
+
+/* 상품 활성화 폼 — 2열 그리드, 좁은 화면은 1열 */
+.prodform { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin: 12px 0 10px; }
+.prodform label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--ink-2); min-width: 0; }
+.prodform .full { grid-column: 1 / -1; }
+/* The field fills its column and never sets it: a select is as wide as its
+   longest option, and "＋ 브라우저에서 새 키 쌍 생성 (…)" made each column — and
+   the page — wider than the card (18px at 1440, 245px in English). */
+.prodform input, .prodform select {
+  width: 100%; min-width: 0;
+  padding: 9px 11px; font-size: 14px; color: var(--ink);
+  background: var(--ground); border: 1px solid var(--rule-2); border-radius: 7px;
+}
+.prodform input:focus-visible, .prodform select:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+@media (max-width: 720px) { .prodform { grid-template-columns: 1fr; } }
+
+/* 구독 카드 3종을 한 화면에 — .grid 안에서는 폼이 1열로 */
+.grid .prodform { grid-template-columns: minmax(0, 1fr); }
+/* Equal heights across a row of cards, with each card's actions on its
+   bottom edge — three subscription cards of different lengths read as one
+   row, not a skyline. */
+.grid > .card { margin-bottom: 0; align-self: stretch; display: flex; flex-direction: column; min-width: 0; }
+.grid > .card > .keyrow:last-child { margin-top: auto; }
+
+/* 다음 단계 — after activating Settlements: a full-width panel under the three
+   product cards, shown until the first settlement exists. Three numbered
+   lines — the institution id (with its copy button), the SDK, the guide. */
+.grid > .firstrun { grid-column: 1 / -1; }
+.firstrun h2 { margin: 6px 0 6px; }
+.firstrun .lede { margin: 0 0 14px; }
+.nextsteps { list-style: none; counter-reset: ns; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.nextsteps li { counter-increment: ns; position: relative; padding-left: 30px; min-width: 0;
+  display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--ink-2); line-height: 1.6; }
+.nextsteps li:last-child { display: block; }
+.nextsteps li::before {
+  content: counter(ns); position: absolute; left: 0; top: 1px;
+  width: 20px; height: 20px; display: grid; place-items: center;
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  border: 1px solid var(--rule-2); border-radius: 50%;
+}
+.nextsteps .nshead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.nextsteps .nshead b { font-size: 14px; color: var(--ink); }
+.nextsteps .nshead .btn { flex: none; white-space: nowrap; }
+.nextsteps small { font-size: 12.5px; color: var(--ink-3); }
+
+/* Settlement ledger toolbar + pager (server-side search / keyset paging) */
+.rtools { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+/* One type size across the toolbar: the search box, the state select, the
+   date pair and the export button were each inheriting a different one. */
+.rtools { font-size: 13.5px; }
+.rtools input[type="search"] {
+  flex: 1 1 220px; min-width: 180px; padding: 8px 10px;
+  border: 1px solid var(--rule); border-radius: 7px;
+  background: var(--card); color: var(--ink); font: inherit; font-size: 13.5px;
+}
+.rtools select {
+  flex: 0 0 auto; padding: 8px 10px;
+  border: 1px solid var(--rule); border-radius: 7px;
+  background: var(--card); color: var(--ink); font: inherit; font-size: 13.5px;
+}
+.rtools .btn.small { font-size: 13.5px; }
+.rpager { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.rpager button.ghost {
+  padding: 7px 14px; border: 1px solid var(--rule); border-radius: 7px;
+  background: transparent; color: var(--brand); font: inherit; font-weight: 700; cursor: pointer;
+}
+.rpager button.ghost:hover { border-color: var(--brand); }
+
+/* Settlement board (table layout, matching the anchoring-records board) */
+table.rtab { font-size: 13.5px; }
+table.rtab th, table.rtab td { padding: 8px 6px; }
+table.rtab td.rowact .btn.small { padding: 5px 9px; }
+table.rtab td.rid { font-size: 11.5px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The three amounts of a remittance read as one group down the middle. */
+th.mid, td.mid { text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* A date range in the toolbar, styled as the select beside it is. */
+.daterange { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; }
+.daterange input[type="date"] {
+  padding: 7px 9px; border: 1px solid var(--rule); border-radius: 7px;
+  background: var(--card); color: var(--ink); font: inherit; font-size: 13.5px;
+}
+td.rowact .chip { margin-left: 4px; padding: 2px 5px; vertical-align: 1px; }
+td.num .dim { font-size: 11px; }
+td.rowact { white-space: nowrap; text-align: right; }
+td.rowact .btn + .btn { margin-left: 6px; }
+/* State colour as a left-edge stripe on the first cell, like the old cards */
+tr.rok  > td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
+tr.rbad > td:first-child { box-shadow: inset 3px 0 0 var(--fail); }
+tr.rwait > td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+/* The expand row: hidden until 이벤트 toggles it, then an inner event table */
+tr.rx-hidden { display: none; }
+tr.rx > td { background: var(--ground-2); padding: 0 12px 12px; }
+/* The expanded row spans the whole table, which may be wider than the screen;
+   the legs stay pinned to the visible edge and wrap there while the table
+   scrolls underneath, instead of being read 900px to the right. */
+.rxbody { padding: 10px 2px 2px; position: sticky; left: 0; max-width: calc(100vw - 90px); }
+@media (min-width: 1001px) { .rxbody { max-width: calc(100vw - 252px - 90px); } }
+.rxbody table.rxevents { font-size: 12.5px; }
+.rxbody table.rxevents th, .rxbody table.rxevents td { padding: 6px 10px; }
+
+/* ── 추적: one settlement's legs, read top to bottom ─────────────────────
+   A mark per leg, filled only when the completing event exists; caution
+   while it is moving or parked; neutral when it failed, because a failed
+   leg is a fact to read, not an alarm to be painted. */
+.legs { list-style: none; margin: 4px 0 10px; padding: 0 4px; }
+.leg { display: flex; gap: 12px; padding: 7px 0; }
+.lmark {
+  flex-shrink: 0; width: 10px; height: 10px; margin-top: 7px; border-radius: 50%;
+  border: 2px solid var(--rule-2); background: var(--ground);
+}
+.leg.done .lmark { background: var(--brand); border-color: var(--brand); }
+.leg.active .lmark, .leg.held .lmark { background: var(--warn-bg); border-color: var(--warn); }
+.leg.failed .lmark { background: var(--inert); border-color: var(--inert); }
+.lbody { min-width: 0; flex: 1; }
+.lhead { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 13.5px; }
+.lhead .dim { font-size: 12px; }
+.ldetail { display: flex; flex-wrap: wrap; gap: 3px 8px; align-items: center; margin-top: 2px; font-size: 12.5px; color: var(--ink-2); }
+.ldetail .mono { font-size: 11.5px; }
+.leg.pending .lhead b, .leg.pending .ldetail { color: var(--ink-3); }
+.rxlog { margin: 2px 4px 4px; }
+.rxlog > summary { font-size: 12.5px; color: var(--ink-2); cursor: pointer; }
+.rxlog > summary:hover { color: var(--ink); }
+.rxlog table.rxevents { margin-top: 8px; }
+
+/* The trust card's second heading takes a little air above it. */
+.trusteyebrow { margin-top: 18px; }
+
+/* Dashboard v2: stat blocks, mini preview tables */
+.statrow { display: flex; flex-wrap: wrap; gap: 14px 34px; margin: 4px 0 12px; }
+.stat b { display: block; font-size: 22px; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+.stat small { color: var(--ink-2); font-size: 12px; }
+.pipeline { font-size: 13px; margin: 6px 0; }
+table.minitab { font-size: 12.5px; margin-top: 4px; }
+table.minitab td { padding: 6px 10px; }
+
+/* ── dashboard rows ──────────────────────────────────────────────────────
+   One full-width row per subscribed product, stacked. A two-across grid was
+   right for three equal summaries and wrong as soon as a fourth card
+   appeared: in a grid a new product reshapes every other card, while a row
+   only ever adds a row. Each row is two halves — the numbers on the left,
+   the last few things that produced them on the right — and the halves
+   stack below a laptop width. */
+.dashrows { display: grid; gap: 16px; margin-bottom: 20px; }
+.dashrows > .card { margin-bottom: 0; min-width: 0; }  /* a table inside must scroll, not widen the row */
+.prow .cardhead h2 { margin-bottom: 16px; }
+.prowbody { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 38%); gap: 18px 36px; align-items: start; }
+.prowmain { min-width: 0; }
+.prowmain > p:last-child, .prowmain > .quota:last-child { margin-bottom: 0; }
+/* Stats share the line rather than sizing to their labels, so an English
+   label wraps inside its stat instead of orphaning the last stat below. */
+.prowmain .stat { flex: 1 1 110px; min-width: 0; }
+.prowmain .statrow { gap: 12px 20px; }
+/* A row with nothing to measure yet is one column: the steps to the first
+   measurement read across, not squeezed beside an empty half. */
+.prow.single .prowbody { grid-template-columns: 1fr; }
+.prowside { min-width: 0; border-left: 1px solid var(--rule); padding-left: 28px; }
+.prowside .eyebrow { margin-bottom: 9px; }
+.prowside p.muted { font-size: 13.5px; }
+.prowside > a { font-size: 13.5px; }
+
+/* The right half's feed: one event per line, state and figure on the first
+   line, the identifying detail dim beneath. A list rather than a table
+   because the state labels are sentences and the column is narrow. */
+.feed { list-style: none; margin: 0; padding: 0; }
+.feed li { padding: 7px 0; border-top: 1px solid var(--rule); }
+.feed li:first-child { padding-top: 0; border-top: 0; }
+.feed li:last-child { padding-bottom: 0; }
+/* The chip and the figure may wrap onto two lines — an English state label
+   is a sentence, and at a laptop width the column cannot hold both. The
+   figure keeps the right edge either way. */
+.feedtop { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 10px; font-size: 13.5px; line-height: 1.5; }
+.feedtop .num { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.feedtop .mono { font-size: 12px; }
+.feedsub { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: center; margin-top: 2px; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+.feedsub .mono { font-size: 11.5px; }
+
+/* What the first proof takes, on a row that has nothing to measure yet. */
+.sidesteps { margin: 0 0 12px; padding-left: 20px; font-size: 13.5px; line-height: 1.6; color: var(--ink-2); }
+.sidesteps li { margin-bottom: 6px; }
+
+/* 구독 · 빌링 — the card the dashboard opens with: four figures, then the
+   lines behind the first of them. */
+.bill { padding: 16px 24px 18px; }
+.bill .cardhead h2 { margin-bottom: 10px; }
+.bill .statrow { margin: 4px 0 14px; }
+.billtab { font-size: 13.5px; }
+.billtab th, .billtab td { padding: 7px 10px; }
+.billtab td.pname { white-space: nowrap; font-weight: 600; }
+.billtab tbody tr:last-child td { border-bottom: 0; }
+.rtools small { align-self: center; font-size: 13.5px; }
+
+.dashmore { margin: 0; }
+
+@media (max-width: 900px) {
+  .prowbody { grid-template-columns: 1fr; }
+  .prowside { border-left: 0; padding-left: 0; border-top: 1px solid var(--rule); padding-top: 14px; }
+}
+
+/* ── chain transactions, audit log, key registration ───────────────────── */
+/* A copy button beside a hash; the full value sits off-screen for the copy. */
+.vh { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.txcopy { white-space: nowrap; }
+.txcopy .link { font-size: 12px; padding-left: 0; }
+.txcell { white-space: nowrap; font-size: 12px; }
+.txlink { text-decoration: none; }
+.txlink:hover { text-decoration: underline; }
+.keyswitch { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.keyswitch select { padding: 4px 6px; border: 1px solid var(--rule); border-radius: 6px; background: var(--card); color: var(--ink); font: inherit; font-size: 12.5px; }
+.regkey { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+.regkey input[type="text"], .regkey textarea {
+  width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 7px;
+  background: var(--card); color: var(--ink); font: inherit;
+}
+.regkey textarea { font-family: var(--mono); font-size: 12.5px; }
+.chainslot { margin-top: 4px; font-size: 12.5px; }
+.chainslot .chip { margin-right: 6px; vertical-align: 1px; }
+/* The registration form's format sample: quiet, and wraps on a phone. */
+.keysample { margin-top: 6px; padding: 12px 14px; border: 1px dashed var(--rule-2); border-radius: 8px; background: var(--ground-2); }
+.keysample p { font-size: 13px; margin: 6px 0; max-width: none; }
+.keysample pre.code { margin: 6px 0 8px; }
+.keysample pre.code code { white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+.keysample p code { word-break: break-all; font-size: 12px; }
+#ik-pem::placeholder { color: var(--ink-3); }
+
+/* ── the sidebar's one rule ───────────────────────────────────────────────
+   Where the list stops being work done with a product and becomes the
+   organisation's own administration: 구독, 연동, 감사 기록. A line, not a
+   heading — a heading would push the first item down the sidebar again. */
+.navsep { display: block; height: 1px; margin: 10px; background: var(--dark-rule); }
+@media (max-width: 1000px) { .navsep { grid-column: 1 / -1; margin: 2px 0; } }
+
+/* ── 구독 · 빌링 against 운영 현황 ─────────────────────────────────────────
+   The billing card is the account's standing, not something a product did,
+   yet it sat on the same white card as the operations rows beneath it and
+   read as one more of them. It takes the masthead's dark surface instead —
+   part of the frame the organisation works inside — and the rows beneath
+   are named as their own zone. */
+.card.bill { background: var(--dark-2); border-color: var(--dark-2); }
+.bill .cardhead h2 { color: var(--dark-ink); }
+.bill .cardhead h2 .dim, .bill .stat small, .bill p.hint { color: var(--dark-ink-2); }
+.bill .statrow { display: flex; flex-wrap: wrap; gap: 14px 0; margin: 6px 0 16px; }
+.bill .stat { flex: 1 1 auto; min-width: 0; padding: 1px 22px; border-left: 1px solid var(--dark-rule); }
+.bill .stat b { white-space: nowrap; }
+.bill .stat:first-child { padding-left: 0; border-left: 0; }
+.bill .stat b { color: var(--dark-ink); }
+.bill .stat:first-child b { color: var(--cyan); }
+.bill .btn.ghost { color: var(--cyan); background: transparent; border-color: #1d6d79; }
+.bill .btn.ghost:hover { background: #00a8ba1f; border-color: var(--cyan); }
+.bill .billtab th { color: var(--dark-ink-2); background: #ffffff0a; border-bottom-color: var(--dark-rule); }
+.bill .billtab td { color: #dbe6e8; border-bottom-color: var(--dark-rule); }
+.bill .billtab td.pname { color: var(--dark-ink); }
+@media (max-width: 900px) {
+  .bill .statrow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bill .stat:nth-child(odd) { padding-left: 0; border-left: 0; }
+  .bill .stat b { white-space: normal; }
+}
+.zonehead {
+  display: flex; align-items: center; gap: 10px; margin: 10px 0 -4px;
+  font-size: 13.5px; font-weight: 700; letter-spacing: -.2px; color: var(--ink);
+}
+.zonehead small { font-size: 12px; font-weight: 400; color: var(--ink-3); }
+.zonehead::after { content: ''; flex: 1; height: 1px; background: var(--rule); }
+
+/* ── 추적, drawn ───────────────────────────────────────────────────────────
+   The legs as a line of stations above the list that details them. The same
+   colour rule as the list: filled only when the completing event exists,
+   caution while a leg is moving or parked, neutral when it failed. */
+.journey {
+  margin: 12px 0 14px; padding: 15px 18px 16px;
+  background: var(--ground); border: 1px solid var(--rule); border-top: 3px solid var(--rule-2);
+  border-radius: var(--radius);
+}
+.journey.ok { border-top-color: var(--brand); }
+.journey.run, .journey.hold { border-top-color: var(--warn); }
+.journey.stop { border-top-color: var(--inert); }
+.jhead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.jstate { display: inline-flex; align-items: center; gap: 9px; font-size: 15px; letter-spacing: -.3px; color: var(--ink); }
+.jstate i { flex-shrink: 0; width: 9px; height: 9px; border-radius: 50%; background: var(--inert); }
+.journey.ok .jstate i { background: var(--brand); }
+.journey.run .jstate i, .journey.hold .jstate i { background: var(--warn); }
+.jmeta { font-size: 12.5px; color: var(--ink-3); }
+.jlive {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .7px; text-transform: uppercase; color: var(--ink-3);
+}
+.jlive i { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); animation: jblink 1.4s ease-in-out infinite; }
+.rxbody p.jnote { margin: 6px 0 0; font-size: 13px; color: var(--ink-2); max-width: none; }
+
+.jflow { display: flex; align-items: stretch; margin: 14px 0 18px; }
+.jstop {
+  flex: 1 1 0; min-width: 0; padding: 10px 14px;
+  border: 1px solid var(--rule); border-radius: var(--radius); background: var(--ground-2);
+}
+.jstop small { display: block; font-size: 11.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jstop b {
+  display: block; margin: 2px 0; font-size: 17px; letter-spacing: -.4px; font-variant-numeric: tabular-nums;
+  color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.jstop.lit { background: var(--pass-bg); border-color: var(--brand); }
+.jstop.lit b { color: var(--ink); }
+.jstop.lit small { color: var(--ink-2); }
+.jarrow { position: relative; flex: 0 0 42px; align-self: center; height: 2px; background: var(--rule-2); }
+.jarrow::after {
+  content: ''; position: absolute; right: -1px; top: -4px;
+  border-style: solid; border-width: 5px 0 5px 7px; border-color: transparent transparent transparent var(--rule-2);
+}
+.jarrow.lit { background: var(--brand); }
+.jarrow.lit::after { border-left-color: var(--brand); }
+
+.jsteps { list-style: none; display: flex; margin: 0; padding: 0; }
+.jstep {
+  position: relative; flex: 1 1 0; min-width: 0; padding: 0 4px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center;
+}
+/* The track from the station before this one, centre to centre. */
+.jstep::before { content: ''; position: absolute; top: 13px; right: 50%; width: 100%; height: 2px; background: var(--rule-2); }
+.jstep:first-child::before { display: none; }
+.jnode {
+  position: relative; z-index: 1; width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center; font-family: var(--mono); font-size: 12px; font-weight: 600;
+  color: var(--ink-3); background: var(--ground); border: 2px solid var(--rule-2);
+}
+.jstep b { margin-top: 5px; font-size: 12.5px; font-weight: 600; color: var(--ink-3); word-break: keep-all; line-height: 1.35; }
+.jstep small { font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.jstep.done::before, .jstep.active::before, .jstep.held::before { background: var(--brand); }
+.jstep.done .jnode { background: var(--brand); border-color: var(--brand); color: #fff; }
+.jstep.done b, .jstep.active b, .jstep.held b, .jstep.failed b { color: var(--ink); }
+.jstep.active .jnode, .jstep.held .jnode { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+.jstep.active small, .jstep.held small { color: var(--warn); font-weight: 600; }
+.jstep.active .jnode { animation: jpulse 1.6s ease-out infinite; }
+.jstep.failed::before { background: var(--inert); }
+.jstep.failed .jnode { background: var(--inert); border-color: var(--inert); color: #fff; }
+/* The first time a tracker opens, the route arrives in order — once. */
+.journey.fresh .jflow > *, .journey.fresh .jstep { animation: jin .4s ease-out both; }
+.journey.fresh .jflow > :nth-child(2), .journey.fresh .jstep:nth-child(2) { animation-delay: .1s; }
+.journey.fresh .jflow > :nth-child(3), .journey.fresh .jstep:nth-child(3) { animation-delay: .2s; }
+.journey.fresh .jflow > :nth-child(4), .journey.fresh .jstep:nth-child(4) { animation-delay: .3s; }
+.journey.fresh .jflow > :nth-child(5), .journey.fresh .jstep:nth-child(5) { animation-delay: .4s; }
+@keyframes jin { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@keyframes jpulse { 0% { box-shadow: 0 0 0 0 #9a4b1c59; } 70%, 100% { box-shadow: 0 0 0 10px #9a4b1c00; } }
+@keyframes jblink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) {
+  .jstep.active .jnode, .jlive i, .journey.fresh .jflow > *, .journey.fresh .jstep { animation: none; }
+}
+@media (max-width: 720px) {
+  .jflow { flex-direction: column; gap: 6px; }
+  .jarrow { display: none; }
+  .jstep { padding: 0 1px; }
+  .jstep b { font-size: 11px; }
+  /* Five clocks do not fit across a phone; the list beneath carries them. */
+  .jstep.done small { display: none; }
+  .jstep small { font-size: 10.5px; }
+}
+
+/* ── 준비금 증명 ─────────────────────────────────────────────────────────
+   A file and one button. The result panel is neutral with a brand edge: a
+   statement the platform has accepted is not yet one the chain has
+   confirmed, and only the anchor's own chip may turn the success colour. */
+.porpage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+/* Korean breaks between words here, not inside them; a file name or a hash too long for its line still wraps. */
+.porpage p, .porpage li { word-break: keep-all; overflow-wrap: break-word; }
+.porcheck { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; color: var(--ink); cursor: pointer; }
+.porcheck input { width: auto; }
+.porbox { margin-top: 14px; padding: 14px 16px; border: 1px solid var(--rule); border-left: 3px solid var(--brand); border-radius: var(--radius); background: var(--ground-2); }
+.porbox.bad { border-color: var(--fail); background: var(--fail-bg); }
+.porbox .statrow { margin: 0 0 8px; }
+.porbox .stat { min-width: 0; }
+.porbox .stat b { overflow-wrap: anywhere; }
+.porbox .digestbox { margin-top: 10px; }
+.porproblems { margin: 8px 0; padding-left: 18px; font-size: 13.5px; line-height: 1.6; color: var(--ink); overflow-wrap: anywhere; }
+.porproblems li { margin-bottom: 6px; }
+.porproblems .mono { display: block; font-size: 11.5px; color: var(--ink-2); }
+/* The example files: the name is the link, what the layout is sits beside it. */
+.card p.porsamples { margin: -2px 0 0; max-width: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; }
+/* One example: its name and what the file looks like. On a narrow screen the description wraps under the name. */
+.porsamples .porsample { min-width: 0; color: var(--ink-3); font-size: 12.5px; }
+.porsamples .link { padding: 0 4px 0 0; font-family: var(--mono); font-size: 12.5px; }
+.porsamples a { font-size: 12.5px; }
+/* The one thing that can be changed about an anchoring, kept out of the way. */
+.poropt { margin: 10px 0 0; }
+.poropt > summary { font-size: 13px; color: var(--ink-2); cursor: pointer; }
+.poropt > summary:hover { color: var(--ink); }
+.poropt .porcheck { margin: 10px 0 4px; }
+.poropt p.hint { margin: 0; }
+/* The one file to keep: the button, and beside it why it and the balance file are enough. */
+.porkeep { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.porkeep .btn { flex: 0 0 auto; }
+.card .porkeep p.hint { flex: 1 1 320px; min-width: 0; margin: 0; max-width: none; }
+.porkeep p.hint b { color: var(--ink); }
+.porbox .digestbox + p { margin-top: 10px; }
+/* Proof files not yet taken, after their results have left the screen. */
+.card #por-left p.hint { margin: 14px 0 0; max-width: none; }
+#por-left .link { padding: 0; font-size: inherit; }

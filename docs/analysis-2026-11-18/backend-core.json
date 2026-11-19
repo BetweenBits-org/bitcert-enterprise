@@ -1,0 +1,970 @@
+{
+ "layer": "backend-core (API process, request lifecycle, batch worker)",
+ "summary": "The backend core is a single Node 22 process: pm2 runs it in fork mode with one instance. On one event loop it runs the HTTP API, the Attest batch worker (setInterval 3 s), the Remit worker (2 s) and the static console/docs mounts. They all share one mysql2 pool of 10 connections, whose wait queue has no limit.\n\nRequest handling is stateless apart from in-memory rate limiters. API keys and console sessions are looked up in MySQL on every request and nothing is cached, so the API tier could be copied to more machines. The batcher cannot: it has no claim or lock.\n\nIntake is cheap and costs the same per request. POST /v1/attestations does 3 indexed reads and 2 autocommit writes (the attestation and an audit row the response waits for), makes no external calls, and checks no quota and no rate limit on the keyed API.\n\nThe bottleneck is the batcher. Each tick seals at most one batch of up to 1024 leaves from a single organisation. It writes 2 statements per leaf, one round trip at a time inside one transaction, then anchors with 4 bitcoind RPCs (plus 2 to mine a block on regtest). That gives a hard ceiling of about 341 leaves/s at live settings. With K organisations waiting, the last one waits about K×3 s (or K×15 s while fewer than 1024 records are pending).\n\nEvery tick also runs an unindexed full-table scan of attestations to poll inscriptions, so ticks get slower as the table grows. At T2 (8.6 M rows/day) the drain rate falls below intake within days.\n\nOverload gets no backpressure. The API keeps answering 201. The backlog queries cost O(backlog), because the ORDER BY includes rowseq, which no index covers. If bitcoind fails, each sealed batch is stranded for good, because no code path ever re-anchors a 'sealed' batch; the worker comment that claims a retry is wrong.\n\nConsole reads aggregate over an organisation's whole history (about 27 statements per dashboard view; quota COUNTs on every write), and passwords use synchronous scrypt (N=2^15) on the event loop.\n\nOther prose that disagrees with the code:\n- main.ts:4-6 says there is no runtime dependency, but production uses mysql2.\n- server.ts:4 and routes.ts:2 say \"nine routes\"; about 69 are registered.\n- service.ts:435-441 says all orgs share one batch; batches are now one org each.\n- public.ts:18-21 says free anchors share \"the ordinary batch\"; they now share only within the free-tier org.\n\nVerdict: T1 works once batch stranding is fixed. T2 needs the inscription-poll index, bulk SQL, a multi-org batcher that retries, async scrypt and counters. T3 needs the worker split out with proper claiming, stateless API replicas, shared rate limiting, and an anchoring schedule that does not grow with volume.",
+ "components": [
+  {
+   "name": "HTTP server and router",
+   "role": "Single listener on :8787 for API, console and static traffic. Matches routes, parses JSON bodies, maps errors, runs the audit hook, then sends the response.",
+   "files": [
+    "attest/apps/core/src/http/server.ts",
+    "attest/apps/core/src/http/routes.ts"
+   ],
+   "tech": "node:http createServer with default options (no timeouts or connection cap set); hand-written linear router; JSON body up to 1 MiB; responses pretty-printed with JSON.stringify(body, null, 2)",
+   "notes": "Comments say 'nine routes'; about 45 are registered in routes.ts and about 24 more by remit/PoR. errorMapper sends raw e.message on 500."
+  },
+  {
+   "name": "API key authentication",
+   "role": "Resolves a Bearer sk_test_/sk_live_ key to an org on every request",
+   "files": [
+    "attest/apps/core/src/auth.ts"
+   ],
+   "tech": "SHA-256 of the token, then a SELECT by UNIQUE key_hash, then timingSafeEqual; no cache",
+   "notes": "About 2 µs of hashing per request plus one indexed read."
+  },
+  {
+   "name": "Console accounts and sessions",
+   "role": "Self-serve sandbox signup and login, cookie sessions, console auth fallback on the keyed API (test env only)",
+   "files": [
+    "attest/apps/core/src/account.ts",
+    "attest/apps/core/src/http/console.ts"
+   ],
+   "tech": "scryptSync (N=32768, r=8, p=1) on the event loop; sessions stored in MySQL by SHA-256(token), 14-day TTL",
+   "notes": "requireEnabled refuses on env=live (console.ts:144-155). purgeExpiredSessions is never called."
+  },
+  {
+   "name": "Attest service",
+   "role": "All state transitions: issue, issueSigned, inscribe, get, list, bundle export, and the batch pipeline steps",
+   "files": [
+    "attest/apps/core/src/service.ts"
+   ],
+   "tech": "TypeScript class over the Db interface (mysql2 in production); status flow accepted → batched → submitted → confirmed",
+   "notes": "Remit evidence (remit/orchestrator.ts:721, remit/routes.ts:610) and PoR snapshots (por/routes.ts:263) also call svc.issue, so all three products share one batch queue."
+  },
+  {
+   "name": "Batch worker",
+   "role": "In-process timer: seals up to one org batch per tick, anchors it, polls confirmations, runs an hourly free-tier purge",
+   "files": [
+    "attest/apps/core/src/worker.ts",
+    "attest/apps/core/src/service.ts"
+   ],
+   "tech": "setInterval(WORKER_TICK_MS=3000, unref) with a running flag (no overlapping ticks); lastFlush timer in memory",
+   "notes": "No retry for 'sealed' batches; no distributed lock. Shares the event loop and pool with the API and the RemitWorker (2 s tick, main.ts:102)."
+  },
+  {
+   "name": "Merkle tree builder",
+   "role": "Builds the per-batch tree and per-leaf inclusion proofs",
+   "files": [
+    "attest/apps/core/src/merkle/tree.ts"
+   ],
+   "tech": "RFC 6962 leaf/node tags, duplicate-last-leaf, duplicate-leaf rejection; node:crypto createHash per node",
+   "notes": "O(N) build (about 2N SHA-256) and O(log N) per proof; a few ms at N=1024."
+  },
+  {
+   "name": "Proof bundle assembler",
+   "role": "Maps the row, proof, batch and anchor into bitcert-proof-bundle/v1",
+   "files": [
+    "attest/apps/core/src/bundle/assemble.ts"
+   ],
+   "tech": "Pure function, built per request, never stored",
+   "notes": "Cost is the 4 indexed SELECTs and JSON (de)serialisation around it."
+  },
+  {
+   "name": "Free tier (no-signup anchoring)",
+   "role": "Unauthenticated digest anchoring into one shared 'public-free-tier' org with a 30-day retention",
+   "files": [
+    "attest/apps/core/src/http/public.ts"
+   ],
+   "tech": "Per-address and global in-memory fixed-window limits; CORS",
+   "notes": "Not audited. The duplicate path calls findPublicByDigest, which no index supports."
+  },
+  {
+   "name": "Rate limiter",
+   "role": "Fixed-window counters for signup, console auth and the free tier",
+   "files": [
+    "attest/apps/core/src/http/ratelimit.ts"
+   ],
+   "tech": "Map<string,{count,resetAt}> per process; full sweep when the map exceeds 10,000 keys",
+   "notes": "Its own comment says it would need replacing for more than one process."
+  },
+  {
+   "name": "Console API and billing",
+   "role": "Dashboard aggregates, quota, key and issuer-key management, chain tx lookup, audit search; billing arithmetic",
+   "files": [
+    "attest/apps/core/src/http/console.ts",
+    "attest/apps/core/src/billing.ts"
+   ],
+   "tech": "Many COUNT and GROUP BY queries per view; bitcoind RPC inline for tx lookup (5 s timeout); billing.ts is pure",
+   "notes": "Dashboard runs about 27 statements per view, several of them over the org's full history."
+  },
+  {
+   "name": "Audit log",
+   "role": "One row per authenticated, non-silent request (any status); keyset-paged search",
+   "files": [
+    "attest/apps/core/src/audit.ts"
+   ],
+   "tech": "INSERT inside the router's onDone hook, awaited before the response; (org_id, at, id) index",
+   "notes": "Never purged; the q filter uses UPPER(path) LIKE '%…%'."
+  },
+  {
+   "name": "Stateless settlement evaluators and sandbox material",
+   "role": "Reconcile evidence against a policy, build evidence ZIPs, tamper and package demo evidence; nothing stored",
+   "files": [
+    "attest/apps/core/src/http/evidence.ts",
+    "attest/apps/core/src/http/sandbox.ts"
+   ],
+   "tech": "WebCrypto verify (async), rules engine, in-memory ZIP via CompressionStream plus JS crc32",
+   "notes": "CPU only, bounded by the 1 MiB body. DB cost is auth plus audit."
+  },
+  {
+   "name": "Static mounts",
+   "role": "Serves the console, Developer Hub and Playground builds from the API process",
+   "files": [
+    "attest/apps/core/src/http/static.ts"
+   ],
+   "tech": "statSync plus createReadStream; cache-control no-cache, no ETag or compression",
+   "notes": "Per its comment, production is meant to put these behind a reverse proxy on separate hosts."
+  },
+  {
+   "name": "Process lifecycle and configuration",
+   "role": "Boot (schema check, public org, remit registry), worker start, signal handling; environment-only config",
+   "files": [
+    "attest/apps/core/src/main.ts",
+    "attest/apps/core/src/config.ts",
+    "attest/deploy/ecosystem.config.cjs"
+   ],
+   "tech": "Node 22.22 type stripping; pm2 fork mode, 1 instance, kill_timeout 6000, max_restarts 5, no max_memory_restart",
+   "notes": "JSON-line logs to stdout; SIGTERM clears timers and closes the server and pool; force exit after 5 s; in-flight tick not awaited."
+  }
+ ],
+ "flows": [
+  {
+   "name": "POST /v1/attestations (keyed API, unsigned digest)",
+   "sync_or_async": "sync request/response; batching happens later in the worker",
+   "steps": [
+    "server.ts:169-188: new URL, linear route match, build ctx",
+    "routes.ts:229 → auth.ts:52-68 requireAuth/authenticate: prefix check, SHA-256(token), SELECT api_keys WHERE key_hash=? AND revoked_at IS NULL (read 1); ctx.audit set",
+    "server.ts:296-311: readJson buffers up to 1 MiB, JSON.parse",
+    "service.ts:160-169: lower-case and HEX64 check; SELECT id WHERE org_id=? AND leaf_bytes=? (read 2) → 409 duplicate_digest",
+    "service.ts:172-183: INSERT attestations status 'accepted', descriptor JSON.stringify (write 1, autocommit)",
+    "service.ts:184: SELECT * WHERE id=? AND org_id=? (read 3)",
+    "routes.ts:130-134 + server.ts:216-223: onDone → INSERT audit_log (write 2), awaited; failure only logged",
+    "server.ts:250-270: 201 with pretty JSON. No quota, no rate limit, no external call. A concurrent duplicate hits UNIQUE(org_id,leaf_bytes) and returns a 500."
+   ]
+  },
+  {
+   "name": "POST /v1/attestations/signed",
+   "sync_or_async": "sync",
+   "steps": [
+    "requireAuth (read 1), readJson",
+    "service.ts:329-336: statementLeaf = SHA-256(JCS(statement)) in JS",
+    "service.ts:337-343: verifyStatement → statementLeaf again, base64 decode, crypto.subtle.importKey and ECDSA P-256 verify (async on the libuv pool) → 400 invalid_signature",
+    "service.ts:345 → issue(): dup SELECT (read 2), issuerTrust SELECT issuer_keys by org_id+public_key (read 3), INSERT (write 1), get (read 4)",
+    "audit INSERT (write 2); 201"
+   ]
+  },
+  {
+   "name": "POST /v1/public/anchors (free tier)",
+   "sync_or_async": "sync",
+   "steps": [
+    "routes.ts:369 withCors → public.ts:106-124: requireEnabled; clientKey (socket address, since TRUST_PROXY is unset); perAddress.check (10/h) then global.check('all') (500/h), both in memory → 429",
+    "readJson; HEX64 check",
+    "public.ts:134-138: issue(publicOrgId, …, {source:'public', expiresAt: now+30 d}) → dup SELECT, INSERT, get (2 reads + 1 write)",
+    "On duplicate_digest: service.ts:387-391 findPublicByDigest WHERE leaf_bytes=? AND source='public' (no supporting index) → 200 'already anchored'",
+    "202 accepted. No audit row (anonymous)."
+   ]
+  },
+  {
+   "name": "POST /v1/console/attestations (session)",
+   "sync_or_async": "sync",
+   "steps": [
+    "console.ts:158-164 requireAccount: SELECT sessions by token_hash and SELECT accounts by id (2 reads; DELETE if expired)",
+    "console.ts:418 quota(): COUNT(*) of the org's 'attest' rows since the start of the UTC month (read 3) → 429 when ≥ 1000",
+    "readJson; issue() dup SELECT, INSERT, get (2 reads + 1 write)",
+    "console.ts:431 quota() again for the response (read 6)",
+    "audit INSERT (write 2); 201. The quota check is read-then-insert, so concurrent requests can overshoot."
+   ]
+  },
+  {
+   "name": "Batch worker tick (every WORKER_TICK_MS=3000 ms, no overlap)",
+   "sync_or_async": "async timer in the API process",
+   "steps": [
+    "worker.ts:68 skip if the previous tick is still running",
+    "service.ts:429-433 pendingCount: SELECT COUNT(*) WHERE batch_id IS NULL (global, all orgs and products, includes inscriptions)",
+    "worker.ts:72-73: seal only if pending ≥ BATCH_MAX_LEAVES (1024) or 15 s since lastFlush",
+    "service.ts:474-483 sealBatch: head SELECT (org of oldest pending, ORDER BY created_at, rowseq LIMIT 1); pending SELECT of that org LIMIT 1024",
+    "service.ts:486: MerkleTree.fromLeaves (sync, about 2N SHA-256)",
+    "service.ts:490-508: tx on one pooled connection: INSERT batches, then per leaf UPDATE attestations (batch_id, leaf_index, 'batched') and INSERT merkle_proofs, each awaited → 2N+1 statements, commit; lastFlush = now",
+    "service.ts:513-535 anchorBatch: SELECT batch; backend.submit = createrawtransaction, fundrawtransaction(fee_rate 1), signrawtransactionwithwallet, sendrawtransaction (4 RPCs, 15 s timeout each); then tx: INSERT anchor_txs, UPDATE batches, UPDATE attestations WHERE batch_id (N rows) → 'submitted'",
+    "worker.ts:93-96: on anchor error, log 'will retry'. The batch stays 'sealed' and no code path re-anchors it.",
+    "main.ts:139-141 regtest afterAnchor: getnewaddress + generatetoaddress(1)",
+    "service.ts:539-560 refreshConfirmations: SELECT anchor_txs WHERE status!='confirmed' (all); gettransaction per row, sequential; if confirmed, tx of 3 UPDATEs (anchor_txs, batches, attestations by batch_id)",
+    "service.ts:564-579: SELECT attestations WHERE kind='inscription' AND status!='confirmed' AND reveal_txid IS NOT NULL (full table scan), then one RPC per row",
+    "worker.ts:104-108: hourly purgeExpiredPublic (SELECT all expired; one tx with 2 DELETEs per row)"
+   ]
+  },
+  {
+   "name": "GET /v1/attestations/:id/bundle (and the public bundle)",
+   "sync_or_async": "sync; built per request, not stored",
+   "steps": [
+    "requireAuth (read 1) (the public bundle has no auth)",
+    "service.ts:639 get by id+org (read 2)",
+    "Inscription: witness bundle from the row alone (service.ts:598-636)",
+    "Digest: 409 if not batched; SELECT merkle_proofs by attestation_id, SELECT batches by id, SELECT anchor_txs by batch_id (reads 3-5); 409 not_anchored if no anchor row",
+    "bundle/assemble.ts:103-160 maps the rows into the bundle; JSON.parse of descriptor, statement and siblings",
+    "audit INSERT (write 1); 200 pretty JSON with content-disposition"
+   ]
+  },
+  {
+   "name": "POST /v1/console/login",
+   "sync_or_async": "sync, with blocking CPU",
+   "steps": [
+    "console.ts:365-366 requireEnabled (test env only) + limitAuth (in memory, 20 per 15 min per address)",
+    "readJson; findAccountByEmail (read 1)",
+    "account.ts:101 verifyPassword → scryptSync N=32768 r=8 on the event loop (whole process stalls)",
+    "createSession INSERT (write 1), recordLogin UPDATE (write 2)",
+    "overview(): SELECT orgs, activeKey, issuer_keys, quota COUNT (reads 2-5)",
+    "audit INSERT (write 3); 200 + Set-Cookie"
+   ]
+  },
+  {
+   "name": "Shutdown, crash and restart recovery",
+   "sync_or_async": "process lifecycle",
+   "steps": [
+    "main.ts:147-154 SIGTERM/SIGINT: worker.stop() clears the interval only (an in-flight tick is not awaited), remitWorker.stop(), server.close → db.close → exit 0; force exit after 5 s (pm2 kill_timeout 6 s)",
+    "Boot: schema and index check, ensureOrg(public), the worker starts with lastFlush = now (so small backlogs wait a full flush interval)",
+    "Recovery is whatever the next tick finds: 'accepted' rows are sealed again; 'submitted' anchors are polled again; 'sealed' batches without an anchor are never resumed; a broadcast whose DB record was lost is never recorded"
+   ]
+  }
+ ],
+ "per_txn_costs": [
+  {
+   "operation": "POST /v1/attestations (keyed API, unsigned digest) at intake",
+   "db_reads": "3 (api_keys by UNIQUE key_hash; dup check on UNIQUE(org_id,leaf_bytes); SELECT * by PK)",
+   "db_writes": "2 autocommit statements (INSERT attestations; INSERT audit_log, which the response waits for)",
+   "external_calls": "none",
+   "crypto_ops": "2× SHA-256 of the API key (auth.ts:59,65); 2× randomUUID",
+   "sync_cpu_notes": "JSON.parse of a body up to 1 MiB (normally under 1 KB); descriptor JSON.stringify; pretty-printed ~0.5 KB response. Sub-millisecond for normal bodies.",
+   "evidence": [
+    "routes.ts:228-238 requireAuth → ctx.body() → d.svc.issue(...)",
+    "service.ts:164-184 dup SELECT, INSERT ... VALUES (?, ?, ?, ?, ?, 'accepted', ...), then this.get()",
+    "audit.ts:114-120 INSERT INTO audit_log ... (awaited via server.ts:216-218)"
+   ]
+  },
+  {
+   "operation": "Deferred pipeline cost per attestation (batch of N, amortised)",
+   "db_reads": "Per tick: COUNT over pending (O(backlog)), head and pending SELECTs (O(backlog) with filesort), SELECT batch, SELECT unconfirmed anchors, and a full-table inscription scan. Divided by N it is small per leaf at N=1024, but the backlog-sized and table-sized parts grow without bound.",
+   "db_writes": "Per leaf: 1 UPDATE attestations + 1 INSERT merkle_proofs as separate round trips; plus 2 row updates through bulk 'UPDATE … WHERE batch_id' (submitted, confirmed). Per batch: INSERT batches, INSERT anchor_txs, 2× UPDATE batches, 1× UPDATE anchor_txs.",
+   "external_calls": "Per batch: 4 bitcoind RPCs to anchor (create/fund/sign/send) + 2 to mine (regtest only) + 1 gettransaction per unconfirmed anchor per tick until the first confirmation",
+   "crypto_ops": "Tree: N leaf hashes + about N node hashes (SHA-256); proofs: log2(N) sibling hex strings per leaf",
+   "sync_cpu_notes": "Tree plus proofs about 3–8 ms at N=1024 (estimate); 2N JSON.stringify of siblings and directions",
+   "evidence": [
+    "service.ts:503-507 for (const [i, r] of pending.entries()) { const p = tree.proof(i); await upd.run(batchId, i, r.id); await ins.run(...) }",
+    "service.ts:533 UPDATE attestations SET status = 'submitted' WHERE batch_id = ?",
+    "service.ts:557 UPDATE attestations SET status = 'confirmed' WHERE batch_id = ?",
+    "anchor/bitcoind.ts:63-89 four rpc() calls in submit()"
+   ]
+  },
+  {
+   "operation": "POST /v1/attestations/signed",
+   "db_reads": "4 (auth; dup; issuer_keys by org_id+public_key (only the org_id FK index helps); get)",
+   "db_writes": "2 (attestation; audit)",
+   "external_calls": "none",
+   "crypto_ops": "statementLeaf twice (JCS + pure-JS SHA-256); WebCrypto importKey + ECDSA P-256 verify, async on the libuv threadpool, about 0.1 ms",
+   "sync_cpu_notes": "JCS canonicalisation of a statement of about 1 KB is trivial; the statement is stored verbatim as MEDIUMTEXT",
+   "evidence": [
+    "service.ts:331 leaf = statementLeaf(statement); 337 const verdict = await verifyStatement(statement, leaf);",
+    "packages/attest-verify/src/statement.ts:271-276 crypto.subtle.importKey(...) / crypto.subtle.verify(...)",
+    "service.ts:247-251 SELECT id FROM issuer_keys WHERE org_id = ? AND public_key = ? AND revoked_at IS NULL"
+   ]
+  },
+  {
+   "operation": "POST /v1/public/anchors (free tier)",
+   "db_reads": "2 (dup; get). On a duplicate digest, +1 SELECT that scans the whole attestations table.",
+   "db_writes": "1 (INSERT attestations); no audit row",
+   "external_calls": "none",
+   "crypto_ops": "none",
+   "sync_cpu_notes": "2 in-memory limiter checks (O(1), or O(keys) once more than 10,000 addresses, see findings)",
+   "evidence": [
+    "public.ts:109-118 perAddress.check(key) … global.check('all')",
+    "public.ts:137-144 d.svc.issue(d.publicOrgId, …) … findPublicByDigest",
+    "service.ts:389 SELECT * FROM attestations WHERE leaf_bytes = ? AND source = 'public'"
+   ]
+  },
+  {
+   "operation": "POST /v1/console/attestations (session, sandbox console)",
+   "db_reads": "6 (sessions; accounts; quota COUNT; dup; get; quota COUNT again). Each COUNT reads all of the org's rows this month, with a clustered lookup for product.",
+   "db_writes": "2 (attestation; audit)",
+   "external_calls": "none",
+   "crypto_ops": "SHA-256 of the session token",
+   "sync_cpu_notes": "small",
+   "evidence": [
+    "console.ts:416-431 const q = await quota(account.org_id); … d.svc.issue(…); … quota: await quota(account.org_id)",
+    "console.ts:186-188 SELECT COUNT(*) AS n FROM attestations WHERE org_id = ? AND created_at >= ? AND product = 'attest'"
+   ]
+  },
+  {
+   "operation": "POST /v1/attestations/inscribe (document in the witness)",
+   "db_reads": "3 (auth; dup; get)",
+   "db_writes": "2 (attestation with status 'submitted'; audit)",
+   "external_calls": "About 7 bitcoind RPCs inline in the HTTP request (anchor/inscribe.ts), each with a 15 s timeout; the broadcast happens before the INSERT",
+   "crypto_ops": "SHA-256 of the body (up to 100,000 + 65,536 bytes by default); taproot script-path signing (chain layer)",
+   "sync_cpu_notes": "Body buffered in memory up to INSCRIPTION_MAX_BYTES + 64 KiB",
+   "evidence": [
+    "routes.ts:285 const body = await ctx.raw(MAX_INSCRIPTION_UPLOAD);",
+    "service.ts:222 const r = await this.inscriber(body, contentType); (then INSERT at 225-232)",
+    "anchor/inscribe.ts: 7 rpc() call sites (getnewaddress, getaddressinfo, fundrawtransaction, signrawtransactionwithwallet, sendrawtransaction ×2, …)"
+   ]
+  },
+  {
+   "operation": "GET /v1/attestations/:id/bundle",
+   "db_reads": "5 (auth; get; merkle_proofs; batches; anchor_txs by batch_id), all indexed",
+   "db_writes": "1 (audit)",
+   "external_calls": "none",
+   "crypto_ops": "none",
+   "sync_cpu_notes": "JSON.parse of descriptor, statement and siblings; pretty stringify of a 2–5 KB bundle. Inscription bundles carry reveal_tx_hex (about 2× the body, up to about 200 KB by default).",
+   "evidence": [
+    "service.ts:662-669 SELECT * FROM merkle_proofs … SELECT merkle_root FROM batches … SELECT * FROM anchor_txs WHERE batch_id = ?",
+    "service.ts:677 return assembleBundle({ … })"
+   ]
+  },
+  {
+   "operation": "GET /v1/attestations (list)",
+   "db_reads": "2 (auth; SELECT a.* … LEFT JOIN batches ORDER BY created_at DESC LIMIT ≤500, reading the (org_id, created_at) index backwards)",
+   "db_writes": "1 (audit)",
+   "external_calls": "none",
+   "crypto_ops": "none",
+   "sync_cpu_notes": "Pulls every column, including MEDIUMTEXT descriptor and statement, for up to 500 rows; pretty JSON. Normally about 0.5 MB. No cursor, so only the newest 500 records can be reached.",
+   "evidence": [
+    "service.ts:365-369 SELECT a.*, b.anchor_txid … ORDER BY a.created_at DESC LIMIT ? … Math.min(limit, 500)",
+    "routes.ts:296 pageLimit(ctx.query.get('limit'), 50, 500)"
+   ]
+  },
+  {
+   "operation": "GET /v1/console/dashboard",
+   "db_reads": "About 27 statements: 2 for the session plus about 25 aggregates. About 8 of them read the org's whole history (funnel GROUP BY, signed and registered COUNTs, unconfirmed COUNT, remit state GROUP BY, webhook GROUP BY, remitToday through a non-sargable substr()).",
+   "db_writes": "0 (in SILENT_READS, so not audited)",
+   "external_calls": "none",
+   "crypto_ops": "none",
+   "sync_cpu_notes": "Small JSON work; the cost is in MySQL and grows with the org's history",
+   "evidence": [
+    "console.ts:708-711 SELECT status, COUNT(*) AS n FROM attestations WHERE org_id = ? AND product = 'attest' GROUP BY status",
+    "console.ts:752 sumRow('substr(created_at, 1, 10) = ?', today)",
+    "audit.ts:92-96 SILENT_READS includes '/v1/console/dashboard'"
+   ]
+  },
+  {
+   "operation": "POST /v1/console/login and /signup",
+   "db_reads": "Login: about 6 (account by email; org; active key; issuer keys; quota COUNT). Signup: about 9.",
+   "db_writes": "Login: 3 (session INSERT, accounts UPDATE, audit). Signup: about 9 (orgs, api_keys, issuer_keys, sample attestation, accounts, subscriptions, sessions, accounts UPDATE, audit), not in one transaction.",
+   "external_calls": "none directly. Signup seeds one attestation, which later costs a batch, an anchor transaction and a regtest block.",
+   "crypto_ops": "1× scryptSync (N=32768, r=8, p=1, 32 MiB), synchronous; SHA-256 of tokens and keys",
+   "sync_cpu_notes": "scrypt blocks the whole event loop, about 100–300 ms per call according to the code comment (not measured)",
+   "evidence": [
+    "account.ts:79 const hash = scryptSync(password, salt, SCRYPT.keylen,",
+    "account.ts:101 actual = scryptSync(password, Buffer.from(saltB64!, 'base64'), expected.length,",
+    "console.ts:300-304 seeded sample: await d.svc.issue(orgId, sample, 'text/plain', …)"
+   ]
+  },
+  {
+   "operation": "Worker tick sealing one batch of N leaves (N ≤ 1024)",
+   "db_reads": "COUNT pending + head SELECT + pending SELECT (all O(backlog)) + SELECT batch + SELECT unconfirmed anchors (U rows) + full-table inscription SELECT",
+   "db_writes": "2N+1 in the seal transaction; 3 in the anchor transaction (one touches N rows); 3 per confirmed anchor (one touches N rows)",
+   "external_calls": "4 RPCs to submit + 2 to mine on regtest + U + I gettransaction calls, sequential, 15 s timeout each",
+   "crypto_ops": "About 2N SHA-256",
+   "sync_cpu_notes": "About 3–8 ms of tree and proof work at N=1024 (estimate). Live log at 1–2 leaves: sealed→anchored 27–56 ms, anchored→confirmed 37–64 ms.",
+   "evidence": [
+    "worker.ts:71-99 pendingCount → sealBatch → anchorBatch → afterAnchor → refreshConfirmations",
+    "~/.pm2/logs/stonehash-attest-core-out.log 2026-11-18T02:04:04.004Z 'batch sealed' → 02:04:04.041Z 'batch anchored' → 02:04:04.100Z 'anchors confirmed'"
+   ]
+  }
+ ],
+ "capacity_findings": [
+  {
+   "id": "BC-01",
+   "title": "Unindexed inscription poll scans the whole attestations table every worker tick",
+   "severity": "blocker",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "claim": "refreshConfirmations runs every 3 s tick. After polling anchors, it selects pending inscriptions with a predicate no MySQL index supports: kind, status and reveal_txid are not indexed, and the only status index starts with batch_id. MySQL therefore scans the whole attestations table on every tick. Ticks never overlap, so once the scan takes longer than 3 s, sealing slows in proportion and the drain rate falls with table size.",
+   "evidence": [
+    "service.ts:564-568 \"SELECT id, reveal_txid, reveal_tx_hex, leaf_bytes FROM attestations \" + \"WHERE kind = 'inscription' AND status != 'confirmed' AND reveal_txid IS NOT NULL\"",
+    "db.ts:692-696 attestations indexes: (batch_id, status), (batch_id, created_at), (expires_at), (org_id, created_at); DDL db.ts:433-462 has nothing on kind or reveal_txid",
+    "worker.ts:99 const promoted = await this.svc.refreshConfirmations(); (every tick)",
+    "worker.ts:68 if (this.running) return; // a slow chain must not overlap ticks"
+   ],
+   "quantification": "T2 adds about 8.6 M rows a day, and every row is read every 3 s. At an assumed 2–10 M rows/s, one week at T2 (about 60 M rows) makes each tick take 6–30 s. The drain ceiling then drops to about 1024/(6–30 s), roughly 35–170 leaves/s, which goes below 100/s, so the backlog grows without bound. At T1 (31 M rows a year) this degrades slowly over months and keeps a MySQL core busy.",
+   "fix": "Add an index the predicate can use (e.g. (kind, status)), or track pending inscriptions in a small table or an indexed nullable column cleared on confirmation; poll inscriptions on their own, slower schedule."
+  },
+  {
+   "id": "BC-02",
+   "title": "Batcher ceiling is about 341 leaves/s: one batch of up to 1024 leaves per 3 s tick",
+   "severity": "blocker",
+   "kind": "structural",
+   "bites_at_tier": "T3",
+   "confidence": "high",
+   "claim": "Each tick seals at most one batch (BATCH_MAX_LEAVES=1024). It seals every tick only while global pending is at least 1024; otherwise it seals once per BATCH_FLUSH_INTERVAL_MS (15 s). The most the batcher can drain is therefore 1024 leaves per tick across all orgs and all three products (remit and PoR also call svc.issue). That is below T3. Raising the settings helps only until the per-leaf write cost (BC-04) takes over.",
+   "evidence": [
+    "worker.ts:72-77 const due = Date.now() - this.lastFlush >= this.opts.flushIntervalMs; if (pending > 0 && (pending >= this.opts.maxLeaves || due)) { … const batchId = await this.svc.sealBatch();",
+    "service.ts:480-483 … WHERE batch_id IS NULL AND org_id = ? ORDER BY created_at ASC, ${ord} ASC LIMIT ?` ).all(head.org_id, this.maxLeaves)",
+    "config.ts:332-333,342 BATCH_MAX_LEAVES 1024, BATCH_FLUSH_INTERVAL_MS default 10_000 (live 15000), WORKER_TICK_MS default 2_000 (live 3000)"
+   ],
+   "quantification": "Live settings: 1024 per 3 s ≈ 341/s. A single org at T2 (100/s) drains while ticks stay under 3 s. T3 sustained (1,000/s) is about 3× the ceiling, and peaks (10,000/s) about 30×. With tuning (e.g. 500 ms tick, 8192 leaves) the arithmetic limit is about 16k/s, but sequential per-leaf writes cap it at roughly 1–3k/s (estimate). It would also mean about 2 Bitcoin transactions per second.",
+   "fix": "Bulk SQL (BC-04); seal several batches per tick within a time budget; anchor on a fixed schedule, independent of leaf count, with one root aggregating many batches."
+  },
+  {
+   "id": "BC-03",
+   "title": "One organisation per tick: tenant latency and Bitcoin transaction count grow with the number of active tenants",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "sealBatch takes the org that owns the globally oldest pending record and seals only that org. With K orgs waiting, the last one waits about K ticks: K×3 s while global pending is at least 1024, and K×15 s below that. Each tenant batch is also its own Bitcoin transaction (a deliberate privacy choice), so the number of anchor transactions follows tenant count, not volume. Every sandbox signup seeds a sample record, so each signup costs one batch, one transaction and, on regtest, one mined block.",
+   "evidence": [
+    "service.ts:474-477 SELECT org_id FROM attestations WHERE batch_id IS NULL ORDER BY created_at ASC, ${ord} ASC LIMIT 1",
+    "worker.ts:74-76 // One batch per tick, and a batch is now one organisation's records — so with several tenants waiting, the rest are picked up on the following ticks",
+    "service.ts:457-458 The cost is real: a tenant with one pending record pays for its own transaction",
+    "console.ts:300-304 seeded sample: await d.svc.issue(orgId, sample, 'text/plain', …)"
+   ],
+   "quantification": "100 active tenants at T1: 5–25 minutes before a record is first batched. 1,000 tenants: 50 minutes to about 4 hours. At T2 with 1,000 tenants, each tenant is visited about every 50 minutes, with about 300 leaves per visit.",
+   "fix": "Seal all due orgs in one tick within a time budget, or aggregate per-org subtree roots into one anchored root per interval (sibling hashes reveal nothing about other tenants)."
+  },
+  {
+   "id": "BC-04",
+   "title": "sealBatch writes 2 statements per leaf, one round trip at a time, inside one transaction",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "claim": "In one transaction on one pooled connection, sealBatch issues 1 INSERT, then for each leaf an UPDATE and an INSERT, each awaited separately. N=1024 means 2,049 sequential round trips, with 1024 row locks held throughout. This per-leaf cost is the floor under any tuning of BATCH_MAX_LEAVES or WORKER_TICK_MS.",
+   "evidence": [
+    "service.ts:503-507 for (const [i, r] of pending.entries()) { const p = tree.proof(i); await upd.run(batchId, i, r.id); await ins.run(r.id, batchId, i, JSON.stringify(p.siblings), JSON.stringify(p.directions)); }",
+    "db.ts:901-913 const conn = await this.pool.getConnection(); … await conn.beginTransaction(); const out = await fn(inner); await conn.commit();"
+   ],
+   "quantification": "At an assumed 0.2–0.5 ms per local round trip, a 1024-leaf seal takes about 0.4–1 s. On its own that caps throughput at about 1,000–2,500 leaves/s per worker. Two more bulk UPDATEs (anchor, confirm) touch N rows each later.",
+   "fix": "Use a multi-row INSERT for merkle_proofs and one set-based UPDATE (JOIN against a VALUES list or staging table). Alternatively, store the batch's ordered leaves once and derive proofs at export time."
+  },
+  {
+   "id": "BC-05",
+   "title": "A failed anchor or a crash strands sealed batches for good; the retry the comment promises does not exist",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "If anchorBatch throws (bitcoind down, wallet unfunded, RPC timeout), the batch stays 'sealed'. No code path ever anchors an existing sealed batch; the next tick seals a new one. During an outage the worker keeps converting up to 1024 'accepted' records per tick into dead batches, and their bundle export answers 409 not_anchored forever. The same happens on a crash between seal and anchor. Because the broadcast happens before the DB transaction, a crash or DB error after sendrawtransaction leaves an on-chain anchor that is never recorded. The live log shows 0 'anchor failed' events so far.",
+   "evidence": [
+    "worker.ts:93-95 } catch (e) { // The batch stays `sealed` and the next tick retries it. this.log('anchor failed, will retry', …",
+    "grep across core src: 'sealed' appears only at service.ts:493 (INSERT) and service.ts:517 (status check in anchorBatch); the only anchorBatch caller is worker.ts:82, with the batch it just sealed",
+    "service.ts:523-526 const handle = await this.backend.submit(payload); const ts = nowIso(); await this.db.tx(async (tx) => {",
+    "service.ts:672-675 throw new ServiceError(409, 'not_anchored', …)"
+   ],
+   "quantification": "A 10-minute bitcoind or wallet outage at T2 can strand about 60k records (100/s × 600 s), all needing manual repair. At T1 the same outage strands about 600.",
+   "fix": "At the start of each tick, anchor existing 'sealed' batches oldest first, and pause sealing while anchoring fails. Persist the signed transaction (txid and hex) before broadcasting so a retry rebroadcasts the same transaction. Add a recovery pass at boot."
+  },
+  {
+   "id": "BC-06",
+   "title": "Backlog queries scale with the backlog, and nothing pushes back on intake",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "medium",
+   "claim": "Every tick counts all pending rows and runs two queries ordered by (created_at, rowseq). rowseq is not in the (batch_id, created_at) index (InnoDB appends the PK id, not rowseq), so MySQL must fetch and filesort every matching pending row to return LIMIT 1 or LIMIT 1024. When intake exceeds drain, each seal gets slower, which reduces drain further. Nothing pushes back: the API keeps returning 201 with no backlog check, and the pool wait queue has no limit.",
+   "evidence": [
+    "service.ts:430-431 'SELECT COUNT(*) AS n FROM attestations WHERE batch_id IS NULL'",
+    "service.ts:475-476 SELECT org_id FROM attestations WHERE batch_id IS NULL ORDER BY created_at ASC, ${ord} ASC LIMIT 1",
+    "db.ts:694 CREATE INDEX attestations_open_order ON attestations(batch_id, created_at)",
+    "db.ts:942-943 waitForConnections: true, connectionLimit: 10,"
+   ],
+   "quantification": "At T3 on live settings the backlog grows by at least 660 rows/s (about 57 M a day). With 1 M rows pending, each head or pending query does about 1 M clustered lookups (seconds), twice per tick. Plan not verified with EXPLAIN.",
+   "fix": "Order by rowseq alone, or index (batch_id, org_id, rowseq); keep a pending counter; return 429/503 when backlog size or oldest-pending age passes a threshold; set the pool's queueLimit."
+  },
+  {
+   "id": "BC-07",
+   "title": "scryptSync blocks the event loop on every console login and signup",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "Passwords are hashed and verified with scryptSync (N=32768, r=8, p=1, 32 MiB). It runs synchronously on the single event loop that also serves the API and runs both workers, so every login or signup freezes every other request and the batcher for its duration.",
+   "evidence": [
+    "account.ts:42-46 // N=2^15 with r=8 is a few hundred milliseconds here … const SCRYPT = { N: 32_768, r: 8, p: 1, keylen: 32 } as const;",
+    "account.ts:79 const hash = scryptSync(password, salt, SCRYPT.keylen,",
+    "account.ts:101 actual = scryptSync(password, Buffer.from(saltB64!, 'base64'), expected.length,",
+    "console.ts:376 && !found.disabled_at && verifyPassword(password, found.password_hash);"
+   ],
+   "quantification": "About 100–300 ms blocked per call (per the code comment; not measured). 3–10 logins/s saturate the process. The console auth limit (20 per 15 min per address, config.ts:352-353) does nothing against attempts spread across many addresses.",
+   "fix": "Switch to async crypto.scrypt (libuv threadpool; raise UV_THREADPOOL_SIZE) or a worker thread; keep the per-address limit."
+  },
+  {
+   "id": "BC-08",
+   "title": "One process, one event loop, one 10-connection pool, no load shedding",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T3",
+   "confidence": "medium",
+   "claim": "pm2 runs a single fork-mode instance. The HTTP API, the Attest batcher (3 s), the Remit worker (2 s) and the static mounts share one JS thread and one mysql2 pool of 10 connections with an unbounded wait queue. CPU-heavy work anywhere (scrypt, large responses, PoR or remit handlers) delays everything, and overload only shows up as rising latency.",
+   "evidence": [
+    "main.ts:2 One process: HTTP server plus the batch worker on a timer.",
+    "main.ts:102 remitWorker = new RemitWorker(orchestrator, outbox, cfg.workerTickMs > 0 ? 2_000 : 0, log);",
+    "deploy/ecosystem.config.cjs:37-41 name: 'stonehash-attest-core', script: 'src/main.ts', interpreter: 'node', (no instances or exec_mode, so 1 fork)",
+    "db.ts:942-943 waitForConnections: true, connectionLimit: 10,"
+   ],
+   "quantification": "Intake is 5 sequential statements per request. At an estimated 0.2–0.5 ms of main-thread CPU per request, one process tops out around 2–5k simple requests/s (not measured). T3 sustained uses an estimated 20–50 % of the thread before worker load; 10k/s peaks exceed it several times over. A 1024-leaf seal holds 1 of the 10 connections for about 0.5–1 s.",
+   "fix": "Run N stateless API processes behind a load balancer (cluster or containers); move the workers into their own singleton process; size pools per process; add a concurrency limit with 503 shedding."
+  },
+  {
+   "id": "BC-09",
+   "title": "Scale-out blockers: rate limiters are per process and the batcher claims nothing",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T3",
+   "confidence": "medium",
+   "claim": "All rate limiters live in process memory, so N instances allow N× the limits and every restart resets them. The batcher selects pending rows without locking them, and its UPDATE does not re-check batch_id IS NULL. With two instances, both would build the same batch. Only the merkle_proofs primary key makes the second transaction fail, after it waits on row locks. That protection is accidental, not designed, and the work is wasted; refreshConfirmations would also double-poll. No in-memory sessions or caches block scale-out.",
+   "evidence": [
+    "ratelimit.ts:9-11 In-memory and per-process, which is exactly right for a single-process service and would need replacing if that ever changed.",
+    "service.ts:480-483 plain SELECT … WHERE batch_id IS NULL AND org_id = ? … (no FOR UPDATE / SKIP LOCKED)",
+    "service.ts:496-497 \"UPDATE attestations SET batch_id = ?, leaf_index = ?, status = 'batched' WHERE id = ?\"",
+    "db.ts:465 merkle_proofs: attestation_id VARCHAR(64) NOT NULL PRIMARY KEY,"
+   ],
+   "quantification": "The free tier's global cap of 500/h becomes 500×N/h; signup and console auth caps loosen the same way.",
+   "fix": "Run exactly one worker (MySQL GET_LOCK, or leader election), or claim rows with SELECT … FOR UPDATE SKIP LOCKED and compare-and-set updates (WHERE id=? AND batch_id IS NULL). Move rate limits to a shared store or the gateway."
+  },
+  {
+   "id": "BC-10",
+   "title": "Keyed API has no quota, no rate limit and no per-tenant fairness",
+   "severity": "moderate",
+   "kind": "configuration",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "claim": "POST /v1/attestations (and /signed, /inscribe) only checks the key. By design, the monthly quota (1,000 per month) is enforced only on the console's create routes. A single key can push unlimited records, each carrying up to about 1 MiB of descriptor JSON, into the shared FIFO batcher queue, delaying every other tenant. Quotas are product policy; nothing protects capacity on this path.",
+   "evidence": [
+    "routes.ts:228-236 r.post('/v1/attestations', async (ctx) => { const orgId = await requireAuth(d, ctx); const body = await ctx.body(); … const att = await d.svc.issue(orgId, leaf, …",
+    "console.ts:412-415 The quota is enforced here because this is where a browser can reach it in a loop.",
+    "server.ts:76 const MAX_BODY = 1 << 20; // 1 MiB (the only cap on descriptor size; service.ts:177 JSON.stringify(descriptor ?? {}))"
+   ],
+   "quantification": "One client at 1,000/s alone exceeds the batcher's 341/s ceiling. Descriptor storage can reach about 1 MiB per record.",
+   "fix": "Per-key or per-org token buckets (shared store), plan-based monthly quotas on the keyed API, and a descriptor cap of a few KB."
+  },
+  {
+   "id": "BC-11",
+   "title": "Each authenticated request writes an audit row before responding; audit_log and sessions are never purged",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "claim": "The router's onDone hook inserts one audit_log row for every authenticated, non-silent request, including 4xx and 5xx outcomes, and waits for it before sending the response; failures are only logged. Nothing ever deletes audit_log rows, and purgeExpiredSessions is never called. Path search uses UPPER(path) LIKE '%term%', which the (org_id, at, id) index cannot serve, so a rare term walks the org's whole history.",
+   "evidence": [
+    "server.ts:216-218 if (this.onDoneHook) { try { await this.onDoneHook(ctx, reply ? reply.status : res.statusCode, performance.now() - started);",
+    "audit.ts:114-117 INSERT INTO audit_log (id, org_id, at, actor_type, actor_id, actor_label, service, method, path, status, duration_ms)",
+    "audit.ts:200 if (s.q) { where.push(\"UPPER(path) LIKE ? ESCAPE '!'\"); params.push(likeContains(s.q)); }",
+    "account.ts:208 export async function purgeExpiredSessions(db: Db) — no caller in src; no 'DELETE FROM audit_log' anywhere"
+   ],
+   "quantification": "One extra write and round trip per audited request. At T2, at least 8.6 M audit rows a day (over 3 B a year); at T3, at least 86 M a day. Primary keys are random UUIDs.",
+   "fix": "Buffer audit rows and bulk-insert them off the request path (outbox); partition or retain by month; use time-ordered ids; schedule the session purge."
+  },
+  {
+   "id": "BC-12",
+   "title": "Console dashboard, quota and tx lookup aggregate over an organisation's whole history",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "claim": "GET /v1/console/dashboard runs about 27 statements per view. Several have no bound: GROUP BY status over all of the org's attestations, two more full-history COUNTs, an unconfirmed COUNT, remit state and webhook GROUP BYs, and a non-sargable substr(created_at,1,10) filter. The quota COUNT (this month's rows) runs twice per console write and on every list or me call, and the tx lookup ORs three columns plus a subquery across all the org's rows. Org records never expire, so the cost of a page view grows forever. The console is currently refused outside env=test (console.ts:148-153).",
+   "evidence": [
+    "console.ts:708-711 SELECT status, COUNT(*) AS n FROM attestations WHERE org_id = ? AND product = 'attest' GROUP BY status",
+    "console.ts:752 sumRow('substr(created_at, 1, 10) = ?', today),",
+    "console.ts:186-188 \"SELECT COUNT(*) AS n FROM attestations WHERE org_id = ? AND created_at >= ? AND product = 'attest'\"",
+    "console.ts:480-482 WHERE org_id = ? AND (reveal_txid = ? OR commit_txid = ? OR batch_id IN (SELECT batch_id FROM anchor_txs WHERE txid = ?))"
+   ],
+   "quantification": "An org at 100/s adds 8.6 M rows a day. After a few days, each dashboard view reads tens of millions of rows, with clustered lookups for product and status: seconds to minutes per view.",
+   "fix": "Maintain per-org, per-month counters updated on insert and status change, or a rollup table; add covering indexes (org_id, product, status); replace substr() with a range predicate; serve aggregates from a replica."
+  },
+  {
+   "id": "BC-13",
+   "title": "List endpoint: SELECT a.* for up to 500 rows, no cursor, pretty-printed",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "claim": "GET /v1/attestations and the console list return at most the newest 500 rows, with no cursor or offset, so an org cannot page through its records over the API. The query fetches every column (MEDIUMTEXT descriptor and statement, and reveal_tx_hex for inscriptions). The console list returns those raw rows, and responses are pretty-printed synchronously.",
+   "evidence": [
+    "service.ts:366-369 SELECT a.*, b.anchor_txid AS anchor_txid FROM attestations a LEFT JOIN batches b … ORDER BY a.created_at DESC LIMIT ?`).all(orgId, Math.min(limit, 500))",
+    "console.ts:403 data: await d.svc.list(account.org_id, pageLimit(ctx.query.get('limit'), 50, 500)),",
+    "server.ts:263 const text = typeof body === 'string' ? body : JSON.stringify(body, null, 2);"
+   ],
+   "quantification": "A typical page is about 0.5 MB and cheap. Worst case, 500 rows × about 1 MiB descriptors is about 500 MB held by mysql2 and stringified on the event loop: seconds blocked, or a V8 string-length failure.",
+   "fix": "Keyset cursor on (created_at, rowseq); explicit column list; descriptor size cap; compact JSON."
+  },
+  {
+   "id": "BC-14",
+   "title": "Confirmation polling checks every unconfirmed anchor, one at a time, every tick, with no end",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "medium",
+   "claim": "refreshConfirmations polls each unconfirmed anchor with one gettransaction RPC, in sequence, inside the same tick that seals. A row leaves the set only at its first confirmation. A dropped or stuck transaction is polled forever: there is no give-up or rebroadcast, and the confirmation count is frozen at promotion. On mainnet, with a fixed 1 sat/vB fee and one anchor per tick, the unconfirmed set can get large, and each RPC can take up to its 15 s timeout. Regtest hides all of this by mining a block after every batch.",
+   "evidence": [
+    "service.ts:540-549 SELECT txid, batch_id, raw_tx_hex, payload_hex FROM anchor_txs WHERE status != 'confirmed' … for (const r of unconfirmed) { const state = await this.backend.poll({",
+    "anchor/rpc.ts:49 timeout: opts.timeoutMs ?? 15_000,",
+    "anchor/bitcoind.ts:67 this.rpcOpts, 'fundrawtransaction', [unfunded, { fee_rate: 1 }], this.wallet,",
+    "main.ts:139-141 afterAnchor: async () => { await backend.generate(1); } (regtest only)"
+   ],
+   "quantification": "On mainnet (about 10 minutes per block) with one anchor per 3 s, about 200 anchors are unconfirmed, so 200 RPCs per tick (about 0.2–1 s). A hung node makes one tick last up to 15 s × 200 = 50 minutes, with no sealing in the meantime.",
+   "fix": "Detect confirmations per block (getblock or notifications) instead of per transaction; batch RPCs; poll within a time budget; add expiry, rebroadcast and fee bumping (RBF/CPFP); separate polling from the sealing loop."
+  },
+  {
+   "id": "BC-15",
+   "title": "HTTP server runs on Node defaults: no connection cap, no explicit timeouts, bodies buffered in memory",
+   "severity": "moderate",
+   "kind": "operational",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "claim": "createServer is called with no options and the code sets no server timeouts. Bodies are buffered in memory (1 MiB of JSON; inscription uploads up to INSCRIPTION_MAX_BYTES + 64 KiB). Node 22 defaults therefore apply (headersTimeout 60 s, requestTimeout 300 s, keepAliveTimeout 5 s, unlimited connections), so slow clients can hold sockets and memory for minutes. There is no request concurrency limit and no pm2 memory restart.",
+   "evidence": [
+    "server.ts:228-230 return createServer((req, res) => { this.handle(req, res).catch((e: unknown) => answerUnhandled(res, e)); }).listen(port, host);",
+    "grep requestTimeout|headersTimeout|keepAliveTimeout|maxConnections over core src: no matches",
+    "server.ts:299-302 for await (const c of req) { size += (c as Buffer).length; if (size > MAX_BODY) throw …; chunks.push(c as Buffer); }",
+    "routes.ts:225 const MAX_INSCRIPTION_UPLOAD = d.cfg.inscriptionMaxBytes + 64 * 1024;"
+   ],
+   "quantification": "10,000 concurrent slow 1 MiB uploads would buffer about 10 GiB.",
+   "fix": "Put a reverse proxy in front (TLS, timeouts, connection and body limits); set server.requestTimeout, headersTimeout and maxConnections; add an in-process concurrency limiter."
+  },
+  {
+   "id": "BC-16",
+   "title": "Rate-limiter maps cost O(keys) per new address beyond 10,000 entries",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "claim": "RateLimiter scans its entire map on every new key once it holds more than 10,000 entries. With 1-hour windows nothing expires, so every new address pays a full scan. On the free tier the per-address check, which inserts the key, runs before the global cap, so traffic from many addresses (cheap over IPv6) becomes CPU and memory load on the event loop even after the global cap has tripped.",
+   "evidence": [
+    "ratelimit.ts:31-33 if (!e || now >= e.resetAt) { this.hits.set(key, { count: 1, resetAt: now + this.opts.windowMs }); if (this.hits.size > 10_000) this.sweep(now);",
+    "ratelimit.ts:42-43 private sweep(now: number): void { for (const [k, v] of this.hits) if (now >= v.resetAt) this.hits.delete(k); }",
+    "public.ts:109-118 const wait = perAddress.check(key); … const globalWait = global.check('all');"
+   ],
+   "quantification": "100 new addresses/s for an hour builds about 360k entries, and each new request then iterates about 360k entries (roughly ms each): tens of percent of the event loop.",
+   "fix": "Sweep on a timer, or use bucketed/LRU structures; key IPv6 by /64; move limiting to the gateway or a shared store."
+  },
+  {
+   "id": "BC-17",
+   "title": "Shutdown and crash windows: in-flight tick not awaited; broadcast happens before the record",
+   "severity": "moderate",
+   "kind": "operational",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "On SIGTERM the worker interval is cleared, but a tick already running is not awaited; the pool is closed and the process is force-exited after 5 s. A restart in the middle of anchorBatch, after sendrawtransaction, loses the record of a broadcast anchor and strands its batch (BC-05). inscribe() broadcasts before its INSERT, so a crash between the two leaves a paid on-chain inscription with no row, and a client retry inscribes and pays again. After a restart, lastFlush starts at now, so a small backlog waits a full flush interval.",
+   "evidence": [
+    "main.ts:149-153 worker.stop(); remitWorker?.stop(); server.close(() => { void db.close().finally(() => process.exit(0)); }); setTimeout(() => process.exit(0), 5_000).unref();",
+    "worker.ts:62-64 stop(): void { if (this.timer) { clearInterval(this.timer); this.timer = null; } }",
+    "service.ts:222-225 const r = await this.inscriber(body, contentType); const id = randomUUID(); await this.db.prepare(",
+    "worker.ts:37 private lastFlush = Date.now();"
+   ],
+   "quantification": "At T2 and above the tick is busy most of the time, so every pm2 restart (for example, reloading the env) has a real chance of stranding one batch of up to 1024 records.",
+   "fix": "Make stop() await the running tick; persist intent before broadcasting; run a reconciliation at boot for sealed batches without anchors and for wallet transactions missing from anchor_txs."
+  },
+  {
+   "id": "BC-18",
+   "title": "Inscriptions get swept into digest batches (no kind filter)",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "confidence": "medium",
+   "claim": "inscribe() inserts rows with batch_id NULL, and pendingCount and sealBatch select every row with batch_id IS NULL without filtering on kind. Every inscription is therefore also sealed into its org's next digest batch and anchored a second time, and its status is rewritten (submitted or confirmed → batched → submitted → confirmed by the batch). No test covers this. The capacity effect is small because inscriptions are rare; it inflates pending counts and adds anchor transactions. Found by reading the code, not verified on the DB.",
+   "evidence": [
+    "service.ts:226-229 INSERT INTO attestations (id, org_id, leaf_bytes, …, kind, commit_txid, reveal_txid, …) VALUES (?, ?, ?, ?, ?, 'submitted', ?, ?, ?, 'inscription', …) — batch_id not set",
+    "service.ts:480-482 SELECT id, leaf_bytes FROM attestations WHERE batch_id IS NULL AND org_id = ? … (no kind filter)",
+    "service.ts:497 \"UPDATE attestations SET batch_id = ?, leaf_index = ?, status = 'batched' WHERE id = ?\""
+   ],
+   "quantification": "One extra batch transaction per org that inscribes; each inscription counts as pending until it is swept.",
+   "fix": "Add AND kind = 'digest' to pendingCount and both sealBatch queries, with an index that supports it. Verify first with a read-only GROUP BY kind, (batch_id IS NULL)."
+  },
+  {
+   "id": "BC-19",
+   "title": "Concurrent duplicate digests get a 500 with the raw MySQL error; free-tier duplicate lookup cannot use an index",
+   "severity": "minor",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "confidence": "high",
+   "claim": "Duplicates are handled by a SELECT followed by an INSERT. Two concurrent requests with the same (org_id, leaf_bytes) both pass the SELECT; the UNIQUE key rejects the second INSERT, but that error is not mapped, so the client gets a 500 containing the driver's message (with table and key names) instead of 409. The UNIQUE constraint keeps the data correct. The free-tier duplicate path then filters on leaf_bytes without org_id, so the UNIQUE (org_id, leaf_bytes) index cannot be used.",
+   "evidence": [
+    "service.ts:164-166 const dup = row<{ id: string }>(await this.db.prepare('SELECT id FROM attestations WHERE org_id = ? AND leaf_bytes = ?').get(orgId, leaf));",
+    "routes.ts:120 return new HttpResult(500, { error: 'internal', message: e instanceof Error ? e.message : String(e) });",
+    "service.ts:389 .prepare(\"SELECT * FROM attestations WHERE leaf_bytes = ? AND source = 'public'\")"
+   ],
+   "quantification": "The free-tier full scan runs at most 500 times an hour (global cap), but each scan grows with the table.",
+   "fix": "Map ER_DUP_ENTRY (errno 1062) to 409; add org_id = publicOrgId to findPublicByDigest; never echo raw error text on a 500."
+  },
+  {
+   "id": "BC-20",
+   "title": "Observability is logs only: no metrics, no backlog visibility, shallow health checks",
+   "severity": "moderate",
+   "kind": "operational",
+   "bites_at_tier": "T1",
+   "confidence": "high",
+   "claim": "The process writes JSON lines for lifecycle and worker events, and plain console.error lines for request failures. There is no access log, request id, metrics endpoint or tracing. /healthz always returns ok; /readyz checks only bitcoind, not MySQL or worker lag. Nothing reports pending backlog, oldest-pending age, tick duration or stranded 'sealed' batches, and the 'batch sealed' log line reports the global pending count as the batch's leaf count.",
+   "evidence": [
+    "main.ts:27-29 const line = { ts: new Date().toISOString(), msg, ...(extra ?? {}) }; process.stdout.write(`${JSON.stringify(line)}\\n`);",
+    "routes.ts:137 r.get('/healthz', () => ({ status: 'ok' }));",
+    "routes.ts:167 const chain = await d.backend.health(); (no DB check)",
+    "worker.ts:80 this.log('batch sealed', { batchId, leaves: pending }); (pending = global COUNT, not batch size)"
+   ],
+   "quantification": "The only per-request record is audit_log (status, duration_ms), which is stored per tenant in MySQL and is not an operational signal.",
+   "fix": "Add Prometheus-style metrics (backlog, oldest-pending age, tick ms, batch size, RPC latency, pool wait, event-loop lag); request ids in logs; /readyz that checks the DB and a worker heartbeat; alerts on stranded batches."
+  },
+  {
+   "id": "BC-21",
+   "title": "Free-tier and signup caps are deliberate cost protection; the hourly purge runs inside the sealing tick",
+   "severity": "minor",
+   "kind": "configuration",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "The no-signup tier is capped at 10 per hour per address and 500 per hour globally (about 0.14/s), with 30-day retention and an hourly purge. Signup is capped per address; the value is overridden in .env and was not read. These are product and cost protections, and at current values the free tier cannot load the system. The purge selects all expired rows with no LIMIT and deletes them in one transaction, 2 DELETEs per row, inside the worker tick. If the caps were raised toward T2, the purge would become a long transaction that blocks sealing while it runs.",
+   "evidence": [
+    "config.ts:364-371 max: int('PUBLIC_ANCHOR_MAX', 10) … max: int('PUBLIC_ANCHOR_GLOBAL_MAX', 500) … retentionDays: int('PUBLIC_ANCHOR_RETENTION_DAYS', 30)",
+    "service.ts:406-416 SELECT id … expires_at < ? (no LIMIT); for (const { id } of doomed) { await dropProof.run(id); await dropAtt.run(id); }",
+    "worker.ts:104-106 if ((this.opts.retentionDays ?? 0) > 0 && Date.now() - this.lastSweep >= 3_600_000) { … await this.svc.purgeExpiredPublic();"
+   ],
+   "quantification": "At most 12,000 free records a day; each hourly purge touches at most about 500 rows (about 1,000 DELETEs).",
+   "fix": "If the caps are raised, purge in bounded chunks outside the sealing loop."
+  },
+  {
+   "id": "BC-S1",
+   "title": "Strength: API request handling is stateless",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "Nothing about a session or key lives in process memory. API keys and console sessions are resolved from MySQL by unique index on every request, and the only in-memory maps are the rate limiters. Once limiting moves to a shared store and the worker is separated, the API tier can be replicated with no sticky sessions.",
+   "evidence": [
+    "auth.ts:58 SELECT id, org_id, key_hash, label FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL",
+    "account.ts:185 SELECT account_id, expires_at FROM sessions WHERE token_hash = ?",
+    "grep 'new Map' across in-scope files: only http/ratelimit.ts:21"
+   ]
+  },
+  {
+   "id": "BC-S2",
+   "title": "Strength: intake, bundles and the Merkle work are cheap and bounded",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "Callers send only a 32-byte digest. Intake is 3 indexed reads and 2 writes with no external calls. The Merkle build is O(N) and each proof O(log N), a few ms at 1024 leaves. A bundle comes from 4 indexed lookups and a pure mapping function.",
+   "evidence": [
+    "service.ts:160-184 HEX64 check, dup SELECT, INSERT, get",
+    "merkle/tree.ts:83-94 levels built pairwise with nodeHash; proof() walks levels.length-1 levels",
+    "service.ts:662-669 three indexed SELECTs, then assembleBundle"
+   ]
+  },
+  {
+   "id": "BC-S3",
+   "title": "Strength: state transitions are committed before they are acted on, and the worker survives DB outages",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "Seal, anchor recording and confirmation each commit in a single transaction; ticks cannot overlap; tick errors are logged and the loop continues. The live log shows the worker riding out MySQL outages (10 'worker tick failed' ECONNREFUSED or 'Server shutdown in progress' events on 11-12 and 11-16) and then sealing normally (263 batches sealed, 0 anchor failures). At current scale the fixed cost per batch is about 0.1 s.",
+   "evidence": [
+    "service.ts:490, 526, 551 await this.db.tx(async (tx) => { … })",
+    "worker.ts:109-113 } catch (e) { this.log('worker tick failed', …); } finally { this.running = false; }",
+    "~/.pm2/logs/stonehash-attest-core-out.log 2026-11-16T06:27:44 'worker tick failed' 'connect ECONNREFUSED 127.0.0.1:3306'; 2026-11-18T02:04:04.004Z sealed → .041Z anchored → .100Z confirmed"
+   ]
+  },
+  {
+   "id": "BC-S4",
+   "title": "Strength: audit search pages by keyset, not OFFSET",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "confidence": "high",
+   "claim": "The audit list is filtered in SQL and paged by keyset over (at, id) with an index on (org_id, at, id), with a page cap of 200. Unfiltered and time-filtered pages cost O(page) however long the log is; only the free-text q filter degrades (BC-11).",
+   "evidence": [
+    "audit.ts:201-211 where.push('(at < ? OR (at = ? AND id < ?))') … ORDER BY at DESC, id DESC LIMIT ${limit + 1}",
+    "db.ts:704 CREATE INDEX audit_log_org_at ON audit_log(org_id, at, id)"
+   ]
+  }
+ ],
+ "hard_limits": [
+  {
+   "name": "JSON request body cap (MAX_BODY)",
+   "value": "1 MiB (1 << 20)",
+   "where": "apps/core/src/http/server.ts:76",
+   "configurable": "no (constant)"
+  },
+  {
+   "name": "Inscription upload cap",
+   "value": "INSCRIPTION_MAX_BYTES + 64 KiB; default 100,000 + 65,536 bytes; clamped to HARD_CEILING 3,500,000",
+   "where": "routes.ts:225, console.ts:456, config.ts:338-341, btc/inscription.ts:88-90",
+   "configurable": "env INSCRIPTION_MAX_BYTES"
+  },
+  {
+   "name": "BATCH_MAX_LEAVES",
+   "value": "1024 (code default and live)",
+   "where": "config.ts:332",
+   "configurable": "env"
+  },
+  {
+   "name": "BATCH_FLUSH_INTERVAL_MS",
+   "value": "15,000 live (code default 10,000)",
+   "where": "config.ts:333",
+   "configurable": "env"
+  },
+  {
+   "name": "WORKER_TICK_MS",
+   "value": "3,000 live (code default 2,000; 0 disables the worker)",
+   "where": "config.ts:342; worker.ts:51-55",
+   "configurable": "env"
+  },
+  {
+   "name": "Batches sealed per tick",
+   "value": "1, from a single organisation",
+   "where": "worker.ts:73-77; service.ts:474-483",
+   "configurable": "no"
+  },
+  {
+   "name": "Remit worker tick",
+   "value": "2,000 ms",
+   "where": "main.ts:102",
+   "configurable": "no (hard-coded)"
+  },
+  {
+   "name": "Free-tier purge interval",
+   "value": "3,600,000 ms, inside the batch tick",
+   "where": "worker.ts:104",
+   "configurable": "no"
+  },
+  {
+   "name": "PUBLIC_ANCHOR_RETENTION_DAYS",
+   "value": "30",
+   "where": "config.ts:371",
+   "configurable": "env (not set in .env, so the default applies)"
+  },
+  {
+   "name": "CONSOLE_MONTHLY_QUOTA",
+   "value": "1,000 attestations per org per UTC month; console write routes only",
+   "where": "config.ts:350; console.ts:182-198, 418-421",
+   "configurable": "env (not set)"
+  },
+  {
+   "name": "Console auth rate limit",
+   "value": "20 per 900,000 ms per address (in memory, per process)",
+   "where": "config.ts:352-353; console.ts:141,166-173",
+   "configurable": "env CONSOLE_AUTH_MAX / CONSOLE_AUTH_WINDOW_MS (not set)"
+  },
+  {
+   "name": "Sandbox signup rate limit",
+   "value": "code default 20 per 3,600,000 ms per address; overridden in .env (value deliberately not read)",
+   "where": "config.ts:358-359; routes.ts:115,431-438",
+   "configurable": "env SIGNUP_RATE_MAX / SIGNUP_RATE_WINDOW_MS"
+  },
+  {
+   "name": "Free-tier per-address limit",
+   "value": "10 per 3,600,000 ms",
+   "where": "config.ts:364-365; public.ts:70,109",
+   "configurable": "env PUBLIC_ANCHOR_MAX / _WINDOW_MS (not set)"
+  },
+  {
+   "name": "Free-tier global limit",
+   "value": "500 per 3,600,000 ms (about 0.14/s), per process",
+   "where": "config.ts:368-369; public.ts:71,118",
+   "configurable": "env PUBLIC_ANCHOR_GLOBAL_MAX / _WINDOW_MS (not set)"
+  },
+  {
+   "name": "RateLimiter sweep threshold",
+   "value": "10,000 keys (full O(n) sweep on each new key above it)",
+   "where": "ratelimit.ts:33",
+   "configurable": "no"
+  },
+  {
+   "name": "Attestation list page size",
+   "value": "default 50, max 500, no cursor or offset",
+   "where": "routes.ts:296; console.ts:403; service.ts:369",
+   "configurable": "query ?limit"
+  },
+  {
+   "name": "Audit page size",
+   "value": "default 50, max 200, keyset cursor",
+   "where": "audit.ts:186-189",
+   "configurable": "query ?limit"
+  },
+  {
+   "name": "MAX_ACTIVE_KEYS",
+   "value": "10 per org",
+   "where": "console.ts:132",
+   "configurable": "no"
+  },
+  {
+   "name": "scrypt parameters",
+   "value": "N=32,768, r=8, p=1, keylen 32, maxmem 256·N·r = 64 MiB; synchronous",
+   "where": "account.ts:46,57,79-80,101-102",
+   "configurable": "no (parameters are stored with each hash)"
+  },
+  {
+   "name": "Session TTL",
+   "value": "14 days; expired rows deleted only when presented again",
+   "where": "account.ts:59, 188-190",
+   "configurable": "no"
+  },
+  {
+   "name": "MySQL pool",
+   "value": "connectionLimit 10, waitForConnections true, queueLimit unlimited (mysql2 default)",
+   "where": "db.ts:936-945",
+   "configurable": "no (hard-coded)"
+  },
+  {
+   "name": "bitcoind RPC timeout",
+   "value": "15,000 ms per call (console tx lookup 5,000 ms)",
+   "where": "anchor/rpc.ts:49; console.ts:86",
+   "configurable": "no"
+  },
+  {
+   "name": "Anchor fee rate",
+   "value": "1 sat/vB fixed",
+   "where": "anchor/bitcoind.ts:67",
+   "configurable": "no (chain layer)"
+  },
+  {
+   "name": "Shutdown force-exit",
+   "value": "5,000 ms (pm2 kill_timeout 6,000 ms)",
+   "where": "main.ts:153; deploy/ecosystem.config.cjs:49",
+   "configurable": "code / pm2 config"
+  },
+  {
+   "name": "Process topology",
+   "value": "pm2 fork mode, 1 instance, max_restarts 5, min_uptime 10 s, restart_delay 2 s, no max_memory_restart",
+   "where": "deploy/ecosystem.config.cjs:36-50",
+   "configurable": "pm2 config"
+  },
+  {
+   "name": "HTTP server timeouts and connections",
+   "value": "Not set in code, so Node 22 defaults apply: headersTimeout 60 s, requestTimeout 300 s, keepAliveTimeout 5 s, unlimited connections",
+   "where": "server.ts:227-231",
+   "configurable": "code change needed"
+  },
+  {
+   "name": "Dashboard statements per view",
+   "value": "about 27 (about 8 unbounded over org history)",
+   "where": "console.ts:685-928",
+   "configurable": "no"
+  },
+  {
+   "name": "Audit path length",
+   "value": "512 characters",
+   "where": "audit.ts:103",
+   "configurable": "no"
+  }
+ ],
+ "scale_path": "For T2 (about 100/s sustained, 1,000/s peaks), in order:\n\n1. Remove the per-tick full-table inscription scan with an index or a separate pending table (BC-01). Make the sealBatch ordering index-backed, for example (batch_id, org_id, rowseq) and ORDER BY rowseq (BC-06).\n2. Make the pipeline recoverable. Anchor existing 'sealed' batches before sealing new ones, and pause sealing while anchoring fails. Persist the signed transaction before broadcasting. Await the running tick on shutdown. Reconcile at boot (BC-05, BC-17).\n3. Write sealBatch in bulk: a multi-row INSERT and a set-based UPDATE, or derive proofs at export time (BC-04).\n4. Stop letting tenant count set latency and Bitcoin transaction count. Either seal all due orgs within a per-tick time budget, or aggregate per-org subtree roots into one anchored root per interval (BC-03).\n5. Switch to async scrypt or a worker thread (BC-07).\n6. Add backpressure and fairness: per-key token buckets and plan quotas on the keyed API, a descriptor size cap, 429/503 on backlog age, and a pool queueLimit (BC-06, BC-10).\n7. Replace history-wide COUNT and GROUP BY with counters or rollups for quota and dashboard, and fix the non-sargable predicates (BC-12). Add a keyset cursor and explicit columns to list (BC-13).\n8. Write audit rows asynchronously in bulk with monthly retention, and schedule the session purge (BC-11).\n9. Put a reverse proxy in front (TLS, timeouts, connection and body limits), set TRUST_PROXY correctly, and fix the RateLimiter sweep (BC-15, BC-16).\n10. Add metrics and alerts for backlog size, oldest-pending age, tick duration, stranded batches, pool wait and event-loop lag, and make /readyz check the DB and worker (BC-20).\n\nFor T3 (about 1,000/s sustained, 10,000/s peaks), in addition:\n\n11. Move the batcher (and the Remit worker) into a singleton process with leader election (GET_LOCK) or claim rows with FOR UPDATE SKIP LOCKED and compare-and-set updates. Run N stateless API processes behind a load balancer, and move rate limits to the gateway or a shared store (BC-08, BC-09).\n12. Turn intake into an append-only, batch-friendly stream: multi-row inserts, or a queue/log feeding a bulk consumer. Build trees of 10^4–10^5 leaves off the main thread, and anchor on a fixed schedule (per interval or per block) so the transaction count no longer grows with volume (BC-02).\n13. Replace per-transaction confirmation polling with per-block scanning, with fee bumping and rebroadcast (BC-14).\n14. Database layer (the DB reader's scope): partition attestations and audit_log by time, use time-ordered keys instead of random UUID PKs, and serve console aggregates from replicas or precomputed tables.",
+ "open_questions": [
+  "Confirm the plans on the live DB with read-only EXPLAIN for the sealBatch head and pending queries (service.ts:474-483) and the inscription poll (service.ts:564-568). I expect filesort and a full scan respectively; I did not touch MySQL.",
+  "Do inscription rows in the live DB carry a batch_id? A read-only SELECT kind, batch_id IS NULL, COUNT(*) FROM attestations GROUP BY 1,2 would confirm or refute BC-18.",
+  "How long does scryptSync actually take on this box? The comment says 'a few hundred milliseconds'; benchmarking was out of bounds for this read-only pass.",
+  "Is :8787 behind a reverse proxy? TRUST_PROXY is unset, so behind a proxy every client would share the proxy's address as one rate-limit key. I did not read HOST.",
+  "What is the production topology for tenants? The console refuses env=live (console.ts:148-153) and is described as provisioned per contract. The dashboard and quota findings matter only once that surface serves production tenants.",
+  "What anchoring schedule and fee policy are intended on mainnet? One transaction per tenant batch per tick, at a fixed 1 sat/vB, conflicts with mempool ancestor limits and with fee cost at T2 (chain layer).",
+  "How many tenants are expected to be active at once? K drives batch latency (BC-03) more than transactions per second does at T1 and T2.",
+  "mysql2 caches prepared statements per connection (default 16,000). The audit search interpolates LIMIT and a variable WHERE clause (up to 64 filter combinations × 200 limits). Could 10 connections exceed MySQL's global max_prepared_stmt_count (default 16,382)? Worth checking with SHOW GLOBAL STATUS LIKE 'Prepared_stmt_count'.",
+  "How much CPU do the PoR and Remit handlers, and the RemitWorker, use on this shared event loop? That belongs to the other readers.",
+  "Is pm2 log rotation configured? Logs are JSON lines on stdout with no size control in the code.",
+  "What are the SIGNUP_RATE_* values in apps/core/.env? I deliberately did not read them."
+ ]
+}

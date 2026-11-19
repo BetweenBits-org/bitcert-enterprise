@@ -1,0 +1,59 @@
+{
+ "note": "Made once by apps/core-java/tools/make-format-vectors.mjs and kept: signatures are random. Test keys; they sign nothing real.",
+ "es256": {
+  "spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEr9LseUFrIIYg7FbdtEbNg8Pi3Rim4ii0yMUfUUwDkfqAtZN30BHNdZS1KyVHi/f04xLQFt5gv3VCen7h1TbB2A==",
+  "signed": {
+   "schema": "stonehash-attestation-statement/v1",
+   "document": {
+    "sha256": "058ad513dff2b80ff50ca6e7f47125d4a6923ba5985adffc9fa18df7f4db81c0",
+    "content_type": "application/pdf"
+   },
+   "issuer": {
+    "key_id": "es256-test-key",
+    "algorithm": "ES256",
+    "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEr9LseUFrIIYg7FbdtEbNg8Pi3Rim4ii0yMUfUUwDkfqAtZN30BHNdZS1KyVHi/f04xLQFt5gv3VCen7h1TbB2A=="
+   },
+   "issued_at": "2026-11-18T06:00:00.000Z",
+   "signature": "3onRoRdNA7OhFE3J_r62cGTsVaNUiZ9YlFTHTMq6L13g5vE0UCBIg9O1edDiFoWF2brFZsVUbvEyzLkRpM3dgw"
+  }
+ },
+ "rs256": {
+  "spki": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqOLXW8OTcPXCHxqluHUWDtUNgFMsAcIGx6agSbk+esxbzM6n9N1ZeDUpKZIRp3zLw9/vOZy5CLwg2D6S0Zs1VcuE4PGeO4XBRJx0Rzg7NyHcR97t70u/R12gQDUmzxpbZbxT6YdDbfLTPL79KVtGDi5QO/rhHPFDdk/KU68N7ciXPCUt/PpK8sBuANTZ2raX2727U098twCm0UG4LWtacFOEzyJQH7ccwyDVYju1iZpjMOIln1/SgwOvQO6uZGttlh4DRj/sPfGBlhnjvhjUfd8CDBLo4J/DIX1GZE7zPki6FrpLGZFVi063ShcYbyKidTsBIDFV5jZqu/L5aZEL/wIDAQAB",
+  "signed": {
+   "schema": "stonehash-attestation-statement/v1",
+   "document": {
+    "sha256": "058ad513dff2b80ff50ca6e7f47125d4a6923ba5985adffc9fa18df7f4db81c0"
+   },
+   "issuer": {
+    "key_id": "rs256-test-key",
+    "algorithm": "RS256",
+    "public_key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqOLXW8OTcPXCHxqluHUWDtUNgFMsAcIGx6agSbk+esxbzM6n9N1ZeDUpKZIRp3zLw9/vOZy5CLwg2D6S0Zs1VcuE4PGeO4XBRJx0Rzg7NyHcR97t70u/R12gQDUmzxpbZbxT6YdDbfLTPL79KVtGDi5QO/rhHPFDdk/KU68N7ciXPCUt/PpK8sBuANTZ2raX2727U098twCm0UG4LWtacFOEzyJQH7ccwyDVYju1iZpjMOIln1/SgwOvQO6uZGttlh4DRj/sPfGBlhnjvhjUfd8CDBLo4J/DIX1GZE7zPki6FrpLGZFVi063ShcYbyKidTsBIDFV5jZqu/L5aZEL/wIDAQAB"
+   },
+   "issued_at": "2026-11-18T06:00:00.000Z",
+   "signature": "fgu0XR5rpTGcSOtQuzgH1CX4SSPehG8PQlNzMPgO4NDa4-hpMAAzseQb5prHk5BTgdu4BDxNYsKve7iXm6IZ-M2Kg7qCL12Nqh-h9Tql13GkCnh-Y1FkMu98AlK540m9UkG7kGX8HghzGoFlx8jwkjnLRNhB-xNnBD6IlmdzxfWLg-8YSZjs8Lbti4kpyM1ebUHW86iu9Ql_E3biEUqCPH2nhvClxOB8YS2EUCrLbvE1MChWL4rmoIiNnqA-9stJ2gX3vwsWPiRSH8vP5_G169jHJ8FD1_Qa3YNyv74Y8x13pOMI2iwDAxiBBmot5T92soh2wOjtCt41NdPuBlWktg"
+  }
+ },
+ "otherKeys": {
+  "p384": "MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEsRmY9mY/TpyUd6nOgGkwHJtgeGWtggkuW7sMfYdNV7NL8yp6/LDUqafAHDtCx5OdB/MuYpPQEZMuOumxlCEkQuMSX6HY31yQ941pJlhScOFbBq+n/3e9Z2CG3uR+p6Z8",
+  "secp256k1": "MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAE7V6JRNzitLBVGpNRwrCYn52cH5HbE8sCaeQeswRoTaAXRcxd/kXTZjntoYdXG/4gXCEEpBdOJxXp2OZibDIdzQ==",
+  "ed25519": "MCowBQYDK2VwAyEAteuCOvoaOd1uMnw9UjA5d9zIMFd/VQdlV/drzkthd5M=",
+  "secondP256": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEQVAHJHrUGy6bzxSzh7UmLdL3JVtkcVWHa8XxVNUADnbMrX4H1Q8mhMMWjD4tJ9KJlDAI1JT2vWXa3BoguCpMnA=="
+ },
+ "es256Compressed": {
+  "spki": "MDkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDIgACtSr8G8pwNDS06aQ/Bs7KcITvy6fvtiSC4NtgFma9KSM=",
+  "uncompressed": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEtSr8G8pwNDS06aQ/Bs7KcITvy6fvtiSC4NtgFma9KSPw5kIMPFMLa8qQXxkun/FYEjJbnuWXatgW2WlQDYArbA==",
+  "signed": {
+   "schema": "stonehash-attestation-statement/v1",
+   "document": {
+    "sha256": "058ad513dff2b80ff50ca6e7f47125d4a6923ba5985adffc9fa18df7f4db81c0"
+   },
+   "issuer": {
+    "key_id": "es256-compressed-key",
+    "algorithm": "ES256",
+    "public_key": "MDkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDIgACtSr8G8pwNDS06aQ/Bs7KcITvy6fvtiSC4NtgFma9KSM="
+   },
+   "issued_at": "2026-11-18T06:00:00.000Z",
+   "signature": "9DbCw8G_3UzZ92Mh27idJtlybbujrdglgJtsMGaph7F0kuthASS9yvLAtqUkLsaxqDiYgpDv-gGPoeXw4RkRYg"
+  }
+ }
+}

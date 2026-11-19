@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Runs examples/PorExample.java with the built library on the classpath.
+set -euo pipefail
+# Resolved through a symbolic link, so the script can be linked into a directory on the PATH.
+ROOT="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")/.." && pwd)"
+JAR="$ROOT/dist/stonehash-attest-por-0.1.0.jar"
+
+if [ ! -f "$JAR" ] || [ ! -f "$ROOT/build/examples/PorExample.class" ]; then
+  "$ROOT/build.sh" >&2
+fi
+
+# Java decodes its arguments in the locale's character set; under any other
+# than UTF-8 a non-ASCII exchange name or file name would arrive mangled.
+if [ "$(locale charmap 2>/dev/null || true)" != "UTF-8" ]; then
+  for candidate in C.UTF-8 C.utf8 en_US.UTF-8 en_US.utf8; do
+    if locale -a 2>/dev/null | grep -qx "$candidate"; then
+      export LC_ALL="$candidate"
+      break
+    fi
+  done
+fi
+
+# POR_JAVA_OPTS: extra JVM options, for example -Xmx4g for a large ledger.
+exec java ${POR_JAVA_OPTS:-} -cp "$JAR:$ROOT/build/examples" PorExample "$@"

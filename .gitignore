@@ -1,0 +1,42 @@
+# ── Never in the repository: settings, keys, seeds, state ─────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.key.json
+state.json
+/deploy/mysql.env
+/attest/apps/core-java/parity/seed.json
+/attest/apps/core-java/parity/seed.*.json
+/attest/apps/core-java/parity/partner-keys.json
+.data*/
+/demo-bank/hsm/
+/demo-bank/data/
+/demo-bank/work/
+/demo-bank-java/data/
+/demo-customers/keys/
+/demo-customers/data/
+/demo-partners/keys/
+/demo-partners/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# ── Generated ─────────────────────────────────────────────────────────────────
+node_modules/
+target/
+dist/
+/demo-bank-java/build/
+/attest/sdks/*/build/
+.build/
+*.log
+.DS_Store
+.regtest/
+
+# ── Not part of this repository ───────────────────────────────────────────────
+# homepage/ is a repository of its own; ref/ is reference material; wip/ holds snapshots.
+/homepage/
+/ref/
+/wip/
+/*.docx

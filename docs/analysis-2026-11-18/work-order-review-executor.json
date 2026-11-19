@@ -1,0 +1,233 @@
+{
+ "lens": "executor-readiness",
+ "summary": "The inventory matches the box. Line counts, the 45/19/5 route registrations (3 of them OPTIONS), the 21 tables, 51 config keys, 66 OpenAPI operations, SDK sizes, \"JDK 11 only, no Maven\", and the named tests and fixtures are all correct. The work order cannot be executed as written where it says how to run and check Java next to the live system. \"Use .env as-is\" points a Java server at the production schema, the production bitcoind wallet, the directory holding the platform key, and :8787. The smoke scripts do not read BASE: two read ATTEST_BASE, and the .sh wrappers hard-code :8787/:3300/:3200. The demos and the partner simulator are each tied to one core and to keys stored in production, so they cannot be used \"as is\". Stage 2 is blocked by the regtest wallet: the block reward is 0 and only `beecert` holds coins. Fix first: a list of env overrides for the dev server, a procedure for a second demo set plus rules for running the smoke scripts, the wallet decision as an owner item, a Flyway baseline taken from the live schema (db.ts has two dialects plus 34 ALTERs run at boot), and the platform key file added as protected data. Then add how to get the JDK and Maven, the pm2 cut-over steps, how to depend on the SDKs, and a wider change-log scope.",
+ "findings": [
+  {
+   "id": "EX-01",
+   "severity": "must-fix",
+   "kind": "risk",
+   "where_in_doc": "2장 표 '설정' 행(`.env`를 그대로 사용), 6장 'Java 서버는 따로 띄웁니다'",
+   "problem": "As written, the Java dev server reads apps/core/.env unchanged. That file sets PORT=8787 and HOST=0.0.0.0, points STONEHASH_DB_URL at the production schema stonehash_attest, uses the production wallet `attest` and the production data dir that holds the platform key, and turns on both workers (WORKER_TICK_MS=3000). §6 asks for another port and a test schema but never names the keys to override. A Java server that changes only PORT would seal, anchor and send webhooks against production data alongside the TS core.",
+   "evidence": [
+    "attest/apps/core/.env: PORT=8787, HOST=0.0.0.0, STONEHASH_DB_URL=mysql://stonehash:…@127.0.0.1:3306/stonehash_attest, BITCOIND_WALLET=attest, STONEHASH_DATA_DIR=/home/ubuntu/bitcert-attest/attest/.data, WORKER_TICK_MS=3000",
+    "attest/apps/core/src/config.ts:318-322 port int('PORT', 8787), host, STONEHASH_DB_PATH, STONEHASH_DB_URL",
+    "attest/apps/core/src/main.ts:109 remit worker 2_000 ms when workerTickMs>0; main.ts:138-140 batch worker tickMs=cfg.workerTickMs",
+    "attest/apps/core/src/worker.ts:51-52 'worker disabled (WORKER_TICK_MS=0)'",
+    "ss -ltn: 8787 listening (live core), 8790 free"
+   ],
+   "confidence": "high",
+   "proposed_text": "개발·검증용 Java 서버는 `apps/core/.env`를 그대로 읽지 않습니다. 복사본(예: `~/attest-java-dev.env`, 권한 600)에서 다음을 반드시 바꿉니다: `PORT=8790`, `HOST=127.0.0.1`, `STONEHASH_DB_URL`의 DB 이름=`stonehash_test_<이름>`, `STONEHASH_DATA_DIR`·`REMIT_PLATFORM_KEY_PATH`=스크래치 경로, `BITCOIND_WALLET`=Java 전용 지갑, `REMIT_PARTNERS_BASE`=두 번째 파트너 시뮬레이터. 지갑이 준비되기 전에는 `WORKER_TICK_MS=0`(배치·송금 워커 모두 꺼짐)으로 API만 검증합니다. 운영 `.env`를 그대로 쓰는 것은 6단계 전환 때뿐입니다."
+  },
+  {
+   "id": "EX-02",
+   "severity": "must-fix",
+   "kind": "wrong-fact",
+   "where_in_doc": "5장 '계약 테스트 재료' — \"`attest/deploy/smoke*.sh|mjs`: 이미 `BASE=` 주소로 도는 종단 점검입니다\"",
+   "problem": "Only smoke.sh reads BASE. smoke-por.mjs and smoke-remit.mjs read ATTEST_BASE. The .sh wrappers hard-code health checks on :8787/:3300/:3200, so running them checks the live TS core. smoke-por.mjs reads the live partner :3300 directly, and smoke-remit.mjs registers its webhook at the live bank demo by default. smoke-exceptions.mjs never calls the core; it drives whichever core the bank demo at BANK_BASE is wired to. The completion criteria for stages 4 and 5 name these scripts, so as written they either pass falsely or send Java's webhooks into the live demo bank.",
+   "evidence": [
+    "attest/deploy/smoke.sh:17 BASE=\"${BASE:-http://127.0.0.1:8787}\"",
+    "attest/deploy/smoke-por.mjs:25 and smoke-remit.mjs:24 const CORE = process.env.ATTEST_BASE ?? 'http://127.0.0.1:8787'",
+    "attest/deploy/smoke-por.sh:5 and smoke-remit.sh:7-8 curl -sf http://127.0.0.1:8787/healthz (and :3300); smoke-exceptions.sh:5 for port in 8787 3300 3200",
+    "attest/deploy/smoke-por.mjs:116 fetch('http://127.0.0.1:3300/wallet/state')",
+    "attest/deploy/smoke-remit.mjs:54 process.env.REMIT_WEBHOOK_URL ?? 'http://127.0.0.1:3200/api/remit/webhook'",
+    "attest/deploy/smoke-exceptions.mjs:15 const BANK = process.env.BANK_BASE ?? 'http://127.0.0.1:3200'"
+   ],
+   "confidence": "high",
+   "proposed_text": "스모크 실행 규칙: `BASE`를 읽는 것은 `smoke.sh`뿐입니다. Java 대상에서는 .sh 래퍼(:8787·:3300·:3200 고정 점검)를 쓰지 않고 `.mjs`를 `ATTEST_BASE=http://127.0.0.1:8790`으로 직접 실행합니다. `smoke-remit.mjs`는 `REMIT_WEBHOOK_URL`을 두 번째 은행 데모로 바꾸지 않으면 운영 데모 은행(:3200)으로 웹훅을 등록합니다. `smoke-por.mjs`(파트너 :3300 고정 조회)와 `smoke-exceptions.mjs`(`BANK_BASE`의 은행 데모를 거쳐서만 코어 호출)는 두 번째 데모 세트를 띄운 뒤에만 Java 완료 조건으로 인정합니다."
+  },
+  {
+   "id": "EX-03",
+   "severity": "must-fix",
+   "kind": "gap",
+   "where_in_doc": "5장 '데모 사이트(:3200, :3400, :3500)와 파트너 시뮬레이터(:3300): 공개 API만 쓰므로 종단 검증에 그대로 쓸 수 있습니다', 6단계 완료 조건",
+   "problem": "Each demo is tied to one core. ATTEST_BASE defaults to :8787, and the API keys each demo uses were provisioned in the production DB and live in its own state.json. The partner simulator posts callbacks to ${ATTEST_BASE}/v1/remit/callbacks, and the core reaches partners at REMIT_PARTNERS_BASE. demo-partners reads state.json and data/ from its own folder (there is no env var for this). Its setup.mjs writes keys and state there and registers institutions with the admin token. So the live demos cannot exercise Java as is, and re-pointing them or running setup.mjs in the live folders breaks them. deploy/reset-sandbox.sh, the obvious clean-start tool, deletes the core .data (platform key), the MySQL schema and the demo state, and restarts anvil.",
+   "evidence": [
+    "demo-partners/server.mjs:32 CORE = process.env.ATTEST_BASE ?? 'http://127.0.0.1:8787'; server.mjs:332 fetch(`${CORE}/v1/remit/callbacks`",
+    "demo-partners/server.mjs:38 state.json read from its own folder; server.mjs:91 data/chain-state.json",
+    "demo-partners/setup.mjs:20 REMIT_ADMIN_TOKEN; :51,:61 writeFileSync(key files); :66 POST ${CORE}/v1/remit/registry/institutions; :80 writeFileSync(STATE)",
+    "attest/apps/core/src/config.ts:376 REMIT_PARTNERS_BASE default http://127.0.0.1:3300; remit/partners-client.ts:70 fetch(`${base}${path}`",
+    "demo-bank/state.json:3, demo-customers/state.json:3, demo-partners/state.json:3 contain \"http://127.0.0.1:8787\"; demo-bank-java/src/BankDemo.java:107 apiKey from state",
+    "attest/deploy/run-partners.sh: 'or run demo-partners with CHAIN_BACKEND=mock'",
+    "attest/deploy/reset-sandbox.sh:15 pm2 stop …; :20 rm -rf attest/.data apps/core/.data; :23-27 sources deploy/mysql.env, DBNAME from STONEHASH_DB_URL"
+   ],
+   "confidence": "high",
+   "proposed_text": "Java 종단 검증은 두 번째 데모 세트로 합니다: `demo-partners`(필요하면 `demo-bank`)를 스크래치 폴더에 복사하고 `PORT=3301`(은행은 3201), `ATTEST_BASE=http://127.0.0.1:8790`, `CHAIN_BACKEND=mock`(공유 anvil에 쓰지 않음)으로 띄운 뒤, 복사본에서 `setup.mjs`를 실행해 Java 테스트 스키마에 기관을 등록합니다. Java 서버는 `REMIT_PARTNERS_BASE=http://127.0.0.1:3301`. 운영 데모 폴더(`demo-*`)에서는 `setup.mjs` 실행과 `ATTEST_BASE` 변경을 하지 않습니다. `deploy/reset-sandbox.sh`는 플랫폼 키·MySQL 스키마·데모 상태를 지우고 anvil을 재시작하므로 실행 금지입니다."
+  },
+  {
+   "id": "EX-04",
+   "severity": "must-fix",
+   "kind": "gap",
+   "where_in_doc": "6장 '운영 중인 것은 건드리지 않습니다 … bitcoind의 attest 지갑', 5장 2단계 완료 조건 'regtest에서 접수→앵커→번들 검증' 및 2b단계",
+   "problem": "Stages 2 and 2b require real regtest anchoring. The only wallet the core uses (`attest`) is off limits, and there is no mock anchor backend: ANCHOR_BACKEND accepts only regtest or mainnet. On the :18443 node the block reward is already 0, so mining cannot fund a new wallet. The only funded wallet is `beecert`, and sending from it is a value transfer that the sandbox classifier blocks. The executor will stop at stage 2 with no stated way forward.",
+   "evidence": [
+    "attest/apps/core/src/config.ts:16 type AnchorBackendName = 'regtest' | 'mainnet'; :299-301 throws on any other value",
+    "attest/apps/core/.env: ANCHOR_BACKEND=regtest, BITCOIND_WALLET=attest",
+    "/home/ubuntu/.claude/projects/-home-ubuntu-bitcert-attest/memory/attest-surfaces-and-tone.md:51-54 'The block subsidy on :18443 is already 0 … Mining cannot fund a wallet. The only funded wallet is beecert … the sandbox classifier blocks it'"
+   ],
+   "confidence": "high",
+   "proposed_text": "소유자 확인이 필요한 일에 추가: 'Java 검증용 regtest 지갑. `:18443`은 블록 보상이 0이라 채굴로 자금을 만들 수 없고 자금이 있는 지갑은 `beecert`뿐입니다. 2·2b단계 전에 (가) `attest-java` 지갑 생성 + `beecert`에서 소액 이체, (나) `attest` 지갑 공유(운영 코어와 UTXO 충돌 위험) 중 하나를 소유자에게 받습니다. 그 전까지 Java 서버는 `WORKER_TICK_MS=0`으로 API·형식만 검증합니다.'"
+  },
+  {
+   "id": "EX-05",
+   "severity": "must-fix",
+   "kind": "parity-trap",
+   "where_in_doc": "5장 0단계 '현행 스키마를 그대로 담은 Flyway 기준선', 2장 '스키마 변경' 행",
+   "problem": "The schema is not defined in one place. db.ts carries two dialects (SQLite and MySQL CREATE blocks) plus 34 ALTER TABLE statements that openDb applies at every TS core boot (attestations.source, expires_at, kind, commit_txid, reveal_txid and others). A baseline copied from the CREATE TABLE text misses those columns. A baseline cut once also goes stale whenever another session adds a column or table (remit_source_refs is the latest), because the TS core applies its DDL to production on the next restart. Creating flyway_schema_history inside stonehash_attest is itself a production schema change.",
+   "evidence": [
+    "attest/apps/core/src/db.ts:41 import { DatabaseSync } from 'node:sqlite'; :59 dialect: 'sqlite' | 'mysql'",
+    "attest/apps/core/src/db.ts:312 (SQLite) and :656 (MySQL) CREATE TABLE IF NOT EXISTS remit_source_refs",
+    "attest/apps/core/src/db.ts:763-776 ALTER TABLE attestations ADD COLUMN source/expires_at/kind/commit_txid/reveal_txid (34 ALTER TABLE occurrences in db.ts)",
+    "attest/apps/core/src/main.ts:34 const db = await openDb(cfg.dbUrl || cfg.dbPath, log)"
+   ],
+   "confidence": "high",
+   "proposed_text": "Flyway V1은 db.ts의 CREATE 문을 옮겨 적지 않고, 운영 스키마에서 읽기 전용으로 뽑은 정의(`SHOW CREATE TABLE` 21개, 인덱스 포함)로 만든 뒤 db.ts의 MySQL 쪽 DDL과 부팅 ALTER 34개와 대조합니다(SQLite 쪽은 무시). TS 코어는 부팅 때마다 이 DDL을 운영 스키마에 적용하므로, 다른 세션이 열·표를 더하면 변경 기록에 남기고 Java는 V2 이후 마이그레이션으로 따라갑니다. 운영 스키마에 `flyway_schema_history`를 만드는 baseline은 6단계 소유자 승인 항목입니다."
+  },
+  {
+   "id": "EX-06",
+   "severity": "must-fix",
+   "kind": "gap",
+   "where_in_doc": "1장 '깨면 안 되는 계약' 3. 기존 데이터",
+   "problem": "Not all existing state is in MySQL. The platform signing key is a file: REMIT_PLATFORM_KEY_PATH, by default ${STONEHASH_DATA_DIR}/platform-remit-key.pem, a PKCS8 P-256 PEM. The TS core creates it on first boot when it is missing, and the platform keyId is derived from it. A Java rebuild that stores keys elsewhere, or boots with a different path and generates a new key, silently changes the keyId that counterparties verify. A dev server using the production data dir would sign test data with the production key.",
+   "evidence": [
+    "attest/apps/core/src/remit/sign.ts:198-212 loadOrCreatePlatformKey: generateKeyPairSync('ec', { namedCurve: 'P-256' }) → export pkcs8 PEM → writeFileSync when missing; keyId = `STONEHASH-SIGN-${sha256(spki).hex.slice(0, 8)}`",
+    "attest/apps/core/src/config.ts:379 platformKeyPath: str('REMIT_PLATFORM_KEY_PATH', path.join(dataDir, 'platform-remit-key.pem'))",
+    "ls attest/.data: platform-remit-key.pem (mode 600)"
+   ],
+   "confidence": "high",
+   "proposed_text": "계약 3에 추가: 'DB 밖의 상태도 기존 데이터입니다. 플랫폼 서명키(`REMIT_PLATFORM_KEY_PATH`, 기본 `${STONEHASH_DATA_DIR}/platform-remit-key.pem`, PKCS8 P-256 PEM)는 전환 뒤에도 같은 파일을 읽고, keyId(`STONEHASH-SIGN-` + SPKI의 SHA-256 앞 8자리 hex)가 같아야 합니다. Java 운영 프로필은 키 파일이 없으면 새로 만들지 않고 부팅을 멈춥니다. 개발 서버는 스크래치 경로의 별도 키를 씁니다.'"
+  },
+  {
+   "id": "EX-07",
+   "severity": "should-fix",
+   "kind": "gap",
+   "where_in_doc": "3장 '박스의 도구', 6장 'JDK는 홈 디렉터리 아래에 풀어 쓰면 시스템 변경 없이 가능합니다'",
+   "problem": "The work order says how to avoid a system JDK change, but not how to get Maven. None is installed and there is no ~/.m2, so the first build downloads everything from Maven Central. It also does not warn that /usr/bin/java is 11.0.33, which pm2 resolves `script: 'java'` to for the live :3500 Java demo. Changing the system default would change that demo's runtime, and a backend pm2 entry copied from the demo's would start on Java 11 and fail. Maven builds also compete with the live services on a shared 4-CPU box.",
+   "evidence": [
+    "java -version → openjdk 11.0.33; command -v mvn/gradle → none; ~/.m2 absent; /usr/lib/jvm has only java-11-openjdk-amd64",
+    "attest/deploy/ecosystem.config.cjs stonehash-bank-java entry: script: 'java', interpreter: 'none', args '-cp lib/stonehash-attest-remit-0.1.0.jar:build BankDemo'",
+    "attest/sdks/attest-remit-java/build.sh, attest-por-java/build.sh: javac --release 11",
+    "/home/ubuntu/.claude/projects/-home-ubuntu-bitcert-attest/memory/MEMORY.md 'Workflow sizing here — 4 CPUs'"
+   ],
+   "confidence": "high",
+   "proposed_text": "JDK·Maven 준비(시스템 변경 없음): Temurin JDK 17 또는 21 tar.gz와 Maven 3.9.x 바이너리를 `~/opt/`에 풀고 `JAVA_HOME`·`PATH`는 작업 셸에서만 설정합니다. `/usr/bin/java`(11.0.33)는 :3500 데모와 SDK 빌드(`--release 11`)가 쓰므로 `update-alternatives`로 바꾸지 않으며, pm2 항목의 `script`에는 JDK 절대 경로(예: `~/opt/jdk-21/bin/java`)를 씁니다. 첫 빌드는 Maven Central에서 의존성을 받고(~/.m2 없음), 빌드는 `nice -n 10 mvn -T 1`로 돌립니다(4 CPU 공유 박스)."
+  },
+  {
+   "id": "EX-08",
+   "severity": "should-fix",
+   "kind": "gap",
+   "where_in_doc": "5장 6단계 '소유자 승인 후 :8787 교체, 기존 코어는 롤백용 보존'",
+   "problem": "The cut-over step does not say how the live core is started or what changes. The live core is the pm2 app `stonehash-attest-core` (script src/main.ts, interpreter node, cwd apps/core). Its env is read from apps/core/.env when the ecosystem file is loaded, so `pm2 restart` does not pick up .env edits. The ecosystem file is shared and another session edited it today.",
+   "evidence": [
+    "attest/deploy/ecosystem.config.cjs:37-41 name 'stonehash-attest-core', script 'src/main.ts', interpreter 'node', env: readEnv(path.join(APP, '.env'))",
+    "/home/ubuntu/.claude/projects/-home-ubuntu-bitcert-attest/memory/attest-pm2-env-reload.md: editing apps/core/.env needs `pm2 start deploy/ecosystem.config.cjs`, not `pm2 restart`",
+    "find -mmin -720: attest/deploy/ecosystem.config.cjs modified 2026-11-18"
+   ],
+   "confidence": "high",
+   "proposed_text": "전환 절차(소유자 승인 후): `deploy/ecosystem.config.cjs`에 `stonehash-attest-core-java` 항목을 Edit로 추가합니다(`script`=JDK 절대 경로, `args`=`-jar <jar>`, `interpreter: 'none'`, `cwd`=apps/core-java, `env: readEnv(path.join(APP, '.env'))` — 같은 .env). 전환은 `pm2 stop stonehash-attest-core` 다음 `pm2 start deploy/ecosystem.config.cjs --only stonehash-attest-core-java`, 롤백은 그 반대입니다. `.env` 수정은 `pm2 restart`로 반영되지 않습니다. 두 코어가 같은 스키마에서 동시에 워커를 돌리는 순간이 없어야 합니다."
+  },
+  {
+   "id": "EX-09",
+   "severity": "should-fix",
+   "kind": "wrong-fact",
+   "where_in_doc": "1장 표 `attest-rules` 행",
+   "problem": "The symbol list is incomplete. The sandbox console endpoints also import the scenario generator and fixed demo data from attest-rules. What the console sandbox returns comes from them, including signatures made with the demo issuer keys, so they must be ported byte-for-byte, not just the rules engine. The base64url helpers are toBase64Url and fromBase64Url.",
+   "evidence": [
+    "attest/apps/core/src/http/sandbox.ts:31-35 import { DEMO_ISSUER_KEYS, SAMPLE_POLICY, SAMPLE_SETTLEMENT, SCENARIOS, breakDigest, breakSignature, buildScenario, changeAmount, duplicateReceipt, evaluate, removeDocument, validatePolicy, verifyEvidenceSignatures, DEMO_KEYRING } from '@stonehash/attest-rules'",
+    "attest/apps/core/src/remit/sign.ts: import { signedBytes, toBase64Url, fromBase64Url } from '@stonehash/attest-rules'; remit/orchestrator.ts: import { signedBytes, fromBase64Url }"
+   ],
+   "confidence": "high",
+   "proposed_text": "| `attest-rules` | `evaluate`, `verifyEvidenceSignatures`, `validatePolicy`, `keyring`, `DEMO_KEYRING`, `signedBytes`, `toBase64Url`/`fromBase64Url`, 샌드박스 시나리오 생성기(`SCENARIOS`, `buildScenario`, `breakDigest`, `breakSignature`, `changeAmount`, `duplicateReceipt`, `removeDocument`)와 고정 자료(`DEMO_ISSUER_KEYS`, `SAMPLE_POLICY`, `SAMPLE_SETTLEMENT`) — 같은 키·같은 바이트로 이식 |"
+  },
+  {
+   "id": "EX-10",
+   "severity": "should-fix",
+   "kind": "gap",
+   "where_in_doc": "6장 '임시 스키마(`stonehash_test_*`: DB 계정에 이 접두사 권한이 있습니다)'",
+   "problem": "The work order does not say which account or variable to use, and the app's DB setting is not a JDBC URL. STONEHASH_DB_URL is a mysql://user:pass@host:port/db URL (user `stonehash`, DB stonehash_attest), and when it is empty the TS core silently falls back to SQLite. The existing test convention is STONEHASH_TEST_MYSQL_URL, a server URL without a DB; tests create and drop stonehash_test_<8 hex> with utf8mb4_bin, a collation that affects LIKE and case behaviour. A second credential file (top-level deploy/mysql.env) is used by the destructive reset script. The grant itself was not verified, because that would mean querying MySQL.",
+   "evidence": [
+    "attest/apps/core/.env: STONEHASH_DB_URL=mysql://stonehash:…@127.0.0.1:3306/stonehash_attest",
+    "attest/apps/core/src/config.ts:321-322 dbPath default attest-${env}.sqlite, dbUrl; main.ts:34 openDb(cfg.dbUrl || cfg.dbPath)",
+    "attest/apps/core/test/mysql-parity.test.ts:9-10,20,24,29 STONEHASH_TEST_MYSQL_URL; schema `stonehash_test_${randomUUID().slice(0, 8)}`; CREATE DATABASE … CHARACTER SET utf8mb4 COLLATE utf8mb4_bin",
+    "attest/apps/core/src/db.ts:85 utf8mb4_bin vs LIKE case note",
+    "attest/deploy/reset-sandbox.sh:23-27 sources $REPO/deploy/mysql.env"
+   ],
+   "confidence": "medium",
+   "proposed_text": "DB 접속: 앱 계정은 `apps/core/.env`의 `STONEHASH_DB_URL`(`mysql://사용자:비밀번호@127.0.0.1:3306/stonehash_attest`)입니다. Java는 이 URL을 파싱해 JDBC URL·사용자·비밀번호로 바꾸고 변수 이름은 유지하며, 값이 비어 있으면 SQLite로 떨어지지 않고 부팅을 거부합니다. 테스트는 기존 관례대로 `STONEHASH_TEST_MYSQL_URL`(DB 이름을 뺀 같은 URL)로 `stonehash_test_<8자리>` 스키마를 `utf8mb4`/`utf8mb4_bin`으로 만들고 끝나면 지웁니다(`mysql-parity.test.ts`). 최상위 `deploy/mysql.env`(관리자 계정)는 쓰지 않습니다."
+  },
+  {
+   "id": "EX-11",
+   "severity": "should-fix",
+   "kind": "gap",
+   "where_in_doc": "1장 '깨면 안 되는 계약' 4·5",
+   "problem": "Two contract details the executor needs are missing. (a) CORS: the 3 OPTIONS registrations serve /v1/public/anchors. allow-origin comes from PUBLIC_ANCHOR_ORIGINS (default *), allow-methods is 'GET, POST, OPTIONS' and allow-headers is 'content-type'. The homepage calls /v1/public/* from another origin, so dropping CORS breaks the homepage's free tier. (b) Password hash encoding: the salt is 16 bytes and the hash 32 bytes, both standard Base64 with padding. A URL-safe or hex decoder would reject every existing login.",
+   "evidence": [
+    "attest/apps/core/src/http/public.ts:84-90 access-control-allow-origin / access-control-allow-methods 'GET, POST, OPTIONS' / access-control-allow-headers 'content-type'; :103 preflight → 204",
+    "attest/apps/core/src/http/routes.ts:366 r.add('OPTIONS', '/v1/public/anchors', withCors(pub.preflight))",
+    "attest/apps/core/src/config.ts:372 PUBLIC_ANCHOR_ORIGINS default '*'",
+    "homepage/js/attest.js references /v1/public/",
+    "attest/apps/core/src/account.ts:46 SCRYPT { N: 32_768, r: 8, p: 1, keylen: 32 }; :78-83 randomBytes(16), salt.toString('base64'), hash.toString('base64') joined with '$'"
+   ],
+   "confidence": "high",
+   "proposed_text": "계약 4에 추가: '비밀번호 해시의 salt(16바이트)와 hash(32바이트)는 표준 Base64(패딩 포함, URL-safe 아님)입니다.' 계약 5에 추가: '`/v1/public/*`의 CORS — OPTIONS 3개는 204, `access-control-allow-origin`은 `PUBLIC_ANCHOR_ORIGINS`(기본 `*`) 기준, `access-control-allow-methods: GET, POST, OPTIONS`, `access-control-allow-headers: content-type`. 홈페이지(`homepage/js/attest.js`)가 다른 출처에서 이 경로를 호출합니다.'"
+  },
+  {
+   "id": "EX-12",
+   "severity": "should-fix",
+   "kind": "gap",
+   "where_in_doc": "2장 '백엔드가 SDK를 의존성으로 가져다 쓰는 것은 괜찮습니다', 5장 4단계 '`attest-por-java` 재사용'",
+   "problem": "The SDKs are not Maven projects (they build with build.sh and javac --release 11), so the work order gives no way to use them as a dependency. attest-remit-java now has a release/ folder: jar, sources jar, pom com.stonehash:stonehash-attest-remit:0.1.0 and SHA256SUMS, written by release.sh on 2026-11-18 at 04:26. attest-por-java has only dist/ jars and no pom. Without a rule, the executor will either copy SDK sources into core-java (forking the SDK) or point at dist/ jars that the SDK session rebuilds.",
+   "evidence": [
+    "attest/sdks/attest-remit-java/release/: stonehash-attest-remit-0.1.0.jar, -sources.jar, .pom (groupId com.stonehash, artifactId stonehash-attest-remit, version 0.1.0), SHA256SUMS",
+    "attest/sdks/attest-por-java/dist/: stonehash-attest-por-0.1.0.jar, -sources.jar (no pom)",
+    "attest/sdks/attest-remit-java/build.sh, attest-por-java/build.sh: --release 11; no pom.xml under sdks/"
+   ],
+   "confidence": "high",
+   "proposed_text": "SDK 의존 방법: remit은 `sdks/attest-remit-java/release/`의 jar와 pom(`com.stonehash:stonehash-attest-remit:0.1.0`)을 SHA256SUMS로 확인한 뒤 `mvn install:install-file -Dfile=… -DpomFile=…`로 로컬 저장소에 설치합니다. por는 pom이 없으므로 `dist/`의 jar를 좌표 `com.stonehash:stonehash-attest-por:0.1.0`으로 설치합니다. SDK 소스를 `core-java`로 복사하지 않으며, `release.sh`로 새 버전이 나오면 백엔드 의존 버전을 함께 올리고 변경 기록에 남깁니다."
+  },
+  {
+   "id": "EX-13",
+   "severity": "should-fix",
+   "kind": "risk",
+   "where_in_doc": "6장 '기존 TypeScript 코어의 수정은 계속할 수 있습니다 … 변경 기록에 한 줄을 남겨'",
+   "problem": "The change-log rule covers only TS core edits, but inputs the Java port depends on changed today outside the core: openapi.json, fixtures/por/SPEC.md, packages/attest-por/src, the remit SDK release and ecosystem.config.cjs. The newest table, remit_source_refs (UNIQUE (org_id, uetr) and (org_id, sha256, idx)), is what stage 5's double-intake guard rests on. Files that other sessions edit at the same time include db.ts, main.ts, remit/routes.ts and remit/registry.ts.",
+   "evidence": [
+    "find -mmin -720 (2026-11-18): attest/apps/docs/openapi.json, attest/fixtures/por/SPEC.md, attest/packages/attest-por/src/{anchor,client,intake}.ts, attest/sdks/attest-remit-java/{release.sh,build.sh,release/}, attest/deploy/ecosystem.config.cjs",
+    "attest/apps/core/src/db.ts:656-668 remit_source_refs with UNIQUE KEY remit_source_refs_uetr (org_id, uetr), UNIQUE KEY remit_source_refs_message (org_id, sha256, idx)",
+    "/home/ubuntu/.claude/projects/-home-ubuntu-bitcert-attest/memory/shared-box-session-coordination.md: files other sessions touch include apps/core/src/{db.ts,main.ts}, remit/{routes.ts,registry.ts}, apps/console/src/app.ts"
+   ],
+   "confidence": "high",
+   "proposed_text": "변경 기록 대상 확대: TS 코어뿐 아니라 `apps/docs/openapi.json`, `fixtures/**`, `packages/attest-{verify,rules,evidence,por}/src`, `sdks/*-java/release`, `deploy/ecosystem.config.cjs`, `apps/core/src/db.ts`의 DDL을 바꿀 때도 한 줄을 남깁니다. 착수 시점의 추적 항목(2026-11-18): `remit_source_refs`(UNIQUE `(org_id, uetr)`, `(org_id, sha256, idx)` — 5단계 이중 접수 차단의 근거), 오늘 바뀐 `openapi.json`, `fixtures/por/SPEC.md`, `packages/attest-por/src`, `attest-remit-java/release`."
+  },
+  {
+   "id": "EX-14",
+   "severity": "nice-to-have",
+   "kind": "gap",
+   "where_in_doc": "5장 표 2~5단계",
+   "problem": "The 2 'Settlement evidence' operations are not named in any stage. Stage 2 lists 15, stage 4 lists 5, stage 5 lists 17, and the console has 27, yet the console sandbox calls one of these two directly. Naming them lets the executor check the per-stage totals against the 66.",
+   "evidence": [
+    "attest/apps/docs/openapi.json tags: Settlement evidence = POST /v1/settlements/reconcile, POST /v1/settlements/bundle; Sandbox console 27; Operations 3 + Attestations 6 + Free tier 3 + Signing keys 2 + Provisioning 1 = 15",
+    "attest/apps/console/src/sandbox.ts:572 fetch('/v1/settlements/bundle'",
+    "attest/apps/core/src/http/evidence.ts: import { assembleEvidenceBundle } from '@stonehash/attest-evidence'"
+   ],
+   "confidence": "high",
+   "proposed_text": "3단계 내용에 추가: '정산 증빙 2개(`POST /v1/settlements/reconcile`, `POST /v1/settlements/bundle` — 콘솔 샌드박스가 직접 호출)'. 단계별 합계: 2단계 15 + 3단계 29(콘솔 27 + 정산 증빙 2) + 4단계 5 + 5단계 17 = 66."
+  },
+  {
+   "id": "EX-15",
+   "severity": "nice-to-have",
+   "kind": "gap",
+   "where_in_doc": "1장 '그대로 두는 것'(정적 화면), 5장 3단계 '콘솔 화면이 수정 없이 동작'",
+   "problem": "The work order does not say how the built frontends reach the backend. They call the API at the content of <meta name=\"attest-api\">, which is empty by default, so they use the same origin; some calls are hard-coded relative paths. The screens can therefore be checked against Java only if Java serves the same dist folders (CONSOLE_DIR, DOCS_DIR, PLAYGROUND_DIR from .env) on :8790. No rebuild is needed, and per the shared-box notes a docs build republishes package files. Cookies are not isolated by port, so stonehash_session cookies from :8787 and :8790 overwrite each other in one browser profile.",
+   "evidence": [
+    "attest/apps/console/src/api.ts:17 const BASE = document.querySelector('meta[name=\"attest-api\"]')?.content ?? ''",
+    "attest/apps/playground/src/anchor.ts:38-40 apiBase() reads the same meta; attest/apps/docs/src/app.ts:427",
+    "attest/apps/console/src/sandbox.ts:572 and attest/apps/playground/src/por.ts:261 relative fetch paths",
+    "attest/apps/core/.env: CONSOLE_DIR/DOCS_DIR/PLAYGROUND_DIR = /home/ubuntu/bitcert-attest/attest/apps/{console,docs,playground}/dist",
+    "attest/apps/core/src/account.ts:62 stonehash_session",
+    "/home/ubuntu/.claude/projects/-home-ubuntu-bitcert-attest/memory/MEMORY.md 'a docs build publishes attest-verify/attest-por'"
+   ],
+   "confidence": "high",
+   "proposed_text": "화면 검증: 빌드된 프런트는 `<meta name=\"attest-api\">`가 비어 있으면 같은 출처로 API를 호출합니다. Java 서버도 `.env`의 `CONSOLE_DIR`·`DOCS_DIR`·`PLAYGROUND_DIR`(기존 dist)를 그대로 내주고 `http://127.0.0.1:8790/console/`에서 확인하며, 프런트는 다시 빌드하지 않습니다. 쿠키는 포트로 분리되지 않으므로 :8787과 :8790 로그인은 서로 다른 브라우저 프로필에서 합니다."
+  }
+ ]
+}

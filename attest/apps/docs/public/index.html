@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- No data-en here: app.ts sets the title per page after routing, and the
+     static swap would run after it and put the generic title back. -->
+<title>StoneHash Attest · 개발자 허브</title>
+<meta name="description" content="StoneHash Attest의 API 레퍼런스, 증빙 규격, 공개 테스트 벡터, 상품별 연동 가이드. 독립 검증기를 쓰는 데 필요한 전부.">
+<!--
+  Where the API lives, read at runtime for the network badge only. Empty means
+  same origin, which is how the single-host test deployment works; production
+  sets it to the api host because the hub is served from a different one.
+
+  The page renders completely without it. A documentation site that goes blank
+  when the service it documents is down would be worse than useless — the
+  reader is often here precisely because something is not working.
+-->
+<meta name="attest-api" content="">
+<!--
+  Where the Playground lives. Same reasoning: on the single-host test box it is
+  a sibling mount, and in production it is its own hostname. Hardcoding
+  `../playground/` worked here and would have 404d the moment the host split
+  that the deployment design calls for actually happened.
+-->
+<meta name="attest-playground" content="../playground/">
+<link rel="icon" href="./favicon.png">
+<link rel="stylesheet" href="./docs.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <a class="brand" href="./">StoneHash <b>Attest</b></a>
+    <span class="sect" data-en="Developer Hub">개발자 허브</span>
+    <!-- Language last, at the far edge, as on the marketing site — of
+         everything in this bar it is the control nobody arrives wanting. -->
+    <nav class="outbound">
+      <a id="to-playground" data-link="attest-playground" data-en="Playground">플레이그라운드</a>
+      <span class="netbadge" id="netbadge" hidden></span>
+      <span class="langs" id="langs"></span>
+    </nav>
+  </div>
+</header>
+
+<div class="shell">
+  <aside class="sidebar">
+    <nav id="pages" aria-label="문서" data-en-label="Documentation"></nav>
+    <div class="sidenote">
+      <p data-en="<strong>Nothing here phones home.</strong> This hub loads no remote
+      script, font or stylesheet, and sends no analytics. It works offline."><strong>아무 데도
+      접속하지 않습니다.</strong> 이 허브는 외부 스크립트·폰트·스타일시트를 불러오지 않고,
+      분석 데이터도 보내지 않습니다. 오프라인에서도 동작합니다.</p>
+    </div>
+  </aside>
+
+  <main class="content">
+    <article id="doc" class="doc" aria-live="polite"></article>
+  </main>
+
+  <nav class="toc" id="toc" aria-label="이 페이지에서" data-en-label="On this page" hidden></nav>
+</div>
+
+<footer class="foot">
+  <div class="wrap">
+    <!--
+      The one sentence every page ends on. Said without the verifier's link
+      names: what a reader needs to leave with is who proves what, not the
+      labels the report uses for it.
+    -->
+    <p data-en="<strong>The proof's arithmetic checks run offline</strong> — no network, and
+      no trust in StoneHash. <strong>Chain inclusion is yours to confirm</strong>, through any
+      Bitcoin source you choose. Until you do, the report reads <code>skip</code>: unverified,
+      not fine.">
+      <strong>증명의 수학적 검증은 오프라인에서 끝납니다</strong> — 네트워크도, StoneHash에
+      대한 신뢰도 필요 없습니다. <strong>체인 포함 여부의 확인은 귀사의 몫</strong>으로, 원하는
+      비트코인 소스로 트랜잭션을 확인하십시오. 확인 전까지 결과는 <code>skip</code>으로
+      표시되며, 이는 "미확인"이지 "이상 없음"이 아닙니다.
+    </p>
+  </div>
+</footer>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

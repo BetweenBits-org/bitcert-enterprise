@@ -1,0 +1,8 @@
+{
+  "note": "Tables that migrations after the baseline added. tools/compare-schema.mjs sets them aside when it compares a migrated schema with the live one: they are additions, named here by the migration that made them, not differences. A migration that adds a table adds its line here in the same change.",
+  "tables": {
+    "worker_leases": "V2__worker_leases_and_anchor_attempts.sql",
+    "anchor_attempts": "V2__worker_leases_and_anchor_attempts.sql",
+    "remit_jobs": "V3__remit_jobs.sql"
+  }
+}

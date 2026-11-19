@@ -1,0 +1,287 @@
+{
+  "about": "The signed bytes are the UTF-8 of `signing_domain` followed by `canonical`; the signature is ECDSA P-256 over SHA-256, the 64 bytes r||s, base64url without padding. The commitment is SHA-256 over `commitment_domain` followed by `canonical`.",
+  "statement": {
+    "schema": "stonehash.por-snapshot.v1",
+    "exchange": {
+      "institution_id": "KR-EX-0a1b2c",
+      "name": "한빛 거래소 (Hanbit Exchange)"
+    },
+    "asof": "2026-11-16T00:00:00Z",
+    "assets": [
+      {
+        "symbol": "A1",
+        "decimals": 8
+      },
+      {
+        "symbol": "B2",
+        "decimals": 18
+      },
+      {
+        "symbol": "C3",
+        "decimals": 6
+      },
+      {
+        "symbol": "D4",
+        "decimals": 0
+      },
+      {
+        "symbol": "E5",
+        "decimals": 2
+      }
+    ],
+    "tree": {
+      "algo": "merkle-sum-sha256-v1",
+      "leaf_count": 33,
+      "root": "efcaf781ea8e9ef91ca95adb876edeb1d391adce0f9761f038aad9ce50b421e5",
+      "padding": "empty-zero"
+    },
+    "totals": {
+      "A1": "288255623867120420871540",
+      "B2": "300507281331800416001418",
+      "C3": "410616768254085441144327",
+      "D4": "888093547388470602016916",
+      "E5": "111706149750956905999250"
+    },
+    "params": {
+      "user_ref_hash": "sha256(STONEHASH-POR-USER-V1\\n + exchange_id + \\n + user_ref)",
+      "salt": "hmac-sha256(master_seed, user_ref)"
+    },
+    "reserves": {
+      "mode": "DECLARED",
+      "entries": [
+        {
+          "chain": "eip155:1",
+          "asset": "C3",
+          "address": "0x00000000000000000000000000000000000000aa",
+          "token_contract": "0x00000000000000000000000000000000000000bb"
+        }
+      ],
+      "note": "Addresses declared by the exchange; balances are measured on chain by verifiers. Address-control proof is out of sandbox scope."
+    },
+    "generated_at": "2026-11-16T01:02:03.456Z"
+  },
+  "canonical": "{\"asof\":\"2026-11-16T00:00:00Z\",\"assets\":[{\"decimals\":8,\"symbol\":\"A1\"},{\"decimals\":18,\"symbol\":\"B2\"},{\"decimals\":6,\"symbol\":\"C3\"},{\"decimals\":0,\"symbol\":\"D4\"},{\"decimals\":2,\"symbol\":\"E5\"}],\"exchange\":{\"institution_id\":\"KR-EX-0a1b2c\",\"name\":\"한빛 거래소 (Hanbit Exchange)\"},\"generated_at\":\"2026-11-16T01:02:03.456Z\",\"params\":{\"salt\":\"hmac-sha256(master_seed, user_ref)\",\"user_ref_hash\":\"sha256(STONEHASH-POR-USER-V1\\\\n + exchange_id + \\\\n + user_ref)\"},\"reserves\":{\"entries\":[{\"address\":\"0x00000000000000000000000000000000000000aa\",\"asset\":\"C3\",\"chain\":\"eip155:1\",\"token_contract\":\"0x00000000000000000000000000000000000000bb\"}],\"mode\":\"DECLARED\",\"note\":\"Addresses declared by the exchange; balances are measured on chain by verifiers. Address-control proof is out of sandbox scope.\"},\"schema\":\"stonehash.por-snapshot.v1\",\"totals\":{\"A1\":\"288255623867120420871540\",\"B2\":\"300507281331800416001418\",\"C3\":\"410616768254085441144327\",\"D4\":\"888093547388470602016916\",\"E5\":\"111706149750956905999250\"},\"tree\":{\"algo\":\"merkle-sum-sha256-v1\",\"leaf_count\":33,\"padding\":\"empty-zero\",\"root\":\"efcaf781ea8e9ef91ca95adb876edeb1d391adce0f9761f038aad9ce50b421e5\"}}",
+  "commitment_domain": "STONEHASH-POR-V1\n",
+  "commitment": "bdfd821dd0789e05849dea30ca5f1fc75b2924cff74cbaf22f065d1d87b031d3",
+  "signing_domain": "stonehash:remit:event:v1\n",
+  "test_key": {
+    "warning": "TEST KEY — published on purpose, registered nowhere. Never use it for anything else.",
+    "private_pkcs8_pem": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgVItiyxJN7HETsbqB\ntQNUGz3MeYvM6DeM/95E1tfDW4yhRANCAAR4Bo5KJTSmu5/8FyQlDOta47BiEgmZ\n8N3XPx1jmvpUwZ522RaiYe1R6M2WAo8BheDVJqIC5TCFeK2vu/R/vWV9\n-----END PRIVATE KEY-----\n",
+    "public_spki_base64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEeAaOSiU0pruf/BckJQzrWuOwYhIJmfDd1z8dY5r6VMGedtkWomHtUejNlgKPAYXg1SaiAuUwhXitr7v0f71lfQ=="
+  },
+  "signature": {
+    "alg": "ES256",
+    "key_id": "KR-EX-0a1b2c",
+    "issuer": "한빛 거래소 (Hanbit Exchange)",
+    "sig": "qk-IwuTPxLekXPBUvHRlq7jzZBXZFeeI5Hpq21zUWizbnSbLAaeys2KyllaioHyDdLF91osdl13B9HEOswkuEA"
+  },
+  "submission": {
+    "schema": "stonehash.por-submission.v1",
+    "statement": {
+      "schema": "stonehash.por-snapshot.v1",
+      "exchange": {
+        "institution_id": "KR-EX-0a1b2c",
+        "name": "한빛 거래소 (Hanbit Exchange)"
+      },
+      "asof": "2026-11-16T00:00:00Z",
+      "assets": [
+        {
+          "symbol": "A1",
+          "decimals": 8
+        },
+        {
+          "symbol": "B2",
+          "decimals": 18
+        },
+        {
+          "symbol": "C3",
+          "decimals": 6
+        },
+        {
+          "symbol": "D4",
+          "decimals": 0
+        },
+        {
+          "symbol": "E5",
+          "decimals": 2
+        }
+      ],
+      "tree": {
+        "algo": "merkle-sum-sha256-v1",
+        "leaf_count": 33,
+        "root": "efcaf781ea8e9ef91ca95adb876edeb1d391adce0f9761f038aad9ce50b421e5",
+        "padding": "empty-zero"
+      },
+      "totals": {
+        "A1": "288255623867120420871540",
+        "B2": "300507281331800416001418",
+        "C3": "410616768254085441144327",
+        "D4": "888093547388470602016916",
+        "E5": "111706149750956905999250"
+      },
+      "params": {
+        "user_ref_hash": "sha256(STONEHASH-POR-USER-V1\\n + exchange_id + \\n + user_ref)",
+        "salt": "hmac-sha256(master_seed, user_ref)"
+      },
+      "reserves": {
+        "mode": "DECLARED",
+        "entries": [
+          {
+            "chain": "eip155:1",
+            "asset": "C3",
+            "address": "0x00000000000000000000000000000000000000aa",
+            "token_contract": "0x00000000000000000000000000000000000000bb"
+          }
+        ],
+        "note": "Addresses declared by the exchange; balances are measured on chain by verifiers. Address-control proof is out of sandbox scope."
+      },
+      "generated_at": "2026-11-16T01:02:03.456Z"
+    },
+    "sig": {
+      "alg": "ES256",
+      "key_id": "KR-EX-0a1b2c",
+      "issuer": "한빛 거래소 (Hanbit Exchange)",
+      "sig": "qk-IwuTPxLekXPBUvHRlq7jzZBXZFeeI5Hpq21zUWizbnSbLAaeys2KyllaioHyDdLF91osdl13B9HEOswkuEA"
+    }
+  },
+  "must_not_verify": [
+    {
+      "why": "a total in the statement was changed",
+      "statement": {
+        "schema": "stonehash.por-snapshot.v1",
+        "exchange": {
+          "institution_id": "KR-EX-0a1b2c",
+          "name": "한빛 거래소 (Hanbit Exchange)"
+        },
+        "asof": "2026-11-16T00:00:00Z",
+        "assets": [
+          {
+            "symbol": "A1",
+            "decimals": 8
+          },
+          {
+            "symbol": "B2",
+            "decimals": 18
+          },
+          {
+            "symbol": "C3",
+            "decimals": 6
+          },
+          {
+            "symbol": "D4",
+            "decimals": 0
+          },
+          {
+            "symbol": "E5",
+            "decimals": 2
+          }
+        ],
+        "tree": {
+          "algo": "merkle-sum-sha256-v1",
+          "leaf_count": 33,
+          "root": "efcaf781ea8e9ef91ca95adb876edeb1d391adce0f9761f038aad9ce50b421e5",
+          "padding": "empty-zero"
+        },
+        "totals": {
+          "A1": "1",
+          "B2": "300507281331800416001418",
+          "C3": "410616768254085441144327",
+          "D4": "888093547388470602016916",
+          "E5": "111706149750956905999250"
+        },
+        "params": {
+          "user_ref_hash": "sha256(STONEHASH-POR-USER-V1\\n + exchange_id + \\n + user_ref)",
+          "salt": "hmac-sha256(master_seed, user_ref)"
+        },
+        "reserves": {
+          "mode": "DECLARED",
+          "entries": [
+            {
+              "chain": "eip155:1",
+              "asset": "C3",
+              "address": "0x00000000000000000000000000000000000000aa",
+              "token_contract": "0x00000000000000000000000000000000000000bb"
+            }
+          ],
+          "note": "Addresses declared by the exchange; balances are measured on chain by verifiers. Address-control proof is out of sandbox scope."
+        },
+        "generated_at": "2026-11-16T01:02:03.456Z"
+      },
+      "signature": {
+        "alg": "ES256",
+        "key_id": "KR-EX-0a1b2c",
+        "issuer": "한빛 거래소 (Hanbit Exchange)",
+        "sig": "qk-IwuTPxLekXPBUvHRlq7jzZBXZFeeI5Hpq21zUWizbnSbLAaeys2KyllaioHyDdLF91osdl13B9HEOswkuEA"
+      }
+    },
+    {
+      "why": "the signature was changed",
+      "statement": {
+        "schema": "stonehash.por-snapshot.v1",
+        "exchange": {
+          "institution_id": "KR-EX-0a1b2c",
+          "name": "한빛 거래소 (Hanbit Exchange)"
+        },
+        "asof": "2026-11-16T00:00:00Z",
+        "assets": [
+          {
+            "symbol": "A1",
+            "decimals": 8
+          },
+          {
+            "symbol": "B2",
+            "decimals": 18
+          },
+          {
+            "symbol": "C3",
+            "decimals": 6
+          },
+          {
+            "symbol": "D4",
+            "decimals": 0
+          },
+          {
+            "symbol": "E5",
+            "decimals": 2
+          }
+        ],
+        "tree": {
+          "algo": "merkle-sum-sha256-v1",
+          "leaf_count": 33,
+          "root": "efcaf781ea8e9ef91ca95adb876edeb1d391adce0f9761f038aad9ce50b421e5",
+          "padding": "empty-zero"
+        },
+        "totals": {
+          "A1": "288255623867120420871540",
+          "B2": "300507281331800416001418",
+          "C3": "410616768254085441144327",
+          "D4": "888093547388470602016916",
+          "E5": "111706149750956905999250"
+        },
+        "params": {
+          "user_ref_hash": "sha256(STONEHASH-POR-USER-V1\\n + exchange_id + \\n + user_ref)",
+          "salt": "hmac-sha256(master_seed, user_ref)"
+        },
+        "reserves": {
+          "mode": "DECLARED",
+          "entries": [
+            {
+              "chain": "eip155:1",
+              "asset": "C3",
+              "address": "0x00000000000000000000000000000000000000aa",
+              "token_contract": "0x00000000000000000000000000000000000000bb"
+            }
+          ],
+          "note": "Addresses declared by the exchange; balances are measured on chain by verifiers. Address-control proof is out of sandbox scope."
+        },
+        "generated_at": "2026-11-16T01:02:03.456Z"
+      },
+      "signature": {
+        "alg": "ES256",
+        "key_id": "KR-EX-0a1b2c",
+        "issuer": "한빛 거래소 (Hanbit Exchange)",
+        "sig": "Ak-IwuTPxLekXPBUvHRlq7jzZBXZFeeI5Hpq21zUWizbnSbLAaeys2KyllaioHyDdLF91osdl13B9HEOswkuEA"
+      }
+    }
+  ]
+}

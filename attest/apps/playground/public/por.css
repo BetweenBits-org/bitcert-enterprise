@@ -1,0 +1,28 @@
+/* PoR 검증 페이지 — app.css 위에 얹는 전용 시트 (CSP: style-src 'self') */
+.por-sub { opacity: .7; font-size: 13px; margin-left: 10px; }
+.por-grid { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+@media (max-width: 860px) { .por-grid { grid-template-columns: 1fr; } }
+.por-in textarea {
+  width: 100%; min-height: 130px; font: 12px/1.5 ui-monospace, Consolas, monospace;
+  border: 1px solid rgba(127,127,127,.35); border-radius: 8px; padding: 10px;
+  background: inherit; color: inherit; resize: vertical;
+}
+.por-in .sub, .por-actions { display: flex; gap: 8px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
+.por-actions { margin-top: 12px; }
+.por-in input[type=text], .por-actions input[type=text] {
+  flex: 1; min-width: 160px; padding: 8px 10px; border: 1px solid rgba(127,127,127,.35);
+  border-radius: 7px; font-size: 13px; background: inherit; color: inherit;
+}
+.por-out { margin-top: 16px; }
+.vrow { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px dashed rgba(127,127,127,.25); align-items: baseline; }
+.vrow:last-child { border-bottom: 0; }
+.vrow .vicon { width: 20px; flex: none; text-align: center; }
+.vrow .vname { font-weight: 600; }
+.vrow .vdetail { font-size: 12px; opacity: .75; font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+.balbox { margin: 10px 0; padding: 12px 14px; border: 1px solid rgba(127,127,127,.3); border-radius: 8px; }
+.balbox b { font-size: 16px; }
+.statuschip { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 10px; margin-left: 6px; color: #fff; }
+.statuschip.pass { background: #1d5c3a; }
+.statuschip.fail { background: #6b2b2b; }
+.por-note { font-size: 12px; opacity: .65; margin-top: 10px; }
+.por-busy { opacity: .7; }

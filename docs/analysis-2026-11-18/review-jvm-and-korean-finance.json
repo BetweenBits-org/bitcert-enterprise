@@ -1,0 +1,106 @@
+{
+ "lens": "JVM and Korean finance (D1, D2, D3, D4): should the platform core move to Kotlin/Java with Spring Boot before launch, and is the hand-written, single-dependency server still the right rule?",
+ "summary": "The case for moving to the JVM does not hold up. Before launch it would cost about 70-90 engineer-days: roughly 15-17k TypeScript lines of core and runtime packages to port, plus 6-8k lines of tests. It would fix none of the top risks, which are design rules (no double-entry ledger, work kept only in memory, no compare-and-set, no idempotency keys) and the commit-bound database. The bank-installed parts are already Java (about 17k main lines: the SWIFT adapter, a Signer you can plug PKCS#11 into, and the PoR tree), and the core parses no SWIFT or ISO 20022 at all. TypeScript stays anyway, because it powers the browser verifier and is the reference that the Java golden vectors are generated from. Korean regulation does not look at the runtime. The 2026-04-20 SaaS rule from the financial regulators assesses the provider's security and how it handles personal data. So D2 stands. The modular monolith also stands, but D1 needs one deploy fix: the schema currently migrates every time a process boots, which breaks once two roles or rolling replicas start together. D3 should support the SWIFT adapter in Java only and settle the minimum Java version with the pilot banks. D4's own trigger (the API/worker split) happens before launch, so the bank-facing contract should be schema-validated and published as OpenAPI before launch. \"One dependency\" made sense when deploying meant copying the files and running node. For a production service in containers it should become a pinned allowlist with an SBOM. Zero dependencies stays where it is a product property (the browser verifier, the JDK-only bank SDK) or has a stated reason (the throwaway Schnorr key). The biggest gap in the memo is where personal data stops at the bank boundary. That boundary, not the language, decides whether Korean banks can adopt the SaaS and whether anyone ever asks for an on-prem core. I could not find hard Korean numbers on how many backend engineers work in Spring versus Node, so the hiring argument rests on qualitative signals only.",
+ "verdicts": [
+  {
+   "decision_id": "D1",
+   "verdict": "modify",
+   "confidence": "high",
+   "strongest_objection": "Korean lens: Korean fintech leaders run microservices (Toss had 2,800+ services by 2024 per the InfoQ figure cited in notes/research-frontend-saas-platform.md), Toss Bank is breaking up its monolith, and Korean financial RFPs often ask for an MSA. So a bank reviewer might mark a monolith down. This fails for four reasons. Banks buying SaaS assess security, availability and data handling, not internal topology; the FSC SaaS rule in force 2026-04-20 asks for an incident-response-agency (금융보안원) evaluation and controls, and nothing about architecture. The measured limit is MySQL durable commits, not the process: the event loop is about 20% busy. The team is small, and the research shows the reversal pattern: Cash App merged about 450 JVM services into one monorepo, and Segment went from 140+ services back to one. The modular monolith itself stands.",
+   "evidence": [
+    "attest/apps/core/src/db.ts:741-745 - 'Columns added after a table first shipped — applied only when absent, so any vintage of database migrates at boot'",
+    "attest/apps/core/src/db.ts:747-759 - a data-fix UPDATE 'run on every open'",
+    "attest/apps/core/src/main.ts:34 - openDb() runs at process start; no schema_version table anywhere in db.ts",
+    "scratchpad/notes/research-payments-global.md [B3] - ~450 Cash App JVM services consolidated into one monorepo because 'autonomy increasingly produced coordination cost'",
+    "https://fsc.go.kr (search result) - 전자금융감독규정시행세칙 amendment in force 2026-04-20: SaaS controls are about evaluation, device protection and half-yearly checks, not architecture"
+   ],
+   "proposed_change": "Keep the modular monolith and the API/worker roles. Add one precondition to running two roles: before any second process or rolling replica starts against the same database, schema changes and data fixes become a single deploy-time migration job with a version table. Today the ALTERs and the UPDATE run at boot. Failure scenario: a release adds a column; the API and worker tasks (or two API replicas behind the load balancer) boot together; both see the column missing and issue ALTER TABLE. The second either fails with a duplicate-column error or waits on a MySQL metadata lock behind a long worker transaction. Every new query on that table then queues behind it, causing an API stall during the deploy. Estimated 2-4 engineer-days. Also keep the internal operator back-office as a role that can be deployed separately (see missed decisions: licensing may require network separation).",
+   "what_would_flip_it": "Turn to microservices only when a module has to sit in a different security zone (an on-prem bank edition of one module, or a signer under network separation), when more than about 3 independent teams have conflicting release cadences, or when profiling shows contention between modules in one process that splitting roles cannot fix."
+  },
+  {
+   "decision_id": "D2",
+   "verdict": "uphold",
+   "confidence": "high",
+   "strongest_objection": "The strongest JVM case runs like this. Korean bank and fintech engineering is JVM (Toss on Java/Kotlin Spring; Kakao Bank on a Java core). The JVM gives you SunPKCS11 for HSMs, Spring transaction management, JPA @Version optimistic locking (compare-and-set without extra work), restartable Spring Batch jobs (what D6 builds by hand), BigDecimal with rounding modes (quotes.ts hand-rolls scaled BigInt), and Prowide for ISO 20022. And a rewrite only gets more expensive: about 21k lines of core plus runtime packages today, more after D12 and the production console API. It fails on the code. (1) Cost: about 15-17k TS-equivalent lines to port, plus 6-8k test lines, comes to 70-90 engineer-days, which blocks launch for 6-10+ weeks with 2-3 backend engineers. (2) It fixes none of the top risks. @Version only works where it is applied; double entry, idempotency keys, resuming the remittance pipeline after a restart and anchor retries are design work in any language; and only about 26% of the core (orchestrator, store, db, service = 2,919 lines) gets rewritten by D12 anyway. (3) The ecosystem advantages land where Java already is. The core parses no SWIFT or ISO 20022 (grep is empty); the Java SDKs already hold the SWIFT adapter and a Signer you can plug PKCS#11 into. (4) Intake is limited by DB commits, so JVM threads do not raise it. (5) TypeScript cannot be removed: the browser verifier needs it, and the Java goldens are generated from the TS packages, so a JVM core adds a language rather than replacing one. (6) Korean hiring: I found no Korean survey with Spring versus Node shares. The signal is qualitative and real, but it does not justify blocking launch.",
+   "evidence": [
+    "Counted: attest/apps/core/src non-test = 11,120 lines; core tests 15 files / 5,645 lines, of which 7 import internal modules (rewrite) and 5 drive HTTP (reusable)",
+    "Counted: runtime packages src/test - attest-verify 2,049/645, attest-rules 2,833/1,123, attest-por 4,467/2,373, attest-evidence 867/370",
+    "Counted: attest-por-java main 6,523 (PoR tree already ported); attest-remit-java main 10,516 + ~9,573 test lines incl. swift/Iso20022Reader.java, Mt103Reader.java, Signer.java:16-38 (PKCS#11 via JCA provider)",
+    "attest/sdks/attest-remit-java/tools/make-golden.mjs:26-27 - Java goldens are produced from TS jcs (attest-verify) and signedBytes (attest-rules): TS is the format reference",
+    "grep for pacs./MT103 in attest/apps/core/src returns nothing: no ISO 20022 handling in the core",
+    "tsconfig.base.json:7-8 - strict and noUncheckedIndexedAccess already on",
+    "attest/apps/core/src/remit/quotes.ts:46-63 hand-rolled decimal math; attest/packages/attest-remit/src/client.ts:442 compares amounts with Number()",
+    "Web: no Korean developer survey with framework shares found (two searches); global Stack Overflow 2024: Node.js 40.8%, Spring 11.1% (all respondents)"
+   ],
+   "proposed_change": "Keep TypeScript and Node for the core through launch. Add three guardrails to the memo. (a) Put all money arithmetic in one audited module with explicit rounding modes, and ban Number() on amounts with a lint rule (client.ts:442 today). Property-test it against Java BigDecimal through the existing golden mechanism. (b) Turn 'a small set of vetted dependencies' into a named, pinned allowlist with an owner and an SBOM. (c) Write down the JVM triggers (below), and say that the first JVM component, if one is ever needed, is the D9 signer service when it has to reach an HSM over PKCS#11, not the core.",
+   "what_would_flip_it": "A bank deal (signed or at letter-of-intent stage) that requires the core itself, not just the edge SDK or adapter, to be installed and run by bank IT on its standard Java application-server and Oracle or Tibero stack. Or two hiring rounds in which Korean fintech backend candidates are mostly Spring/Kotlin and a TypeScript role stays unfilled for about 3 months. Or a bank security review or regulator finding that names the Node runtime itself."
+  },
+  {
+   "decision_id": "D3",
+   "verdict": "modify",
+   "confidence": "medium",
+   "strongest_objection": "Shipping the bank-side parts in both Java and TS widens reach; a fintech or exchange in SEA may run Node and want the TS SWIFT/folder adapter. This only partly holds. The SWIFT mapping is the most rule-dense, adversarially reviewed code (identity, refusal and amount rules, the 23-character payment id), and two supported implementations double the places it can drift. Banks do not run Node in their SWIFT zone. The TS adapter already earns its place as the reference the Java goldens are generated from.",
+   "evidence": [
+    "attest/packages/attest-remit/src/adapter.ts - a TS SWIFT adapter (pacs.008/MT103) exists alongside sdks/attest-remit-java/src/main/java/com/stonehash/attest/remit/swift/*",
+    "attest/sdks/attest-remit-java/build.sh:13 and attest/sdks/attest-por-java/build.sh:13 - javac --release 11",
+    "attest/sdks/attest-remit-java/src/main/java/com/stonehash/attest/remit/RemitClient.java - uses java.net.http (Java 11+); only 2 main files use Java 11+ APIs",
+    "attest/sdks/attest-remit-java/release.sh:3,19,33 - emits a pom and SHA256SUMS for an internal repository; no artifact signing seen",
+    "attest/sdks/attest-remit-java/src/main/java/com/stonehash/attest/remit/Signer.java:16-38 - bank plugs its own JCA/PKCS#11 provider (good: lets a bank use its own validated crypto module)",
+    "New Relic 2024 Java ecosystem report (search): Java 17 >35% of production apps, Java 8 declining; Korean bank JDK mix not verified"
+   ],
+   "proposed_change": "(a) Make the SWIFT adapter a supported product in Java only. Keep packages/attest-remit/src/adapter.ts as the reference that generates the goldens, not as something banks install. Ship the API client SDK in Java and TS, plus Go for PoR as the owner decided. Write this out as a per-product language matrix, with the conformance vectors named as the contract. (b) Settle the minimum Java version with the first pilot banks before freezing --release 11. A Java 8 build is cheap if a bank needs it (2 files use 11+ APIs, about 1-3 engineer-days), so do not build it speculatively. (c) Add artifact signing and a published support window or LTS-branch policy for bank releases.",
+   "what_would_flip_it": "A paying customer that runs SWIFT messaging from a Node/TS environment (for example a fintech using a cloud SWIFT service bureau): then the TS adapter becomes a supported product. Or every pilot bank confirms JDK 11+ on its integration hosts: then (b) disappears."
+  },
+  {
+   "decision_id": "D4",
+   "verdict": "modify",
+   "confidence": "medium",
+   "strongest_objection": "The hand-written router is not where the risk is. It is 321 lines with linear matching over about 66-69 routes, a 1 MiB body cap and 413 handling, and the tests drive it over HTTP. Fastify brings roughly 15 direct and dozens of transitive packages, which runs against a supply-chain posture that has protected the service so far. That holds for the matcher itself. It does not hold for the API contract. The memo's own trigger, 'when the API and worker are split', fires before launch because D1 deploys two roles from the start. D7 adds a new authenticated console API. And the bank-facing remittance API (19 routes) freezes at launch with no per-route schema validation and no machine-readable contract. NestJS's Spring-like structure is the best argument for it from a Korean hiring view, but it is a heavy restructure and is not needed unless Spring developers are hired to work in TS.",
+   "evidence": [
+    "attest/apps/core/src/http/server.ts:114,157 - routes pushed into an array and matched linearly; :296-307 readJson with a 1 MiB cap and JSON.parse, no schema",
+    "Counted route registrations: http/routes.ts 42, remit/routes.ts 19, por/routes.ts 5 (+ console)",
+    "scratchpad/layers/backend-core.json - 'node:http createServer with default options (no timeouts or connection cap set); hand-written linear router'; audit INSERT awaited before every response",
+    "attest/apps/core/src/btc/secp256k1.ts header - the zero-dependency rationale is 'deploy is copy the tree, run node', which D8 (containers, IaC) replaces"
+   ],
+   "proposed_change": "Before launch, make the bank-facing API contract declarative: JSON Schema per route, a generated OpenAPI document for bank integration and security-review teams, and one error shape. Do it by moving to Fastify at the D1 API/worker split. Keep the handler bodies and map HttpError to setErrorHandler and the audit hook to a Fastify hook. Estimated 7-10 engineer-days (adapter 3-5, schemas for about 66-69 routes 2-4, regression run on the 5 HTTP test files). If the owner wants the smallest dependency footprint, the fallback is a schema validator on the existing router. NestJS stays out. Failure scenario if deferred past launch: adding validation later changes which malformed or extra-field requests are rejected, and with which codes, which is a visible contract change for banks already integrated. Meanwhile every new console route is written twice.",
+   "what_would_flip_it": "The API/worker split moves after launch and the public bank API is versioned so stricter validation can ship as v2: then deferring is fine. If the next 2-3 backend hires are Spring developers who will work in TS, NestJS on its Fastify adapter becomes worth its weight."
+  }
+ ],
+ "estimates": [
+  {
+   "what": "Rewrite of the platform core to Kotlin/Java (Spring Boot) before launch",
+   "estimate": "70-90 engineer-days (3.5-4.5 engineer-months); 6-10+ weeks of calendar time with launch blocked for a 2-3 person backend team",
+   "basis": "Counted: core 11,120 non-test lines plus runtime packages 10,216 (PoR tree 4,467 already ported to Java, so about 15-17k lines are net new); tests to rewrite 6-8k lines (7 of 15 core test files import internals, plus package tests). At 300-500 ported and tested lines per engineer-day that is about 40 days of code and about 20 of tests, plus 10-15 for build, CI, containers, MySQL-parity and conformance re-runs"
+  },
+  {
+   "what": "Share of the core that D12 rewrites anyway (the overlap that would favour 'rewrite while fixing')",
+   "estimate": "about 26% (2,919 of 11,120 lines)",
+   "basis": "remit/orchestrator.ts 818 + remit/store.ts 374 + db.ts 1,017 + service.ts 710; the other ~8k lines (HTTP layer, console API, PoR routes, btc, config, audit, billing) have no correctness reason to move"
+  },
+  {
+   "what": "Moving the HTTP layer to Fastify with JSON Schema and generated OpenAPI",
+   "estimate": "7-10 engineer-days",
+   "basis": "server.ts 321 lines replaced by a Fastify instance plus an adapter keeping the handler signatures; about 66-69 routes at 15-30 min each for schemas; error and audit hooks; the 5 HTTP-level test files run unchanged"
+  },
+  {
+   "what": "Java 8-compatible build of the bank SDKs, if a pilot bank needs it",
+   "estimate": "1-3 engineer-days",
+   "basis": "Only 2 main source files use Java 11+ APIs (RemitClient.java uses java.net.http); the SDKs are JDK-only, so no dependency downgrades"
+  },
+  {
+   "what": "Replacing migrate-at-boot with a deploy-time migration job",
+   "estimate": "2-4 engineer-days",
+   "basis": "db.ts ADDED_COLUMNS list and the CLEAR_ORG_EXPIRY data fix become ordered, versioned steps plus a schema_version table, run once per deploy"
+  }
+ ],
+ "missed_decisions": [
+  "Regulatory classification in Korea (and per SEA market) and the security regime that follows: electronic financial business or auxiliary operator, small-sum overseas remittance business, or VASP (특금법) for the stablecoin leg. This sets ISMS-P, network separation (망분리) for internal systems, DR targets and the financial security institute's SaaS evaluation, and so whether an internal back-office must live on a separated network. Architecture and infrastructure depend on it, the language does not.",
+  "The personal-data boundary with Korean banks. The FSC SaaS exemption in force 2026-04-20 excludes services handling 개인신용정보/고유식별정보, yet the core receives debtor name, address and registration number from the Java edge (PartySupplement.java:35-52) and stores package_json (db.ts:607). Decide what leaves the bank: tokenize or pseudonymise at the Java edge, use field-level encryption, and set retention. This decides whether a bank can adopt the SaaS without 혁신금융서비스 designation, and it is the real driver of any on-prem request.",
+  "On-prem policy stated up front: 'edge only' (Java SDK, SWIFT adapter and bank HSM signer inside the bank; the core stays SaaS). A core-on-prem edition is not offered before launch. If it ever is, that is the trigger for JVM and DB portability (Oracle/Tibero, the bank's application server).",
+  "Signer-service language and key-type split (affects D9). AWS KMS documents secp256k1 as ECDSA only (no BIP340 Schnorr found), and most PKCS#11 HSMs lack BIP340. The ephemeral taproot inscription key (btc/secp256k1.ts) is therefore either an accepted exception to 'the core never holds private keys' or needs an MPC or custom signer. If the signer talks to an HSM over PKCS#11, write it in Java; that is where the JVM actually pays.",
+  "Bank SDK support policy: minimum Java version agreed with pilot banks, LTS branches and support window, artifact signing (release.sh has SHA256SUMS only), and how banks pull the artifacts into their internal Maven repository.",
+  "A dependency policy to replace 'one runtime dependency': a named, pinned allowlist with an owner, an SBOM and an update cadence (Fastify, a logger, OpenTelemetry, mysql2, a migration runner). Zero dependencies stays a stated product property for the browser verifier and the JDK-only bank SDK.",
+  "Money-arithmetic ownership: one module with explicit rounding modes for FX and token-unit conversion, golden-tested against Java BigDecimal (quotes.ts hand-rolls scaled BigInt today; client.ts:442 uses Number()).",
+  "Hiring profile and market: Korean Spring/Kotlin engineers converting to TS, or Node/TS engineers (Korea vs SEA). No Korean survey data was found, so the owner should test the market with one posting before the JVM trigger is judged."
+ ]
+}

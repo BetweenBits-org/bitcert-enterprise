@@ -1,0 +1,30 @@
+{
+  "name": "@stonehash/attest-remit",
+  "version": "0.2.0",
+  "description": "Bank SDK for StoneHash cross-border settlement — read the SWIFT message your payment system already writes (MT103, pacs.008, pain.001) or build from your own data, sign with your own key or HSM, submit, track, report status as pacs.002, and independently re-verify the evidence package.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "samples",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "node --test 'test/*.test.ts'",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@stonehash/attest-rules": "workspace:*",
+    "@stonehash/attest-verify": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3"
+  }
+}

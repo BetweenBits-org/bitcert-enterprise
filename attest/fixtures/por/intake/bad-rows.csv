@@ -1,0 +1,13 @@
+account_id,asset,balance
+u1,BTC,0.123456789
+u2,BTC,-1
+ u3,BTC,1
+,BTC,1
+u4,BTC
+u5,BTC,1e3
+u6,BTC,
+u7,DOGE,1
+u8,btc,1
+u9,BTC,1
+u9,BTC,2
+ok,BTC,2

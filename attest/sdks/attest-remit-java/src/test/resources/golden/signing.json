@@ -1,0 +1,379 @@
+{
+ "about": "jcs: RFC 8785 bytes of each value. events: bytes an event signature is over. elements: the content digest and the bytes an element signature is over (the element with its digest, without its unsigned fields). signedByTypeScript: made with testKey — the Java SDK must verify them.",
+ "domains": {
+  "event": "stonehash:remit:event:v1\n",
+  "digest": "stonehash:evidence:digest:v1\n"
+ },
+ "testKey": {
+  "warning": "for these vectors only — it is published here and protects nothing",
+  "pkcs8Pem": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgbtC+yIN2Y8PpA7lC\nEo6GXvLq3CJP7spumHu7uVVl5yihRANCAAQZ4nCIpvLsfJyXyq9qNZX1lExp1PLI\nYZ+OhJeU+dwQMjrtskPWbY/WwCPHkE6VMS8ahpTFPRUvB/Se8ihlAObv\n-----END PRIVATE KEY-----\n",
+  "spkiBase64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGeJwiKby7Hycl8qvajWV9ZRMadTyyGGfjoSXlPncEDI67bJD1m2P1sAjx5BOlTEvGoaUxT0VLwf0nvIoZQDm7w==",
+  "keyId": "VN-BANK-T1",
+  "issuer": "Test Bank (VN)"
+ },
+ "jcs": [
+  {
+   "value": null,
+   "utf8Hex": "6e756c6c",
+   "text": "null"
+  },
+  {
+   "value": true,
+   "utf8Hex": "74727565",
+   "text": "true"
+  },
+  {
+   "value": false,
+   "utf8Hex": "66616c7365",
+   "text": "false"
+  },
+  {
+   "value": 0,
+   "utf8Hex": "30",
+   "text": "0"
+  },
+  {
+   "value": 0,
+   "utf8Hex": "30",
+   "text": "0"
+  },
+  {
+   "value": 1,
+   "utf8Hex": "31",
+   "text": "1"
+  },
+  {
+   "value": -1,
+   "utf8Hex": "2d31",
+   "text": "-1"
+  },
+  {
+   "value": 1.5,
+   "error": {
+    "name": "Error",
+    "message": "jcs: only integers are supported in this schema, got 1.5"
+   }
+  },
+  {
+   "value": 1e+21,
+   "error": {
+    "name": "Error",
+    "message": "jcs: integer out of safe range: 1e+21"
+   }
+  },
+  {
+   "value": 1e-7,
+   "error": {
+    "name": "Error",
+    "message": "jcs: only integers are supported in this schema, got 1e-7"
+   }
+  },
+  {
+   "value": 123456789012,
+   "utf8Hex": "313233343536373839303132",
+   "text": "123456789012"
+  },
+  {
+   "value": 0.1,
+   "error": {
+    "name": "Error",
+    "message": "jcs: only integers are supported in this schema, got 0.1"
+   }
+  },
+  {
+   "value": 100,
+   "utf8Hex": "313030",
+   "text": "100"
+  },
+  {
+   "value": 9007199254740991,
+   "utf8Hex": "39303037313939323534373430393931",
+   "text": "9007199254740991"
+  },
+  {
+   "value": "",
+   "utf8Hex": "2222",
+   "text": "\"\""
+  },
+  {
+   "value": "plain",
+   "utf8Hex": "22706c61696e22",
+   "text": "\"plain\""
+  },
+  {
+   "value": "quote \" backslash \\ slash /",
+   "utf8Hex": "2271756f7465205c22206261636b736c617368205c5c20736c617368202f22",
+   "text": "\"quote \\\" backslash \\\\ slash /\""
+  },
+  {
+   "value": "control \u0000\u0001\u001f tab\t newline\n",
+   "utf8Hex": "22636f6e74726f6c205c75303030305c75303030315c7530303166207461625c74206e65776c696e655c6e22",
+   "text": "\"control \\u0000\\u0001\\u001f tab\\t newline\\n\""
+  },
+  {
+   "value": "é ü 한글 €",
+   "utf8Hex": "22c3a920c3bc20ed959ceab88020e282ac22",
+   "text": "\"é ü 한글 €\""
+  },
+  {
+   "value": "😀",
+   "utf8Hex": "22f09f988022",
+   "text": "\"😀\""
+  },
+  {
+   "value": "  ",
+   "utf8Hex": "22e280a8e280a922",
+   "text": "\"  \""
+  },
+  {
+   "value": "lone \ud83d surrogate",
+   "utf8Hex": "226c6f6e65205c756438336420737572726f6761746522",
+   "text": "\"lone \\ud83d surrogate\""
+  },
+  {
+   "value": [],
+   "utf8Hex": "5b5d",
+   "text": "[]"
+  },
+  {
+   "value": {},
+   "utf8Hex": "7b7d",
+   "text": "{}"
+  },
+  {
+   "value": [
+    1,
+    [
+     2,
+     [
+      3
+     ]
+    ]
+   ],
+   "utf8Hex": "5b312c5b322c5b335d5d5d",
+   "text": "[1,[2,[3]]]"
+  },
+  {
+   "value": {
+    "b": 1,
+    "a": 2
+   },
+   "utf8Hex": "7b2261223a322c2262223a317d",
+   "text": "{\"a\":2,\"b\":1}"
+  },
+  {
+   "value": {
+    "9": 6,
+    "10": 5,
+    "é": 1,
+    "e": 2,
+    "E": 3,
+    "": 4
+   },
+   "utf8Hex": "7b22223a342c223130223a352c2239223a362c2245223a332c2265223a322c22c3a9223a317d",
+   "text": "{\"\":4,\"10\":5,\"9\":6,\"E\":3,\"e\":2,\"é\":1}"
+  },
+  {
+   "value": {
+    "amount": "12500.00",
+    "nested": {
+     "z": [
+      true,
+      null,
+      {
+       "y": "x"
+      }
+     ],
+     "a": ""
+    },
+    "list": []
+   },
+   "utf8Hex": "7b22616d6f756e74223a2231323530302e3030222c226c697374223a5b5d2c226e6573746564223a7b2261223a22222c227a223a5b747275652c6e756c6c2c7b2279223a2278227d5d7d7d",
+   "text": "{\"amount\":\"12500.00\",\"list\":[],\"nested\":{\"a\":\"\",\"z\":[true,null,{\"y\":\"x\"}]}}"
+  }
+ ],
+ "events": [
+  {
+   "payload": {
+    "payment_id": "PAY-3f1c9a52-6b0d8e41c7",
+    "reason": "customer request"
+   },
+   "signingBytesHex": "73746f6e65686173683a72656d69743a6576656e743a76310a7b227061796d656e745f6964223a225041592d33663163396135322d36623064386534316337222c22726561736f6e223a22637573746f6d65722072657175657374227d"
+  },
+  {
+   "payload": {
+    "payment_id": "PAY-3f1c9a52-6b0d8e41c7",
+    "quote_id": "QT-1",
+    "amount": "12500.00",
+    "currency": "USD",
+    "debtor": {
+     "name": "Vina Trading Co., Ltd."
+    },
+    "answers": {
+     "purpose": "무역 대금"
+    }
+   },
+   "signingBytesHex": "73746f6e65686173683a72656d69743a6576656e743a76310a7b22616d6f756e74223a2231323530302e3030222c22616e7377657273223a7b22707572706f7365223a22ebacb4ec97ad20eb8c80eab888227d2c2263757272656e6379223a22555344222c22646562746f72223a7b226e616d65223a2256696e612054726164696e6720436f2e2c204c74642e227d2c227061796d656e745f6964223a225041592d33663163396135322d36623064386534316337222c2271756f74655f6964223a2251542d31227d"
+  },
+  {
+   "payload": {
+    "manifest": {
+     "date": "2026-11-17",
+     "payment_ids": [
+      "PAY-b",
+      "PAY-a"
+     ]
+    }
+   },
+   "signingBytesHex": "73746f6e65686173683a72656d69743a6576656e743a76310a7b226d616e6966657374223a7b2264617465223a22323032362d31312d3137222c227061796d656e745f696473223a5b225041592d62222c225041592d61225d7d7d"
+  }
+ ],
+ "elements": [
+  {
+   "element": {
+    "id": "bankInstruction",
+    "issuer": "VN-BANK-T1",
+    "ref": "PAY-3f1c9a52-6b0d8e41c7",
+    "amount": "12500.00",
+    "currency": "USD",
+    "sourceMessage": {
+     "type": "pacs.008.001.08",
+     "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+    }
+   },
+   "digest": "29617058e7caaf2ebaf30ae19e730530d9e50ac2c41ce7d21d60c0e608f26e94",
+   "signingBytesHex": "73746f6e65686173683a65766964656e63653a7369673a76310a7b22616d6f756e74223a2231323530302e3030222c2263757272656e6379223a22555344222c22646967657374223a2232393631373035386537636161663265626166333061653139653733303533306439653530616332633431636537643231643630633065363038663236653934222c226964223a2262616e6b496e737472756374696f6e222c22697373756572223a22564e2d42414e4b2d5431222c22726566223a225041592d33663163396135322d36623064386534316337222c22736f757263654d657373616765223a7b22736861323536223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161222c2274797065223a22706163732e3030382e3030312e3038222c2275657472223a2233663163396135322d376230652d346436612d396331662d326538623561376434633130227d7d"
+  },
+  {
+   "element": {
+    "id": "bankApproval",
+    "issuer": "VN-BANK-T1",
+    "ref": "PAY-3f1c9a52-6b0d8e41c7",
+    "approvedByRole": "Trade Operations",
+    "attached": true,
+    "citedOnly": false
+   },
+   "digest": "919cd7c772dfb71056accf50ac59c9a709965d9fedfa36d2eed5ad0438b5269d",
+   "signingBytesHex": "73746f6e65686173683a65766964656e63653a7369673a76310a7b22617070726f7665644279526f6c65223a225472616465204f7065726174696f6e73222c22646967657374223a2239313963643763373732646662373130353661636366353061633539633961373039393635643966656466613336643265656435616430343338623532363964222c226964223a2262616e6b417070726f76616c222c22697373756572223a22564e2d42414e4b2d5431222c22726566223a225041592d33663163396135322d36623064386534316337227d"
+  },
+  {
+   "element": {
+    "id": "commercialDocs",
+    "issuer": "VN-BANK-T1",
+    "invoiceRef": "INV-2026-0457",
+    "digestVerified": true
+   },
+   "digest": "3a5a2e06a33dd1c94b879ec61bb8d18f8a17fdd4da7e3a17b12b654adb56b9ad",
+   "signingBytesHex": "73746f6e65686173683a65766964656e63653a7369673a76310a7b22646967657374223a2233613561326530366133336464316339346238373965633631626238643138663861313766646434646137653361313762313262363534616462353662396164222c226964223a22636f6d6d65726369616c446f6373222c22696e766f696365526566223a22494e562d323032362d30343537222c22697373756572223a22564e2d42414e4b2d5431227d"
+  }
+ ],
+ "signedByTypeScript": {
+  "events": [
+   {
+    "payload": {
+     "payment_id": "PAY-3f1c9a52-6b0d8e41c7",
+     "reason": "customer request"
+    },
+    "signature": {
+     "alg": "ES256",
+     "key_id": "VN-BANK-T1",
+     "issuer": "Test Bank (VN)",
+     "sig": "Ht0lRVkiA_OSFKxJ-Aezw2TcJumLVy_rAttSJ4iVagFRiRuq7qwTgKYceq3ku-lbU2s_EedMAFhg6phXo_IuUQ"
+    }
+   },
+   {
+    "payload": {
+     "payment_id": "PAY-3f1c9a52-6b0d8e41c7",
+     "quote_id": "QT-1",
+     "amount": "12500.00",
+     "currency": "USD",
+     "debtor": {
+      "name": "Vina Trading Co., Ltd."
+     },
+     "answers": {
+      "purpose": "무역 대금"
+     }
+    },
+    "signature": {
+     "alg": "ES256",
+     "key_id": "VN-BANK-T1",
+     "issuer": "Test Bank (VN)",
+     "sig": "DgM2rnDx4kYqrQvT2YadLmjkBXOYVGzkHAIK2b6PF6GC64HTkCWZoWUx_XfEGchCgwKTSTT17t8QiLA-II38tg"
+    }
+   },
+   {
+    "payload": {
+     "manifest": {
+      "date": "2026-11-17",
+      "payment_ids": [
+       "PAY-b",
+       "PAY-a"
+      ]
+     }
+    },
+    "signature": {
+     "alg": "ES256",
+     "key_id": "VN-BANK-T1",
+     "issuer": "Test Bank (VN)",
+     "sig": "aot5M9ZAzjwmpKJvE72ANWYovXQODy8vIwmqlxFsFsPAtHFPwM2OZFiWZNJmNbqMRCt_bWaWPs4pCSATCWaLNA"
+    }
+   }
+  ],
+  "elements": [
+   {
+    "id": "bankInstruction",
+    "issuer": "VN-BANK-T1",
+    "ref": "PAY-3f1c9a52-6b0d8e41c7",
+    "amount": "12500.00",
+    "currency": "USD",
+    "sourceMessage": {
+     "type": "pacs.008.001.08",
+     "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "uetr": "3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10"
+    },
+    "digest": "29617058e7caaf2ebaf30ae19e730530d9e50ac2c41ce7d21d60c0e608f26e94",
+    "signature": {
+     "status": "VALID",
+     "keyId": "VN-BANK-T1",
+     "algorithm": "ES256",
+     "issuer": "Test Bank (VN)",
+     "trustLevel": "ATTESTED",
+     "value": "aFeNFH3G9o8LcSKc-rva8qmk62r1_pl-bjqzWpeIdGAYK2cZzcocnjOyN_KGPurGT2vfZN1ge2_-_YxPz6W5yA"
+    }
+   },
+   {
+    "id": "bankApproval",
+    "issuer": "VN-BANK-T1",
+    "ref": "PAY-3f1c9a52-6b0d8e41c7",
+    "approvedByRole": "Trade Operations",
+    "attached": true,
+    "citedOnly": false,
+    "digest": "919cd7c772dfb71056accf50ac59c9a709965d9fedfa36d2eed5ad0438b5269d",
+    "signature": {
+     "status": "VALID",
+     "keyId": "VN-BANK-T1",
+     "algorithm": "ES256",
+     "issuer": "Test Bank (VN)",
+     "trustLevel": "ATTESTED",
+     "value": "ku9vspJb1bNh9gEPHvmGpPlDx2tQFPLhRwC5sDBMiH3ucSFAUWvgc0M5ABy4iLBo5d9VD_c6rmZfruYfpfqubw"
+    }
+   },
+   {
+    "id": "commercialDocs",
+    "issuer": "VN-BANK-T1",
+    "invoiceRef": "INV-2026-0457",
+    "digestVerified": true,
+    "digest": "3a5a2e06a33dd1c94b879ec61bb8d18f8a17fdd4da7e3a17b12b654adb56b9ad",
+    "signature": {
+     "status": "VALID",
+     "keyId": "VN-BANK-T1",
+     "algorithm": "ES256",
+     "issuer": "Test Bank (VN)",
+     "trustLevel": "ATTESTED",
+     "value": "BI1QtX0JR0nJAy6hCxWnUMnpeN1RJUeK22otw4wu5Udj_jpEZmJ40Cyyu-3IswpvwfZSdfm3AdLJ_9RZhiLA4Q"
+    }
+   }
+  ]
+ }
+}

@@ -1,0 +1,42 @@
+{
+  "schema": "bitcert-proof-bundle/v1",
+  "bitcoin_network": "regtest",
+  "generated_at": "2026-11-04T09:13:39.837Z",
+  "record": {
+    "kind": "attestation",
+    "leaf_bytes": "ae0b463ffa456b88a8ff3247aab71e99fc3bda341cda084165202089139fd116",
+    "preimage": {
+      "scheme": "sha256-file",
+      "content_type": "text/plain"
+    },
+    "descriptor": {
+      "attestation_id": "93ae9266-f3c0-4929-8928-94115fbec369",
+      "batch_id": "77806618-f3df-42a2-9efe-861cdf7a0971",
+      "ref": "SAMPLE"
+    }
+  },
+  "merkle": {
+    "leaf_index": 0,
+    "root": "3a88bf98a487c8583b34723b25184cf96a744993d6b9867480039a9e829cc2d3",
+    "siblings": [
+      "56ad33a96a7051b72a2cdb99e591f1416b3be8febc35b2b4948c20bc686f408b",
+      "376aaef1950d04e570222587468d73008a605f31c7f2cf3cec16cad6b08253e1",
+      "52196ab1523017c9ce10180b89f4aeee79a12226a547d5bef51b0f38020cf398"
+    ],
+    "directions": [
+      "right",
+      "right",
+      "right"
+    ]
+  },
+  "anchor": {
+    "reveal_txid": "e233c3dfda2b38382a29cbd880c649e385493ab6f8d755d9de51cffadcef954c",
+    "reveal_tx_hex": "02000000000101bbd89baa9bd268339ef1b170033ed45cdb28a62af340134eff550f9bdf249d260000000000fdffffff0246f1052a010000002251205fc7f7c86058f9f6a012f22c54e73051e868ecc9417e61cd534dfcbaffbd46850000000000000000376a3542433031013a88bf98a487c8583b34723b25184cf96a744993d6b9867480039a9e829cc2d377806618f3df42a29efe861cdf7a0971024730440220608a262c1bf3278d040bc5ccfe7c9a3ebff668a71a1e27d2b800de40cc63761802205d4f76bbdbe92b87fb210676cc4e6631e847310f79a0f31a6e5372ee1e8cf18601210327b035f81c323b5dfaae2c3f7d479511bc412a9c28c95920334f1731ceab5da700000000",
+    "op_return_payload_hex": "42433031013a88bf98a487c8583b34723b25184cf96a744993d6b9867480039a9e829cc2d377806618f3df42a29efe861cdf7a0971",
+    "confirmed": {
+      "block_height": 107,
+      "block_hash": "2f088c6640a8aceee1897d14740b1325d5da43b41301848afd5727cc6c1498d3",
+      "confirmations": 2
+    }
+  }
+}

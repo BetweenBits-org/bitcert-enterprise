@@ -1,0 +1,131 @@
+{
+  "about": "Canonical JSON (the RFC 8785 subset this protocol uses). `canonical` is the exact text; the bytes hashed are its UTF-8 encoding.",
+  "cases": [
+    {
+      "name": "keys are sorted, whitespace removed",
+      "value": {
+        "b": "2",
+        "a": "1",
+        "c": {
+          "z": 1,
+          "y": [
+            3,
+            2,
+            1
+          ]
+        }
+      },
+      "canonical": "{\"a\":\"1\",\"b\":\"2\",\"c\":{\"y\":[3,2,1],\"z\":1}}"
+    },
+    {
+      "name": "empty containers",
+      "value": {
+        "o": {},
+        "a": [],
+        "s": ""
+      },
+      "canonical": "{\"a\":[],\"o\":{},\"s\":\"\"}"
+    },
+    {
+      "name": "integers, booleans and null",
+      "value": {
+        "zero": 0,
+        "neg": -1,
+        "max": 9007199254740991,
+        "min": -9007199254740991,
+        "t": true,
+        "f": false,
+        "n": null
+      },
+      "canonical": "{\"f\":false,\"max\":9007199254740991,\"min\":-9007199254740991,\"n\":null,\"neg\":-1,\"t\":true,\"zero\":0}"
+    },
+    {
+      "name": "a string is written as it is, in UTF-8: Korean, an accent, an emoji",
+      "value": {
+        "name": "한빛 거래소",
+        "note": "café ☕ 😀"
+      },
+      "canonical": "{\"name\":\"한빛 거래소\",\"note\":\"café ☕ 😀\"}"
+    },
+    {
+      "name": "the two characters that must be escaped",
+      "value": {
+        "s": "say \"hi\" \\ bye"
+      },
+      "canonical": "{\"s\":\"say \\\"hi\\\" \\\\ bye\"}"
+    },
+    {
+      "name": "control characters: the five short forms, the rest as \\u00xx in lower case",
+      "value": {
+        "s": "\b\f\n\r\t\u0000\u0001\u001f"
+      },
+      "canonical": "{\"s\":\"\\b\\f\\n\\r\\t\\u0000\\u0001\\u001f\"}"
+    },
+    {
+      "name": "not escaped: slash, DEL, U+2028, U+2029",
+      "value": {
+        "s": "/  "
+      },
+      "canonical": "{\"s\":\"/  \"}"
+    },
+    {
+      "name": "keys sort by UTF-16 code unit",
+      "value": {
+        "": "private use",
+        "😀": "emoji",
+        "a": "ascii",
+        "Z": "upper",
+        "가": "hangul"
+      },
+      "canonical": "{\"Z\":\"upper\",\"a\":\"ascii\",\"가\":\"hangul\",\"😀\":\"emoji\",\"\":\"private use\"}"
+    },
+    {
+      "name": "keys that look like numbers sort as text",
+      "value": {
+        "1": "c",
+        "9": "b",
+        "10": "a"
+      },
+      "canonical": "{\"1\":\"c\",\"10\":\"a\",\"9\":\"b\"}"
+    },
+    {
+      "name": "nested arrays keep their order",
+      "value": [
+        [
+          3,
+          "b"
+        ],
+        [
+          1,
+          "a"
+        ],
+        {
+          "k": [
+            true,
+            null
+          ]
+        }
+      ],
+      "canonical": "[[3,\"b\"],[1,\"a\"],{\"k\":[true,null]}]"
+    },
+    {
+      "name": "a balances object",
+      "value": {
+        "USDT": "1500250000",
+        "BTC": "50000000",
+        "ETH": "0"
+      },
+      "canonical": "{\"BTC\":\"50000000\",\"ETH\":\"0\",\"USDT\":\"1500250000\"}"
+    }
+  ],
+  "rejects": [
+    {
+      "name": "a number with a fraction",
+      "json": "{\"x\":1.5}"
+    },
+    {
+      "name": "an integer beyond 2^53 - 1",
+      "json": "{\"x\":9007199254740992}"
+    }
+  ]
+}

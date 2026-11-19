@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Sample only: a fictional importer in Viet Nam pays a fictional exporter in Singapore. -->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>DEMOVNVX20261117000123</MsgId>
+      <CreDtTm>2026-11-17T09:30:00+07:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>INDA</SttlmMtd>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>OUT-2026-000123</InstrId>
+        <EndToEndId>PO-7781</EndToEndId>
+        <UETR>3f1c9a52-7b0e-4d6a-9c1f-2e8b5a7d4c10</UETR>
+      </PmtId>
+      <IntrBkSttlmAmt Ccy="USD">12500.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-11-17</IntrBkSttlmDt>
+      <InstdAmt Ccy="USD">12500.00</InstdAmt>
+      <ChrgBr>DEBT</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>DEMOVNVX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>DEMOSGSG</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>Vina Trading Co., Ltd.</Nm>
+        <PstlAdr>
+          <StrtNm>Le Loi Boulevard</StrtNm>
+          <BldgNb>12</BldgNb>
+          <TwnNm>Ho Chi Minh City</TwnNm>
+          <TwnLctnNm>District 1</TwnLctnNm>
+          <Ctry>VN</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>0312345678</Id>
+              <SchmeNm>
+                <Cd>TXID</Cd>
+              </SchmeNm>
+            </Othr>
+          </OrgId>
+        </Id>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>VN-ACC-000777</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>DEMOVNVX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>DEMOSGSG</BICFI>
+          <Nm>Demo Payout Bank (SG)</Nm>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>Pacific Supply Pte Ltd</Nm>
+        <PstlAdr>
+          <StrtNm>Raffles Place</StrtNm>
+          <BldgNb>1</BldgNb>
+          <PstCd>048616</PstCd>
+          <TwnNm>Singapore</TwnNm>
+          <Ctry>SG</Ctry>
+        </PstlAdr>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>SG-ACC-000009</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+      <Purp>
+        <Cd>GDDS</Cd>
+      </Purp>
+      <RmtInf>
+        <Strd>
+          <RfrdDocInf>
+            <Tp>
+              <CdOrPrtry>
+                <Cd>CINV</Cd>
+              </CdOrPrtry>
+            </Tp>
+            <Nb>INV-2026-0457</Nb>
+            <RltdDt>2026-11-10</RltdDt>
+          </RfrdDocInf>
+        </Strd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

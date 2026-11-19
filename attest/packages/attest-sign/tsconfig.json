@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "comment": "Keeps the base lib, which includes DOM — WebCrypto's types (BufferSource, EcdsaParams) live there, and this package is nothing but WebCrypto calls.",
+  "compilerOptions": { "types": ["node"] },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

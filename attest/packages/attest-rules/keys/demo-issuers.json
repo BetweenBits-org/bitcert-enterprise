@@ -1,0 +1,108 @@
+{
+  "!!! READ THIS !!!": "These are DEMONSTRATION keys and their private halves are published on purpose. A signature from one of them proves that this repository signed something — nothing more. It establishes NO identity, and `trustLevel` is pinned to DEMO so no policy requiring ATTESTED or ACCREDITED can ever be satisfied by them. Anyone can forge these signatures, which is precisely the point: the synthetic bank fixtures must not look authentic.",
+  "purpose": "Sign the synthetic settlement-evidence fixtures so the Bank Review demo performs real ECDSA verification instead of trusting a declared status field.",
+  "algorithm": "ECDSA P-256 / SHA-256 (ES256, RFC 7515)",
+  "regenerate": "node tools/make-demo-keys.mjs  (then: node tools/sign-fixtures.mjs)",
+  "keys": [
+    {
+      "keyId": "demo-provider-key-01",
+      "issuer": "DEMO_PROVIDER",
+      "note": "payment provider issuing payout receipts",
+      "trustLevel": "DEMO",
+      "algorithm": "ES256",
+      "publicKeyJwk": {
+        "kty": "EC",
+        "x": "1FPQIP1R1aYB6urCDAcXzdJY5IYVx9SFOMnbbJtExfM",
+        "y": "_7gTFtl--uVDMHI18wPzkOQ5DANQqflQJiYPwTEoquc",
+        "crv": "P-256"
+      },
+      "privateKeyJwk": {
+        "kty": "EC",
+        "x": "1FPQIP1R1aYB6urCDAcXzdJY5IYVx9SFOMnbbJtExfM",
+        "y": "_7gTFtl--uVDMHI18wPzkOQ5DANQqflQJiYPwTEoquc",
+        "crv": "P-256",
+        "d": "XiENPBKBz2iP8VQTidgAZ5RkM8DjvKu1AeTcQF3ZoR8"
+      }
+    },
+    {
+      "keyId": "demo-bank-key-01",
+      "issuer": "DEMO_BANK",
+      "note": "the instructing bank in the trade-payment fixture",
+      "trustLevel": "DEMO",
+      "algorithm": "ES256",
+      "publicKeyJwk": {
+        "kty": "EC",
+        "x": "vo4TK9FC3_MYzV4J0T7b7LRMPwDBIesxysThGq7zCIU",
+        "y": "0LSeeU5xCOg_vPyINABHDCZ3VcvITHWDxTTrnVy-aMU",
+        "crv": "P-256"
+      },
+      "privateKeyJwk": {
+        "kty": "EC",
+        "x": "vo4TK9FC3_MYzV4J0T7b7LRMPwDBIesxysThGq7zCIU",
+        "y": "0LSeeU5xCOg_vPyINABHDCZ3VcvITHWDxTTrnVy-aMU",
+        "crv": "P-256",
+        "d": "H_t9wwuXWAhEqbgg1wbKeohIYnr_poiIISwKB0L2pvI"
+      }
+    },
+    {
+      "keyId": "demo-seller-key-01",
+      "issuer": "DEMO_SELLER",
+      "note": "the seller issuing commercial documents",
+      "trustLevel": "DEMO",
+      "algorithm": "ES256",
+      "publicKeyJwk": {
+        "kty": "EC",
+        "x": "VThJkSp0N_T-GjUiaQ_g7fEhfPZlVxRoCzAAsmCZLT0",
+        "y": "k51_HneBOXFAVSglG3mLE8ISPiyPbhA1U0oZRMb61Kk",
+        "crv": "P-256"
+      },
+      "privateKeyJwk": {
+        "kty": "EC",
+        "x": "VThJkSp0N_T-GjUiaQ_g7fEhfPZlVxRoCzAAsmCZLT0",
+        "y": "k51_HneBOXFAVSglG3mLE8ISPiyPbhA1U0oZRMb61Kk",
+        "crv": "P-256",
+        "d": "bfJFZuW0Q443cjAwFI4vmFZiczwOXFeV97h-DgfvWeg"
+      }
+    },
+    {
+      "keyId": "demo-vn-bank-key-01",
+      "issuer": "DEMO_VN_LICENSED_BANK",
+      "note": "the Vietnamese licensed bank in the corridor fixture — a distinct party from DEMO_BANK, so a distinct key",
+      "trustLevel": "DEMO",
+      "algorithm": "ES256",
+      "publicKeyJwk": {
+        "kty": "EC",
+        "x": "SL0hJmz2E9Gz_pFL7XIG57rOczBoCYOrMMvJk8606ds",
+        "y": "VNO-QUo8KcSwDDj_93WPLMv75yQVMk_FqRcx-7ybjwQ",
+        "crv": "P-256"
+      },
+      "privateKeyJwk": {
+        "kty": "EC",
+        "x": "SL0hJmz2E9Gz_pFL7XIG57rOczBoCYOrMMvJk8606ds",
+        "y": "VNO-QUo8KcSwDDj_93WPLMv75yQVMk_FqRcx-7ybjwQ",
+        "crv": "P-256",
+        "d": "djclOOfhBZ0RCYcOWYg770sdbBS_HG4ubsWAOOKl9Vc"
+      }
+    },
+    {
+      "keyId": "demo-sending-vasp-key-01",
+      "issuer": "DEMO_SENDING_VASP",
+      "note": "the originating VASP attesting the travel-rule record",
+      "trustLevel": "DEMO",
+      "algorithm": "ES256",
+      "publicKeyJwk": {
+        "kty": "EC",
+        "x": "E8_FXPM_BTsi84lfNEP1U69pPNdb6PGtH_3vJEhNb4U",
+        "y": "0ZIf_eq8ruRSapvtRrfD-kPMjDz4g6gZ42x9wJ3S3_w",
+        "crv": "P-256"
+      },
+      "privateKeyJwk": {
+        "kty": "EC",
+        "x": "E8_FXPM_BTsi84lfNEP1U69pPNdb6PGtH_3vJEhNb4U",
+        "y": "0ZIf_eq8ruRSapvtRrfD-kPMjDz4g6gZ42x9wJ3S3_w",
+        "crv": "P-256",
+        "d": "9DLFM1G4prrPiH45yT4_OhgWK66fE76p8TQ0f7Usz40"
+      }
+    }
+  ]
+}

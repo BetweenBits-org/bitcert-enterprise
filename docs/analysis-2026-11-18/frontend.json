@@ -1,0 +1,957 @@
+{
+ "layer": "Frontend and static delivery (all web surfaces and how they are served)",
+ "summary": "The frontend layer is three web apps with no framework and no bundler: the Sandbox Console (the operator UI for banks, exchanges and document issuers), the Playground (free-tier anchoring, an offline bundle verifier and the public PoR inclusion page) and the Developer Hub. Each is compiled by one tsc pass into unminified ES modules and served by the core API process itself (static.ts, :8787). Beside them are the Express + cheerio marketing homepage (:3100) and three demo sites. Nothing sits in front of any of them: no TLS, no reverse proxy, no CDN and no compression. Core sends static files with Cache-Control: no-cache and no ETag or Last-Modified, so a 304 is impossible and every console reload re-downloads about 30 files (~510 KB). That happens on the same event loop that runs the transaction API and the batch and remit workers. The layer's main strength is deliberate: heavy and sensitive work stays in the browser (document hashing, PoR sum-tree building, bundle and PoR verification), so the server receives 32 bytes or one signed statement whatever the document or ledger size. Console request rate scales with the number of operators, not with transaction volume. Only the live settlement tracker (0.4 req/s per open row, up to 10 min) and the PoR anchor watch (0.5 req/s, up to 3 min) poll; nothing else auto-refreshes and row details load on click. The weakness is that the cost of each console request grows with the org's data. The home dashboard runs ~25 statements per view, about 8 of them whole-org aggregates and 13 whose results are no longer shown. Every cold load runs month-to-date COUNT(*)s twice, and the subscriptions call runs 6 more. The settlement ledger recomputes COUNT(*) on every page, and its search is LIKE '%q%' plus JSON_EXTRACT over events. The records screen has no pagination at all (newest 50; the keyed API stops at 500 with no cursor). All of these share a 10-connection MySQL pool with the transaction path, with no statement timeout. At 100k rows per org the console gets slow; at 10M rows per org the dashboard and search would take tens of seconds to minutes per view (estimate, not measured) and could starve writes. Console sign-in runs scryptSync on the event loop and stalls all core traffic for a few hundred milliseconds. The production host split described in comments cannot work as built (CSP connect-src 'self', no CORS on console routes), so a CDN must keep one origin through path routing. The demo sites are demonstrations that integrate through the published REST API and SDK and keep JSON-file state; do not count them as product, although their polling does hit the shared core.",
+ "components": [
+  {
+   "name": "Core static server (fallback mounts)",
+   "role": "Serves /console/, /playground/ and /docs/ from the API process, and redirects / to /console/",
+   "files": [
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/http/static.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/http/routes.ts (96-113)",
+    "/home/ubuntu/bitcert-attest/attest/apps/core/src/http/server.ts (Router.fallback/handle)"
+   ],
+   "tech": "node:http; per file: 2x fs.statSync + createReadStream.pipe",
+   "notes": "Only consulted after the linear scan of ~69 API routes misses. Live .env sets PLAYGROUND_DIR, DOCS_DIR and CONSOLE_DIR to the three dist folders. Plain HTTP on all interfaces. Cache-Control: no-cache; no ETag, Last-Modified, gzip/br, Range or Content-Length. A strict self-only CSP plus nosniff and no-referrer goes on every file. Same process as the API, BatchWorker and RemitWorker (pm2 fork, 1 instance)."
+  },
+  {
+   "name": "Sandbox Console (apps/console)",
+   "role": "Operator UI with 8 hash-routed sections: dashboard, settlements ledger with live tracker and manifests, PoR anchoring, anchor (digest, inscription, signed, verify), records, subscriptions/billing, integrate (keys), audit log",
+   "files": [
+    "/home/ubuntu/bitcert-attest/attest/apps/console/src/app.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/console/src/api.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/console/src/por.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/console/src/i18n.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/console/src/sandbox.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/console/public/index.html",
+    "/home/ubuntu/bitcert-attest/attest/apps/console/build.mjs"
+   ],
+   "tech": "TypeScript, compiled by tsc to unminified ES modules with sourcemaps; no framework or bundler; template strings + innerHTML; vendored attest-verify and portable attest-por SDK sources",
+   "notes": "Auth is a DB-backed session cookie (HttpOnly, SameSite=Lax, 14 days; not Secure on this box); the page stores no browser data. Korean/English via ?lang= or navigator.language. Same-origin API (meta attest-api=\"\"). Cold load is 30 requests, ~510 KB, 4-level import waterfall. sandbox.ts is compiled but never imported. All routes are refused unless STONEHASH_ENV=test."
+  },
+  {
+   "name": "Playground (apps/playground)",
+   "role": "Public pages: free-tier anchoring without signup, offline proof-bundle verifier, and the PoR end-user inclusion verifier (por.html)",
+   "files": [
+    "/home/ubuntu/bitcert-attest/attest/apps/playground/src/app.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/playground/src/anchor.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/playground/src/por.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/playground/src/chain.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/playground/public/index.html",
+    "/home/ubuntu/bitcert-attest/attest/apps/playground/public/por.html",
+    "/home/ubuntu/bitcert-attest/attest/apps/playground/build.mjs"
+   ],
+   "tech": "Same tsc/ES-module build; Korean only",
+   "notes": "index: 17 modules, 96 KB. por.html: 18 requests, ~114 KB. Verification is offline. The anchor panel calls the CORS-enabled /v1/public/anchors. por.html fetches /v1/public/por/snapshots/:id through a root-relative (same-origin) path. The app.ts header still says 'no StoneHash endpoint is contacted', but the anchor panel now contacts one."
+  },
+  {
+   "name": "Developer Hub (apps/docs)",
+   "role": "Public documentation: 11 Markdown guides (Korean for 7), OpenAPI reference rendered in the browser, SDK tarballs with checksums",
+   "files": [
+    "/home/ubuntu/bitcert-attest/attest/apps/docs/src/app.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/docs/src/markdown.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/docs/src/openapi.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/docs/src/i18n.ts",
+    "/home/ubuntu/bitcert-attest/attest/apps/docs/build.mjs"
+   ],
+   "tech": "tsc ES modules (4 modules, 43 KB), own Markdown renderer",
+   "notes": "Content is fetched per page and cached in tab memory. openapi.json is 372,899 B, uncompressed. GET /v1/meta drives the network badge. download/*.tar.gz (37-130 KB) is served by core as octet-stream."
+  },
+  {
+   "name": "Marketing homepage (homepage/, pm2 stonehash-homepage :3100)",
+   "role": "Marketing and use-case pages, hash/verify demos, a hero anchor demo that calls core's free tier, and an admin page for translations and site config",
+   "files": [
+    "/home/ubuntu/bitcert-attest/homepage/server.js",
+    "/home/ubuntu/bitcert-attest/homepage/lib/site.js",
+    "/home/ubuntu/bitcert-attest/homepage/html/",
+    "/home/ubuntu/bitcert-attest/homepage/js/attest.js",
+    "/home/ubuntu/bitcert-attest/homepage/serve.json"
+   ],
+   "tech": "Express 5 + cheerio server-side i18n (?lang= and a lang cookie); express.static for /assets, /css, /js",
+   "notes": "Binds 0.0.0.0 with trust proxy on; no CSP or helmet. Assets are 73 MB, including 8-17 MB autoplay videos on legacy pages. serve.json is legacy and unused by Express. README and start.sh are stale (port 3010). ATTEST_API_URL points at core :8787. Separate process from core, same box."
+  },
+  {
+   "name": "Demo bank (demo-bank, :3200)",
+   "role": "Demonstration of a bank's own integration: signed anchoring through a docker attest-sign container and an openssl 'HSM', plus a remittance adapter",
+   "files": [
+    "/home/ubuntu/bitcert-attest/demo-bank/server.mjs",
+    "/home/ubuntu/bitcert-attest/demo-bank/remit.mjs",
+    "/home/ubuntu/bitcert-attest/demo-bank/public/"
+   ],
+   "tech": "node:http, vendored verifier, JSON files (data/records.json, data/remit-cases.json)",
+   "notes": "Not on the product path. Uses only REST with a bearer key, plus a console login when subscribing. Its browser refresh fans out to core GET /v1/settlements/:id."
+  },
+  {
+   "name": "Demo customers portal (demo-customers, :3400)",
+   "role": "Three customer-type tabs (document issuer, exchange PoR, bank remittance) written against the published SDKs",
+   "files": [
+    "/home/ubuntu/bitcert-attest/demo-customers/server.mjs",
+    "/home/ubuntu/bitcert-attest/demo-customers/public/"
+   ],
+   "tech": "node:http; imports attest-sign, attest-verify, attest-por and attest-remit package sources",
+   "notes": "JSON books rewritten whole on every save. The browser refreshes every 2.5 s with 3 fetches, all answered from memory (no core call)."
+  },
+  {
+   "name": "Partner simulators UI (demo-partners/public, :3300)",
+   "role": "Dashboard for the simulated receiving side (BFI, SG payout bank, settlement entity)",
+   "files": [
+    "/home/ubuntu/bitcert-attest/demo-partners/public/index.html"
+   ],
+   "tech": "Static HTML/JS served by demo-partners/server.mjs",
+   "notes": "A sandbox stand-in for real counterparties. Refreshes every 2 s with 3 fetches; wallet/state calls anvil balanceOf."
+  },
+  {
+   "name": "Settlement-chain explorer (Otterscan + nginx :5106)",
+   "role": "Block explorer for the anvil settlement chain (owned by the chain/infra reader)",
+   "files": [
+    "/home/ubuntu/bitcert-attest/evm-explorer/nginx.conf",
+    "/home/ubuntu/bitcert-attest/evm-explorer/up.sh"
+   ],
+   "tech": "nginx inside a docker container, gzip_static, expires max/30d",
+   "notes": "The only nginx on the box; it fronts nothing else. No host-level nginx, Caddy, HAProxy or Traefik."
+  }
+ ],
+ "flows": [
+  {
+   "name": "Console cold load and boot",
+   "sync_or_async": "sync from the browser; static and API share core's event loop",
+   "steps": [
+    "GET / -> static.ts:61-70 redirectRoot sends 302 to /console/ (no-store)",
+    "GET /console/ -> Router.match misses ~69 routes (server.ts:155-188) -> fallback routes.ts:112 -> serveStatic static.ts:76-166 -> index.html (2 statSync + stream, no-cache, CSP)",
+    "Browser loads console.css, then app.js -> api/i18n/p256/por -> attest-verify index + 8 PoR SDK modules -> 11 verifier modules: 27 modules in 4 waves, every one a full 200",
+    "app.ts:3774-3778: GET /v1/console/me (6 reads), then GET /v1/console/attestations (4 reads + 1 audit INSERT)",
+    "renderDashboard app.ts:3056-3091 renders the section with innerHTML and runs its loader once: home = products + dashboard; remit = products, then ledger page + manifests; por = products + snapshots; products = products + issuer-keys (+ settlements?limit=1); integrate = keys + issuer-keys + products; audit = audit page",
+    "Section changes are hashchange re-renders; boot data is not refetched (the records screen shows boot-time data until reload)"
+   ]
+  },
+  {
+   "name": "Settlement ledger, search, load more, export",
+   "sync_or_async": "sync request/response, keyset-paged",
+   "steps": [
+    "loadRemit app.ts:2018: GET /v1/console/products (11 reads)",
+    "fetchRemitPage app.ts:1948 runs in parallel with GET /v1/manifests/daily (LIMIT 30 + up to 30 N+1 lookups)",
+    "Server: remit/store.ts:141-216 COUNT(*) on the filtered set + SELECT * LIMIT 26; remit/routes.ts:441-456 one attestation SELECT per row; 1 audit INSERT",
+    "Search input debounced 300 ms (app.ts:2055-2065) resets to page 1: LIKE '%q%' plus 3 EXISTS(JSON_EXTRACT LIKE) over remit_events",
+    "'Load more' appends the next cursor page (COUNT recomputed); request-sequence tokens drop stale replies",
+    "Export: up to 50 sequential pages of 100 until 5,000 rows (app.ts:1753-1779), CSV built in memory, Blob download"
+   ]
+  },
+  {
+   "name": "Live settlement tracker",
+   "sync_or_async": "client polling, 2.5 s, one loop per open row",
+   "steps": [
+    "Clicking 추적 on a row -> wireRemitRows app.ts:1915-1929 -> followSettlement(gen) app.ts:1863",
+    "GET /v1/settlements/:id (remit/routes.ts:467-497): 2 auth + payment + attestation + all events (payload + signature) + audit INSERT",
+    "Client compares a stamp (app.ts:1884). On change it repaints (paintTracker app.ts:1806-1838) and calls GET /v1/settlements/:id/chain (1 EVM RPC)",
+    "Repeats every 2,500 ms (app.ts:1868) until the row is closed, the payment settles, or 240 polls (10 min); hidden tabs keep polling"
+   ]
+  },
+  {
+   "name": "Console digest anchoring",
+   "sync_or_async": "sync",
+   "steps": [
+    "File chosen -> digestFile api.ts:635: whole file into memory -> crypto.subtle if in a secure context, otherwise pure-JS SHA-256 (the case on this box, which is plain HTTP)",
+    "POST /v1/console/attestations {sha256} (console.ts:416-432): auth + quota COUNT + issue + quota COUNT + audit",
+    "afterAnchor app.ts:3542-3549: GET /v1/console/attestations + GET /v1/console/me, then a full section re-render"
+   ]
+  },
+  {
+   "name": "Console PoR anchoring (tree built in the browser)",
+   "sync_or_async": "client compute, then sync submit, then 2 s polling",
+   "steps": [
+    "initPor por.ts:249: GET /v1/console/products; loadHistory: GET /v1/por/snapshots (LIMIT 100 + N+1)",
+    "anchor() por.ts:670-727: file.arrayBuffer -> UTF-8 decode -> asset detection -> CsvLedgerReader in 1 MiB chunks -> treeSums guard (≤100,000 accounts, ≤4,000,000 sums) -> buildPorTree on the UI thread -> statement",
+    "POST /v1/console/institutions/:id/console-key; P-256 signature in JS; POST /v1/por/snapshots (+ POST openings when spot-checked)",
+    "watchAnchor por.ts:779-795: GET /v1/por/snapshots/:id every 2 s, up to 90 times"
+   ]
+  },
+  {
+   "name": "Public PoR verification (/playground/por.html)",
+   "sync_or_async": "sync",
+   "steps": [
+    "18 static requests (~114 KB) from core, no-cache",
+    "User loads proof.json locally; 'fetch' -> GET /v1/public/por/snapshots/:id (por/routes.ts:479-500: snapshot row + 4 bundle SELECTs + institution; anonymous, no cache headers)",
+    "verifyP256, verifyPorInclusion, commitment recompute and verifyBundle all run in the browser"
+   ]
+  },
+  {
+   "name": "Free-tier anchor (Playground and homepage demo)",
+   "sync_or_async": "POST, then client polling",
+   "steps": [
+    "GET /v1/meta on load; the file is hashed in the browser",
+    "POST /v1/public/anchors {sha256} (10/h per address, 500/h globally; CORS *)",
+    "Playground polls GET /v1/public/anchors/:id at 1->5 s with no maximum (anchor.ts:102-116); the homepage polls every 3 s, up to 60 times (js/attest.js:176-190)",
+    "Bundle download; the verify panel runs offline"
+   ]
+  },
+  {
+   "name": "Homepage page render",
+   "sync_or_async": "sync (Express)",
+   "steps": [
+    "serveTranslatedHTML server.js:61-142: existsSync + readFileSync of the page",
+    "cheerio.load; getTranslations() and getSiteConfig() re-read and JSON.parse their files on every request",
+    "preparePage lib/site.js:121-202 reads 5 partials synchronously and rewrites links, meta and i18n across the whole DOM",
+    "res.vary('Cookie'); res.send($.html()); assets come from express.static (ETag)"
+   ]
+  },
+  {
+   "name": "Developer Hub page view",
+   "sync_or_async": "sync",
+   "steps": [
+    "GET /docs/ + docs.css + 4 modules from core",
+    "GET /v1/meta for the badge (failures are silent)",
+    "GET content/*.md or openapi.json (373 KB) per page, rendered in the browser and cached in tab memory"
+   ]
+  }
+ ],
+ "per_txn_costs": [
+  {
+   "operation": "Console cold page load: static part (any screen)",
+   "db_reads": "0",
+   "db_writes": "0",
+   "external_calls": "0",
+   "crypto_ops": "0",
+   "sync_cpu_notes": "30 static requests: index.html 5,264 B, console.css 64,978 B, favicon 2,406 B, 27 JS modules 437,731 B. Per file: linear match over ~69 routes, up to 4 URL parses, path.resolve, 2 statSync on the event loop, createReadStream on the libuv threadpool. No validators or compression, so every reload, new tab or language switch repeats all of it.",
+   "evidence": [
+    "apps/core/src/http/static.ts:76-166",
+    "apps/core/src/http/server.ts:155-188",
+    "Measured: static import graph of apps/console/dist/app.js = 27 modules, 4 levels"
+   ]
+  },
+  {
+   "operation": "Console boot API calls (every cold load)",
+   "db_reads": "10. GET /me: 2 auth + orgs + api_keys + issuer_keys + month quota COUNT. GET /attestations: 2 auth + LEFT JOIN batches LIMIT 50 + month quota COUNT.",
+   "db_writes": "1 (audit_log INSERT for GET /v1/console/attestations, which is not a silent read)",
+   "external_calls": "0",
+   "crypto_ops": "SHA-256 of the session token per request",
+   "sync_cpu_notes": "Replies are pretty-printed JSON (server.ts:263).",
+   "evidence": [
+    "apps/console/src/app.ts:3774-3778",
+    "apps/core/src/http/console.ts:182-227,400-405",
+    "apps/core/src/account.ts:183-195",
+    "apps/core/src/audit.ts:92-99"
+   ]
+  },
+  {
+   "operation": "Console home dashboard view",
+   "db_reads": "~38. GET /v1/console/products: 11 (2 auth + subscriptions + 2 institutions + 6 month-to-date COUNTs, awaited one after another). GET /v1/console/dashboard: 26-27 (2 auth + 24-25 statements; ~8 whole-org aggregates; 13 feed fields the UI no longer renders).",
+   "db_writes": "0 (both are silent reads)",
+   "external_calls": "0",
+   "crypto_ops": "0",
+   "sync_cpu_notes": "Server JSON.parses ≤10 snapshot rows and averages ≤100 pairs twice. Client renders once; no refresh timer.",
+   "evidence": [
+    "apps/console/src/app.ts:2648-2674",
+    "apps/core/src/http/console.ts:685-928",
+    "apps/core/src/remit/routes.ts:109-169"
+   ]
+  },
+  {
+   "operation": "Settlement ledger page (25 rows), Load more, or one search keystroke",
+   "db_reads": "≈29: 2 auth + filtered COUNT(*) + SELECT * LIMIT 26 + ≤25 attestation SELECTs (N+1). With q, both the COUNT and the page query evaluate LIKE '%q%' on 3 columns plus 3 EXISTS(JSON_EXTRACT ... LIKE) sub-queries over remit_events for every payment scanned.",
+   "db_writes": "1 audit INSERT",
+   "external_calls": "0",
+   "crypto_ops": "0",
+   "sync_cpu_notes": "Client appends with insertAdjacentHTML and re-scans every row button to wire new ones.",
+   "evidence": [
+    "apps/console/src/app.ts:1948-2016",
+    "apps/core/src/remit/store.ts:141-216",
+    "apps/core/src/remit/routes.ts:431-465"
+   ]
+  },
+  {
+   "operation": "Settlement CSV export (≤5,000 rows)",
+   "db_reads": "≤50 sequential requests × (2 auth + COUNT + page + ≤100 attestation SELECTs) ≈ ≤5,200",
+   "db_writes": "≤50 audit INSERTs",
+   "external_calls": "0",
+   "crypto_ops": "0",
+   "sync_cpu_notes": "Client builds the whole CSV string in memory before the Blob download.",
+   "evidence": [
+    "apps/console/src/app.ts:1751-1793"
+   ]
+  },
+  {
+   "operation": "Live tracker poll (per open row, every 2.5 s, up to 240)",
+   "db_reads": "5 (2 auth + payment + attestation + all events with payload and signature)",
+   "db_writes": "1 audit INSERT per poll",
+   "external_calls": "Only when something changed: GET /v1/settlements/:id/chain = 1 EVM JSON-RPC (+3 reads, +1 audit INSERT)",
+   "crypto_ops": "0 server-side",
+   "sync_cpu_notes": "Server JSON.parses every event's payload and signature and pretty-prints the whole log on every poll, even when nothing changed. 0.4 req/s per open row.",
+   "evidence": [
+    "apps/console/src/app.ts:1852-1893",
+    "apps/core/src/remit/routes.ts:467-514"
+   ]
+  },
+  {
+   "operation": "Console digest anchor",
+   "db_reads": "POST: 2 auth + 2 quota COUNTs + issue (backend-owned). Then GET /attestations (4) + GET /me (6).",
+   "db_writes": "issue (backend-owned) + 2 audit INSERTs",
+   "external_calls": "0 from this layer",
+   "crypto_ops": "Client: SHA-256 of the whole file (pure JS here, because the box is plain HTTP)",
+   "sync_cpu_notes": "Client reads the whole file, copies it into a padded buffer (~2x file size) and hashes on the main thread; full re-render afterwards.",
+   "evidence": [
+    "apps/console/src/app.ts:3407-3455,3542-3549",
+    "apps/console/src/api.ts:635-662",
+    "apps/core/src/http/console.ts:416-432"
+   ]
+  },
+  {
+   "operation": "Console PoR anchoring (tree built in the browser)",
+   "db_reads": "products 11 + history (2 auth + LIMIT 100 + ≤100 attestation SELECTs) + ≤90 watch polls × (2 auth + snapshot + attestation)",
+   "db_writes": "1 audit INSERT per keyed call (history, each watch poll) + snapshot and attestation writes (backend-owned)",
+   "external_calls": "0 from this layer",
+   "crypto_ops": "Client: SHA-256 per leaf and node of the sum tree, SHA-256 of the file, one P-256 signature in JS. Server: P-256 verify (backend-owned).",
+   "sync_cpu_notes": "CSV is parsed in 1 MiB chunks, but buildPorTree runs on the UI thread; capped at 100,000 accounts / 4,000,000 sums (~7 s frozen at the cap, per the code comment).",
+   "evidence": [
+    "apps/console/src/por.ts:96-106,670-795",
+    "apps/core/src/por/routes.ts:452-465"
+   ]
+  },
+  {
+   "operation": "Console sign-in",
+   "db_reads": "5 (account by email + overview's 4)",
+   "db_writes": "3 (session INSERT, last_login UPDATE, audit INSERT)",
+   "external_calls": "0",
+   "crypto_ops": "scryptSync N=32,768, r=8 (32 MiB)",
+   "sync_cpu_notes": "Blocks the entire core event loop (API, static files, workers) for 'a few hundred milliseconds' (code comment).",
+   "evidence": [
+    "apps/core/src/http/console.ts:366-386",
+    "apps/core/src/account.ts:41-46,101"
+   ]
+  },
+  {
+   "operation": "Public PoR verification (/playground/por.html)",
+   "db_reads": "~6 per snapshot fetch (row + merkle_proofs + batches + anchor_txs + attestation + institution)",
+   "db_writes": "0",
+   "external_calls": "0",
+   "crypto_ops": "All in the browser: P-256 verify, Merkle-sum path, SHA-256s, bundle checks",
+   "sync_cpu_notes": "18 static requests (~114 KB) plus one anonymous, uncached JSON reply.",
+   "evidence": [
+    "apps/playground/src/por.ts:257-265",
+    "apps/core/src/por/routes.ts:479-500",
+    "apps/core/src/service.ts:636-700"
+   ]
+  },
+  {
+   "operation": "Free-tier anchor (Playground or homepage demo)",
+   "db_reads": "Status poll: 1 SELECT each, unaudited and unlimited; 0.2-1 req/s per visitor",
+   "db_writes": "POST (backend-owned), capped at 10/h per address and 500/h globally",
+   "external_calls": "0",
+   "crypto_ops": "Client SHA-256 (the Playground always uses pure JS; the homepage uses crypto.subtle when available)",
+   "sync_cpu_notes": "Client hashes the whole file on the main thread.",
+   "evidence": [
+    "apps/playground/src/anchor.ts:102-197",
+    "homepage/js/attest.js:86-190",
+    "apps/core/src/http/public.ts:154-164"
+   ]
+  },
+  {
+   "operation": "Homepage HTML page view (Express :3100)",
+   "db_reads": "0",
+   "db_writes": "0",
+   "external_calls": "0 server-side (legacy pages make the browser fetch Google Fonts and jsdelivr Swiper)",
+   "crypto_ops": "0",
+   "sync_cpu_notes": "~9 synchronous file reads (page, translations.json 102,891 B, site_config.json, 5 partials), 2 JSON.parse, cheerio parse, several whole-DOM passes and a serialise; no render cache.",
+   "evidence": [
+    "homepage/server.js:61-142",
+    "homepage/lib/site.js:121-202"
+   ]
+  },
+  {
+   "operation": "Developer Hub page view",
+   "db_reads": "0",
+   "db_writes": "0",
+   "external_calls": "0",
+   "crypto_ops": "0",
+   "sync_cpu_notes": "index + docs.css 19,195 B + 4 modules 43,336 B + one Markdown file (5-41 KB) or openapi.json 372,899 B, uncompressed; GET /v1/meta.",
+   "evidence": [
+    "apps/docs/src/app.ts:120-145,420-440"
+   ]
+  }
+ ],
+ "capacity_findings": [
+  {
+   "id": "FE-01",
+   "title": "Console screens run whole-org aggregates on every view, on the shared 10-connection pool",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "affects": "Console dashboard, subscriptions, boot; transaction-path latency through pool contention",
+   "claim": "The landing dashboard issues 24-25 statements per view (plus 2 for auth). About 8 aggregate every row the org owns (status != 'confirmed', GROUP BY status, substr(created_at,1,10) = ?), and 13 compute fields the console no longer renders: the attention counts and items, signed counts, webhooks and the latest manifest. GET /v1/console/products adds 6 month-to-date COUNT(*)s awaited one after another, and 5 of the 8 screens call it. Every cold load runs the month quota COUNT twice. The only attestations index is (org_id, created_at), so counts filtered on product or status read every row in range. These queries share the 10-connection pool with the transaction path, with no statement timeout. The browser fetch has no timeout either, so an impatient reload re-issues the same aggregates while the abandoned ones keep running.",
+   "evidence": [
+    "apps/core/src/http/console.ts:704 num(`SELECT COUNT(*) AS n FROM attestations WHERE org_id = ? AND status != 'confirmed'`, org),",
+    "apps/core/src/http/console.ts:709-710 `SELECT status, COUNT(*) AS n FROM attestations WHERE org_id = ? AND product = 'attest' GROUP BY status`",
+    "apps/core/src/http/console.ts:752 sumRow('substr(created_at, 1, 10) = ?', today),",
+    "apps/core/src/remit/routes.ts:131-133 anchorsBy = (product) => count('SELECT COUNT(*) AS n FROM attestations WHERE org_id = ? AND created_at >= ? AND product = ?', ...) — called 3x, plus 2 more month counts at 144-153",
+    "apps/core/src/http/console.ts:187 \"SELECT COUNT(*) AS n FROM attestations WHERE org_id = ? AND created_at >= ? AND product = 'attest'\" — quota; both /me and /attestations run it at every boot (app.ts:3776-3777)",
+    "apps/console/src/app.ts never reads dash.attention, attest.signed, remit.webhooks or manifest_latest (grep), yet console.ts:694-705 and 837-865 compute 9 attention statements, 715-720 two signed counts, 774-779 manifest + webhooks",
+    "apps/core/src/db.ts:943 connectionLimit: 10,  (waitForConnections: true; no queueLimit, no max_execution_time)",
+    "apps/console/src/api.ts:87-93 res = await fetch(`${BASE}${path}`, { method, credentials: 'include', ... }) — no AbortSignal or timeout"
+   ],
+   "quantification": "Home view ≈ 38 reads (products 11 + dashboard 27), on top of a boot of 10 reads + 1 write. One org sending 1 tx/s holds ~2.6M rows per month, and the all-time aggregates grow without bound. At 100k rows per org a view takes roughly sub-second to seconds; at 10M rows per org each whole-org aggregate reads ~10M rows, i.e. tens of seconds per view (estimate, not measured). One dashboard Promise.all can hold 5 of the 10 pool connections.",
+   "fix": "Maintain per-org counters/rollups on write (org × product × status × day; month usage; settlement state buckets) and read the screens from them. Delete the 13 unused statements. Bound every window. Cache dashboard and products per org for 10-30 s. Give console reads their own small pool or a read replica with max_execution_time. Add a client fetch timeout.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-02",
+   "title": "Settlement ledger recomputes COUNT(*) on every page, and search cannot use an index",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "affects": "Console 송금 ledger, search box, Load more, CSV export",
+   "claim": "Every ledger page, every 'Load more' and every export page recomputes COUNT(*) over the filtered set. A search term becomes UPPER(col) LIKE '%q%' on three columns plus three EXISTS sub-queries running JSON_EXTRACT(...) LIKE over remit_events; no index can serve that, and it fires after only a 300 ms debounce per keystroke. Each returned row then triggers its own attestation SELECT (N+1). The export walks up to 50 pages one after another.",
+   "evidence": [
+    "apps/core/src/remit/store.ts:169-176 (UPPER(id) LIKE ? ESCAPE '!' OR UPPER(quote_id) LIKE ? ... OR EXISTS (SELECT 1 FROM remit_events e WHERE e.payment_id = remit_payments.id AND e.type = 'PAYOUT_COMPLETED' AND UPPER(COALESCE(JSON_EXTRACT(...)))",
+    "apps/core/src/remit/store.ts:194-196 const total = ... `SELECT COUNT(*) AS n FROM remit_payments WHERE ${where.join(' AND ')}` — runs for every page, before the cursor clause",
+    "apps/core/src/remit/routes.ts:451-452 attestation: p.attestation_id ? { id: p.attestation_id, status: (await d.svc.get(orgId, p.attestation_id))?.status ?? 'unknown' } : null,",
+    "apps/console/src/app.ts:2057-2064 debounce = setTimeout(() => { ... remitView.q = qInput.value.trim(); ... void fetchRemitPage(true) ... }, 300);",
+    "apps/console/src/app.ts:1751 const EXPORT_MAX = 5000;  app.ts:1765-1769 await api.settlements({ ...query, ...(cursor ? { cursor } : {}), limit: 100 });"
+   ],
+   "quantification": "A page ≈ 30 statements (2 auth + COUNT + SELECT * LIMIT 26 + ≤25 N+1 + audit INSERT). A search costs O(payments × events per payment), twice (COUNT and page). Demo settlements carry 5-16 events (median 12), so 10M payments means ~120M event probes per keystroke. An export is ≤50 requests ≈ ≤5,200 reads + 50 audit writes.",
+   "fix": "Add an indexed identifier table or columns (payment_id, quote_id, chain_tx, UETR, instruction and end-to-end ids, bank refs) with exact or prefix match. Drop the per-page total, or compute it once per filter and cache it or make it approximate. Join attestation status into the page query. Make the export a server-side job writing to object storage.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-03",
+   "title": "Records screen and the keyed list API have no pagination",
+   "severity": "major",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "affects": "Console 앵커링 기록 screen; GET /v1/attestations integrators",
+   "claim": "The records screen shows only the newest 50 attestations fetched at boot: no cursor, no search, no date filter, and no refetch on navigation. GET /v1/attestations stops at 500 with no cursor. Past 500 records, an org cannot enumerate its own records from either the console or the API.",
+   "evidence": [
+    "apps/console/src/api.ts:313-314 attestations: (): Promise<{ data: Attestation[]; quota: Quota }> => send('GET', '/v1/console/attestations'),",
+    "apps/core/src/http/console.ts:403 data: await d.svc.list(account.org_id, pageLimit(ctx.query.get('limit'), 50, 500)),",
+    "apps/core/src/service.ts:366-369 SELECT a.*, b.anchor_txid ... WHERE a.org_id = ? ORDER BY a.created_at DESC LIMIT ?  .all(orgId, Math.min(limit, 500))",
+    "apps/core/src/http/routes.ts:296 return { data: (await d.svc.list(orgId, pageLimit(ctx.query.get('limit'), 50, 500))).map(publicAttestation) };  — no cursor parameter",
+    "apps/console/src/app.ts:3075 if (here === 'records') renderAttestations();  — renders the boot-time list; never refetched"
+   ],
+   "quantification": "An org producing 1 tx/s passes 500 records in ~8 minutes. At 100k or 10M records, over 99.9% of history cannot be reached from the UI or the API. The query itself stays cheap (index (org_id, created_at), LIMIT 50).",
+   "fix": "Add keyset cursor (created_at, id), status/date filters and exact-digest lookup to both endpoints, and give the console 'Load more' the way the ledger has it.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-04",
+   "title": "No TLS, reverse proxy or CDN in front of any surface",
+   "severity": "major",
+   "kind": "operational",
+   "bites_at_tier": "n/a",
+   "affects": "Every surface: console sessions, API keys in transit, browser crypto, HTTP/2",
+   "claim": "Every surface is plain HTTP straight to Node on all interfaces: core (HOST binds all interfaces; COOKIE_SECURE and TRUST_PROXY unset), the homepage (0.0.0.0) and the demos. As a result the session cookie is not Secure, the browser withholds crypto.subtle and the async clipboard (forcing pure-JS hashing), and there is no HTTP/2 to flatten the module waterfall. No host-level proxy exists; the only nginx runs inside the Otterscan container on :5106.",
+   "evidence": [
+    "apps/core/src/config.ts:349 cookieSecure: str('COOKIE_SECURE', '') === '1',  — COOKIE_SECURE and TRUST_PROXY keys are absent from apps/core/.env; HOST binds all interfaces (classified, value not printed)",
+    "apps/console/build.mjs:17-19 the console is reached over plain http at an IP address, where the browser withholds `crypto.subtle`",
+    "apps/console/src/api.ts:656-661 if (crypto?.subtle) { ... } const { sha256 } = await import('./vendor/sha256.ts'); return hex(sha256(bytes));",
+    "evm-explorer/nginx.conf:6-9 server { listen 5106; server_name _; gzip_static on;  — the only nginx (inside the explorer container); /etc/nginx, /etc/caddy, /etc/haproxy, /etc/traefik are absent",
+    "homepage/server.js:249 app.listen(PORT, process.env.HOST || '0.0.0.0', error => {"
+   ],
+   "quantification": "Volume-independent; this blocks going to production. It also leaves a 30-file module graph on HTTP/1.1 (6 connections per origin, 4 round-trip waves).",
+   "fix": "Put a TLS-terminating proxy (nginx, Caddy or a cloud LB) in front with HTTP/2, gzip/br and HSTS. Set COOKIE_SECURE=1 and TRUST_PROXY=1, and bind the Node processes to loopback.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-05",
+   "title": "Static files are served by the transaction process with no caching or compression",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "n/a",
+   "affects": "Console, Playground, Developer Hub; core event loop during public spikes",
+   "claim": "The core API process serves the Console, Playground and Developer Hub itself, as the router's fallback. Each file costs two synchronous statSync calls and a stream. Responses carry Cache-Control: no-cache with no ETag or Last-Modified, so a revalidation is always a full 200; there is no gzip or brotli, no Range and no Content-Length. A cold console load is 30 requests and ~510 KB uncompressed, repeated in full on every reload, new tab or language switch. All of it runs on the same event loop as the API, BatchWorker and RemitWorker.",
+   "evidence": [
+    "apps/core/src/http/static.ts:126 if (statSync(target).isDirectory()) {   static.ts:137 statSync(target);",
+    "apps/core/src/http/static.ts:149 'cache-control': 'no-cache',  — no etag, last-modified, content-encoding or range anywhere in apps/core/src (grep)",
+    "apps/core/src/http/static.ts:162-164 const stream = createReadStream(target); stream.on('error', () => { res.destroy(); }); stream.pipe(res);",
+    "apps/core/src/http/routes.ts:112 r.fallback((req, res) => redirectRoot(landing, req, res) || mounts.some((m) => serveStatic(m, req, res)));",
+    "attest/deploy/ecosystem.config.cjs:36-50 a single stonehash-attest-core entry with no instances/exec_mode; apps/core/src/main.ts:2 'One process: HTTP server plus the batch worker on a timer.'",
+    "Measured by walking console/dist imports: 27 modules, 437,731 B JS, 4 levels; plus index.html 5,264 B and console.css 64,978 B"
+   ],
+   "quantification": "Console cold load: 30 static requests + 2 API calls. PoR verify page: 18 requests, ~114 KB. Hub reference page: openapi.json 372,899 B uncompressed. This traffic scales with page views, not transactions: negligible for operators, but it competes with the API during public spikes.",
+   "fix": "Serve static files from the proxy or a CDN and unset PLAYGROUND_DIR, DOCS_DIR and CONSOLE_DIR so core serves only the API. At minimum add ETag/Last-Modified with 304 and precompressed .gz/.br. Give immutable versioned assets a long max-age.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-06",
+   "title": "Pages must stay on the API's origin; the host split in comments would break",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "n/a",
+   "affects": "Any CDN or separate-host plan for the console and public pages",
+   "claim": "Comments describe production as separate hosts (console on app-sandbox., API on api-sandbox.), and that would break as built. The static CSP pins connect-src 'self'. CORS exists only for /v1/public/anchors*. The console authenticates with a cookie and posts JSON, which needs a CORS preflight, and no OPTIONS route exists for /v1/console/*. The public PoR page hard-codes a root-relative path. A CDN or static host must therefore keep one origin and route /v1/* to core; the alternative is building credentialed CORS and widening the CSP first.",
+   "evidence": [
+    "apps/core/src/http/static.ts:152-154 \"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\"",
+    "apps/core/src/http/public.ts:73-79 'CORS for this surface only. ... Scoped to the free-tier paths' — the only access-control-* headers in apps/core/src",
+    "apps/console/public/index.html:10-14 'production sets it to the api host, because the console is served from `app-sandbox.` while the API answers on `api-sandbox.`' <meta name=\"attest-api\" content=\"\">",
+    "apps/playground/src/por.ts:261 const res = await fetch(`/v1/public/por/snapshots/${encodeURIComponent(id)}`);  — root-relative, no apiBase()"
+   ],
+   "quantification": "Applies at every tier; it decides the shape of the CDN design.",
+   "fix": "Use path routing on one origin (CDN or proxy: /console/*, /playground/*, /docs/* from static storage; /v1/* to core). Only if separate hosts are truly needed: add credentialed CORS for the console routes, list the API host in connect-src, and use apiBase() in por.ts.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-07",
+   "title": "Console sign-in blocks the whole core process",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T2",
+   "affects": "All core traffic during any console sign-up or sign-in",
+   "claim": "Sign-up and sign-in hash the password with scryptSync (N=32,768, r=8, 32 MiB) on the main thread. The code puts that at a few hundred milliseconds, during which no API request, static file or worker tick is served.",
+   "evidence": [
+    "apps/core/src/account.ts:41-46 'N=2^15 with r=8 is a few hundred milliseconds here' const SCRYPT = { N: 32_768, r: 8, p: 1, keylen: 32 } as const;",
+    "apps/core/src/account.ts:101 actual = scryptSync(password, Buffer.from(saltB64!, 'base64'), expected.length, { N, r, p, maxmem: maxmem(N, r) });  (hashPassword also uses scryptSync, :79)",
+    "apps/core/src/http/console.ts:376 && !found.disabled_at && verifyPassword(password, found.password_hash);"
+   ],
+   "quantification": "At 100 tx/s a 300 ms stall queues ~30 requests. The limiter allows 20 attempts per 15 min per address, so 10 addresses can impose ~200 stalls (~60 s of blocked loop) per 15 min. The duration comes from the code comment, not a measurement.",
+   "fix": "Use async crypto.scrypt (libuv threadpool) or a worker_thread, and keep the per-address limiter.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-08",
+   "title": "Live tracker re-fetches the full event log every 2.5 s and writes an audit row per poll",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "affects": "Console settlement tracker, audit_log volume and usefulness, MySQL",
+   "claim": "Each open 추적 row runs its own loop: GET /v1/settlements/:id every 2.5 s, up to 240 polls (10 min). Polling does not pause in hidden tabs, and nothing limits how many rows are followed. Each poll returns the whole signed event log (payloads and signatures, pretty-printed) even when nothing changed; the client only compares a stamp. Because the path is not in SILENT_READS, every poll inserts an audit_log row.",
+   "evidence": [
+    "apps/console/src/app.ts:1852-1853 const FOLLOW_EVERY_MS = 2_500; const FOLLOW_MAX = 240;",
+    "apps/console/src/app.ts:1868 window.setTimeout(() => { void followSettlement(list, row, id, gen, polls + 1); }, FOLLOW_EVERY_MS);  — one loop per open row; no document.hidden check in apps/console/src",
+    "apps/core/src/audit.ts:92-96 SILENT_READS = new Set(['/healthz','/readyz','/v1/meta','/v1/console/audit','/v1/console/me','/v1/console/dashboard','/v1/console/products','/v1/console/sandbox'])",
+    "apps/core/src/remit/routes.ts:491-494 events: (await store.events(p.id)).map((e) => ({ seq: e.seq, type: e.type, issuer: e.issuer, at: e.created_at, payload: JSON.parse(e.payload), sig: ... })),",
+    "apps/console/src/app.ts:1884 const stamp = [d2.state, d2.events.length, d2.attestation?.status ?? '', d2.chain_tx ?? '', d2.evidence_level ?? '', live].join('|');"
+   ],
+   "quantification": "Per open row: 0.4 req/s = 2.0 reads/s + 0.4 audit INSERTs/s, i.e. 240 audit rows per 10-minute follow. 20 operators with 3 open rows each = 24 req/s and 24 audit writes/s (~2M audit rows/day), more than the T1 transaction rate itself. The PoR anchor watch adds 0.5 req/s for ≤3 min per submission (por.ts:780-781).",
+   "fix": "Use SSE, or a conditional GET (ETag/If-None-Match -> 304) or ?since_seq= deltas. Pause on visibilitychange and cap concurrent follows. Do not audit polling reads (or audit one 'viewed' per follow).",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-09",
+   "title": "Public PoR verification is served uncached from the core process",
+   "severity": "moderate",
+   "kind": "structural",
+   "bites_at_tier": "n/a",
+   "affects": "/playground/por.html and GET /v1/public/por/snapshots/:id: the page an exchange sends all its users to",
+   "claim": "Both the page and the snapshot it fetches come from the core process uncached: no-cache static headers, and an anonymous GET that runs ~6 SELECTs per verification. Yet a published snapshot and its anchor bundle never change once confirmed. Publishing a PoR is a classic spike event.",
+   "evidence": [
+    "apps/playground/src/por.ts:257-262 $('#fetchSnap').addEventListener('click', async () => { ... const res = await fetch(`/v1/public/por/snapshots/${encodeURIComponent(id)}`);",
+    "apps/core/src/por/routes.ts:479-486 r.get('/v1/public/por/snapshots/:id', async (ctx) => { const s = await row(ctx.params.id!); ... bundle = await d.svc.exportBundle(s.org_id, s.attestation_id);",
+    "apps/core/src/service.ts:663-669 SELECT * FROM merkle_proofs WHERE attestation_id = ? / SELECT merkle_root FROM batches WHERE id = ? / SELECT * FROM anchor_txs WHERE batch_id = ?",
+    "apps/core/src/http/server.ts:264-268 replies set only content-type and content-length — no Cache-Control on API JSON"
+   ],
+   "quantification": "Per verification: 18 static requests (~114 KB) + 1 API call (~6 reads). Illustration: 1M exchange users verifying within one hour ≈ 280 page loads/s ≈ 5,000 static req/s + ~1,700 reads/s on the single core process.",
+   "fix": "Send Cache-Control: public, max-age, immutable for confirmed snapshots and bundles and put a CDN in front. Better still, publish the snapshot JSON as a static object when it is anchored.",
+   "confidence": "medium"
+  },
+  {
+   "id": "FE-10",
+   "title": "The console exists only when STONEHASH_ENV=test",
+   "severity": "moderate",
+   "kind": "configuration",
+   "bites_at_tier": "n/a",
+   "affects": "Go-live plan for the operator UI",
+   "claim": "Every console route refuses unless env=test. So does the session fallback that lets the console call /v1/settlements and /v1/por. A 'live' deployment has no operator UI at all. This box runs env=test as its production, so any scale plan for the console either keeps env=test or must lift these gates first.",
+   "evidence": [
+    "apps/core/src/http/console.ts:148-153 if (d.cfg.env !== 'test') { throw new HttpError(403, 'not_available', 'self-serve console accounts are sandbox-only; production access is provisioned per contract');",
+    "apps/core/src/http/routes.ts:69 if (d.cfg.env === 'test' && d.cfg.console.enabled) {  — session fallback for keyed routes, test only",
+    "apps/core/src/http/routes.ts:148 if (!(d.cfg.env === 'test' && d.cfg.console.enabled)) {"
+   ],
+   "quantification": "Binary: no console under env=live.",
+   "fix": "Decide explicitly. Either keep env=test as production (and accept its regtest-era defaults) or gate the console on a separate flag from env.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-11",
+   "title": "Builds delete and rebuild live static directories in place",
+   "severity": "moderate",
+   "kind": "operational",
+   "bites_at_tier": "n/a",
+   "affects": "Console, Playground and Hub availability during any build (other sessions build on this box)",
+   "claim": "Each app's build deletes its dist folder and rebuilds it in place while core serves that folder. Requests in that window get 404s or cut streams, which static.ts itself acknowledges, and a console loading mid-build can mix module versions. Every build is an unannounced deploy.",
+   "evidence": [
+    "apps/console/build.mjs:108 await rm(DIST, { recursive: true, force: true });  (same in apps/docs/build.mjs:147 and apps/playground/build.mjs:89)",
+    "apps/core/src/http/static.ts:159-161 'Stat and read are two moments: a rebuild between them removes the file, and an unhandled stream error would end the process.'"
+   ],
+   "quantification": "Downtime lasts as long as the tsc pass and copy (seconds) per build.",
+   "fix": "Build into a versioned folder and swap a symlink (or the *_DIR setting) atomically; serve immutable versioned asset paths.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-12",
+   "title": "The verify-without-us pages go down with the API process",
+   "severity": "moderate",
+   "kind": "operational",
+   "bites_at_tier": "n/a",
+   "affects": "Developer Hub, Playground verifier, public PoR page",
+   "claim": "The Hub and the Playground verifier are designed to work without the service, but the API process itself serves them. A core crash, restart or overload takes them down too, and pm2 gives up after 5 failed restarts.",
+   "evidence": [
+    "apps/docs/src/app.ts:424 // and must keep working when the API is unreachable or on another host.",
+    "apps/playground/src/app.ts:7-8 'the network tab stays empty after load, and the page keeps working offline.'",
+    "apps/core/src/http/routes.ts:97-99 if (d.cfg.playgroundDir) mounts.push(...'/playground'); if (d.cfg.docsDir) ...'/docs'; if (d.cfg.consoleDir) ...'/console'",
+    "attest/deploy/ecosystem.config.cjs:46 max_restarts: 5,"
+   ],
+   "quantification": "The availability of these pages equals the availability of core.",
+   "fix": "Host these pages on static storage behind a CDN or proxy, independent of core.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-13",
+   "title": "Heavy browser work runs on the main thread with whole-file buffers",
+   "severity": "minor",
+   "kind": "structural",
+   "bites_at_tier": "n/a",
+   "affects": "Console anchoring and PoR screens, Playground, homepage demo (client side only)",
+   "claim": "Document hashing reads the whole file into memory. On this box (no secure context) it then runs the pure-JS SHA-256, which first copies the input into a padded buffer (≈2× file size) and blocks the tab; the console's digest path has no size cap. The PoR screen builds the Merkle sum tree on the UI thread, capped at 100,000 accounts and 4,000,000 sums.",
+   "evidence": [
+    "apps/console/src/api.ts:635-637 export async function digestFile(file: File): Promise<string> { return digestBytes(new Uint8Array(await file.arrayBuffer())); }",
+    "apps/playground/src/vendor/attest-verify/sha256.ts:45-48 const blocks = Math.ceil((len + 9) / 64); const total = blocks * 64; const m = new Uint8Array(total); m.set(data);  (the same file is vendored into the console)",
+    "apps/console/src/por.ts:101-106 '100,000 accounts of three assets, all held, take about seven seconds ... Beyond these the screen would sit frozen' MAX_ACCOUNTS = 100_000; MAX_TREE_SUMS = 4_000_000;",
+    "apps/console/src/app.ts:3416-3420 fileInput.addEventListener('change', () => { ... void digestFile(file).then((hex) => {  — no size check on the digest path",
+    "homepage/js/attest.js:88-90 'Pure JS is perhaps thirty times slower ... Hashing blocks the tab either way.' if (file.size > (native ? 64 : 8) * 1024 * 1024) say('toobig');"
+   ],
+   "quantification": "About 7 s frozen at the PoR cap (code comment). Large documents need ~2-3x their size in tab memory. None of this costs the server anything.",
+   "fix": "Move hashing and tree building to a Web Worker; hash incrementally over file.slice() chunks; use crypto.subtle once TLS is in place.",
+   "confidence": "medium"
+  },
+  {
+   "id": "FE-14",
+   "title": "Unbundled 27-module graph, and a 'lazy' verifier that loads on every visit",
+   "severity": "minor",
+   "kind": "configuration",
+   "bites_at_tier": "n/a",
+   "affects": "Console cold-load latency and bytes",
+   "claim": "The console ships 27 unminified ES modules (437,731 B) in a 4-level import waterfall. A code comment says the verifier is fetched only when the verify screen opens, but por.ts imports it statically, so every console load fetches all of it. Without HTTP/2 or compression, a cold load costs 4-5 round-trip waves plus ~510 KB.",
+   "evidence": [
+    "apps/console/src/app.ts:21-23 '// Type-only: the verifier itself is imported dynamically, so the ~40 KB of checking code is fetched when someone opens the verify screen and not on every sign-in.'",
+    "apps/console/src/por.ts:60 import { sha256, bytesToHex, utf8 } from './vendor/attest-verify/index.ts';  — this static import pulls in all 11 verifier modules",
+    "apps/console/build.mjs:3-8 'what ships is plain ES modules the browser loads directly, unminified'",
+    "Measured import depth 4: app.js -> api/i18n/p256/por -> verify index + 8 PoR SDK modules -> 11 verifier modules"
+   ],
+   "quantification": "30 requests, ~510 KB per cold load; typical gzip would cut the JS several-fold (not measured).",
+   "fix": "Emit <link rel=modulepreload> for the whole graph (or bundle while keeping sourcemaps), serve over HTTP/2 with gzip/br, and make the PoR SDK import lazy.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-15",
+   "title": "Every console boot writes an audit row and fetches records whatever the screen",
+   "severity": "minor",
+   "kind": "structural",
+   "bites_at_tier": "T1",
+   "affects": "audit_log noise; boot cost",
+   "claim": "Every cold console load fetches the attestation list and quota, whichever section it opens. GET /v1/console/attestations is not in SILENT_READS, so each page load also writes an audit_log row: exactly the noise the silent list exists to prevent.",
+   "evidence": [
+    "apps/console/src/app.ts:3776-3777 st.overview = await api.me(); await loadAttestations();",
+    "apps/core/src/audit.ts:86-91 'Reads the console makes on every page view. Recording them would bury the calls an auditor is looking for under thousands of \"the dashboard was opened\"' — yet '/v1/console/attestations' is missing from the set (92-96)"
+   ],
+   "quantification": "1 audit INSERT + 4 reads (2 of them month COUNTs) per console page load.",
+   "fix": "Fetch records only on the Records screen and add GET /v1/console/attestations to SILENT_READS.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-16",
+   "title": "Homepage re-renders every HTML request synchronously with cheerio",
+   "severity": "minor",
+   "kind": "structural",
+   "bites_at_tier": "n/a",
+   "affects": "Marketing site throughput (separate process, same box)",
+   "claim": "For each homepage HTML request the server synchronously reads the page, a 103 KB translations.json and site_config.json and JSON-parses both, reads five partials, then parses, rewrites and re-serialises the whole DOM with cheerio. Nothing is cached, and Vary: Cookie defeats shared caches. It runs in its own process and cannot slow core directly, but it caps marketing throughput and competes for the box's CPU.",
+   "evidence": [
+    "homepage/server.js:21-25 const getTranslations = () => { ... const data = fs.readFileSync(TRANSLATIONS_PATH, 'utf8'); return JSON.parse(data);  (translations.json = 102,891 B, read per request)",
+    "homepage/server.js:81-89 res.vary('Cookie'); let htmlStr = fs.readFileSync(filePath, 'utf8'); ... const $ = cheerio.load(htmlStr); const translations = getTranslations(); const siteConfig = getSiteConfig();",
+    "homepage/lib/site.js:123 const partial = name => fs.readFileSync(path.join(__dirname, '..', 'html', 'partials', `${name}.html`), 'utf8');  — called 5 times per request (124-133)"
+   ],
+   "quantification": "~9 synchronous reads + 2 JSON.parse (≥103 KB) + a full DOM parse and serialise per view; on the order of 100-300 pages/s per process (estimate, not measured).",
+   "fix": "Cache rendered HTML per (path, lang) in memory and invalidate it on admin saves; keep the language in the URL and drop Vary: Cookie; put a CDN in front.",
+   "confidence": "medium"
+  },
+  {
+   "id": "FE-17",
+   "title": "Homepage serves 8-17 MB autoplay videos from Node",
+   "severity": "minor",
+   "kind": "operational",
+   "bites_at_tier": "n/a",
+   "affects": "Box bandwidth shared with core; marketing page weight",
+   "claim": "The homepage's assets folder is 73 MB, including five MP4s of 8-17 MB. They autoplay on /about (two, ~24.7 MB), /our_solutions and /architecture, all served by express.static from the Node process on the same box as core. The legacy pages also pull Google Fonts and the jsdelivr Swiper library.",
+   "evidence": [
+    "homepage/html/about.html:77-78 <video autoplay=\"\" muted=\"\" loop=\"\" playsinline=\"\" class=\"bg-video\"> <source src=\"../assets/sub_about.mp4\" (7,980,661 B; plus sub_cu_video.mp4 16,759,010 B at :105)",
+    "homepage/server.js:51-53 app.use('/assets', express.static(path.join(__dirname, 'assets'))); app.use('/css', ...); app.use('/js', ...);",
+    "homepage/html/popup.html:12,18-19 fonts.googleapis.com/css2 ... cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"
+   ],
+   "quantification": "~25 MB per first visit to /about. 100 such visits per second would need ~2.5 GB/s, far beyond one box.",
+   "fix": "Move media to object storage behind a CDN; use poster images and compressed or adaptive video.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-18",
+   "title": "Homepage trusts X-Forwarded-For with no proxy; admin falls back to admin/admin",
+   "severity": "minor",
+   "kind": "operational",
+   "bites_at_tier": "n/a",
+   "affects": "Homepage /admin protection",
+   "claim": "trust proxy is on although the app is exposed directly, so the admin IP allowlist reads a client-controlled X-Forwarded-For. Basic auth falls back to admin/admin when the environment variables are unset; they are set on this box (values not read).",
+   "evidence": [
+    "homepage/server.js:16 app.set('trust proxy', true); // Trust Nginx X-Forwarded-For header  — no proxy in front; listens on 0.0.0.0",
+    "homepage/server.js:156 const clientIP = req.ip || req.connection.remoteAddress;  (the allowlist at :152-163 checks this value)",
+    "homepage/server.js:167-168 const adminUsername = process.env.ADMIN_USERNAME || 'admin'; const adminPassword = process.env.ADMIN_PASSWORD || 'admin';"
+   ],
+   "quantification": "Volume-independent security gap.",
+   "fix": "Turn trust proxy off until a proxy exists (then trust only its address), and fail closed when the admin credentials are unset.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-19",
+   "title": "Demo sites are demonstrations, not product, but they poll the shared core",
+   "severity": "minor",
+   "kind": "sandbox-only",
+   "bites_at_tier": "n/a",
+   "affects": "demo-bank :3200, demo-customers :3400, demo-partners :3300",
+   "claim": "The three demo sites integrate only through the published REST API and SDK packages (no core internals) and keep their state in JSON files rewritten whole on every change; demo-bank also runs a docker container per signature. Do not count them as production components; demo-partners stands in for real counterparties. On this box, though, the demo-bank remittance tab refreshes every 2.5 s and fans out one core GET /v1/settlements/:id (audited) per open case.",
+   "evidence": [
+    "demo-bank/server.mjs:12-14 'No StoneHash internals are imported. If this demo works, the published integration surface works.'",
+    "demo-customers/server.mjs:26-36 imports '../attest/packages/attest-sign|attest-verify|attest-por|attest-remit/src/index.ts' (published SDK sources)",
+    "demo-customers/server.mjs:47 const save = () => { writeFileSync(`${p}.tmp`, JSON.stringify(rows, null, 2)); renameSync(`${p}.tmp`, p); };",
+    "demo-bank/public/remit.js:105-107 if (open.has(row.id) || !details.has(row.id)) { try { details.set(row.id, await api('GET', `/api/remit/cases/${row.id}`)); } ...  remit.js:381 setInterval(refresh, 2500);",
+    "demo-bank/remit.mjs:598 const res = await platform('GET', `/v1/settlements/${c.payment_id}`);"
+   ],
+   "quantification": "Every JSON-file write is O(N): remit-cases.json is already 238,793 B for 21 cases. Docker per signature costs seconds per record. Per open demo-bank tab: 0.4 × (1 + open cases) req/s, with the open cases reaching core.",
+   "fix": "Run the demos on a separate host or stop them on any production box; they need no scaling.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-20",
+   "title": "Free-tier polling is unbounded per visitor, but writes are capped",
+   "severity": "minor",
+   "kind": "configuration",
+   "bites_at_tier": "n/a",
+   "affects": "Playground and homepage anchor demos",
+   "claim": "The Playground polls the free-tier status with a 1 s -> 5 s backoff and no maximum; the homepage demo polls every 3 s, up to 60 times. Free-tier writes are capped at 10 per hour per address and 500 per hour globally, which bounds how many pollers can exist. Each poll is one SELECT, unaudited.",
+   "evidence": [
+    "apps/playground/src/anchor.ts:106-114 let delay = 1000; while (st.polling) { const res = await fetch(`${apiBase()}/v1/public/anchors/${id}`); ... delay = Math.min(delay + 1000, 5000); }",
+    "homepage/js/attest.js:180-181 polling = setInterval(async () => { if (++ticks > 60) { stop(); return; }  ... }, 3000);",
+    "apps/core/src/config.ts:365 max: int('PUBLIC_ANCHOR_MAX', 10),  config.ts:369 max: int('PUBLIC_ANCHOR_GLOBAL_MAX', 500),",
+    "apps/core/src/http/public.ts:154-164 status: async (ctx) => { requireEnabled(); const att = await d.svc.getPublic(ctx.params['id']!); ...  — no limiter"
+   ],
+   "quantification": "≤500 free anchors per hour in total. On mainnet (10-60 min to confirm), ≤500 concurrent pollers × 0.2 req/s ≈ ≤100 req/s in the worst case.",
+   "fix": "Cap Playground polls (or stop when the tab is hidden) and send Cache-Control or Retry-After hints on status replies.",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-21",
+   "title": "Strength: the server receives a hash or a statement, never the document or ledger",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "affects": "Attest anchoring, PoR anchoring, verification",
+   "claim": "Heavy and sensitive work stays in the visitor's browser. Digest anchoring sends only the 32-byte hash. The PoR screen sends only the signed statement (root and totals) and keeps the balance file and tree in the page. Bundle and PoR inclusion verification run entirely client-side. The server-side cost of an anchor or snapshot therefore does not depend on document or ledger size.",
+   "evidence": [
+    "apps/console/src/api.ts:316-318 anchor: (sha256: string, contentType?: string) => send('POST', '/v1/console/attestations', { sha256, ...(contentType ? { content_type: contentType } : {}) }),",
+    "apps/console/src/por.ts:9-11 'The balance file is read by this page and is never sent — there is no upload in this module, only the JSON of the signed statement.'",
+    "apps/console/src/por.ts:745 const sent = await api.porSubmit({ statement, sig, ...(s.spotCheck ? { spot_check: true } : {}) });",
+    "apps/console/src/app.ts:3663-3664 const { verifyBundle } = await import('./vendor/attest-verify/index.js'); const report = await verifyBundle(bundle, ...);"
+   ],
+   "quantification": "A 1 GB document or a 100,000-account ledger costs the server the same as a 1 KB one: one small JSON POST.",
+   "fix": "Keep this design; add Web Workers (FE-13).",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-22",
+   "title": "Strength: ledger and audit log are keyset-paged with server-side filters",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "affects": "Console 송금 ledger and 감사 기록",
+   "claim": "The settlement ledger (25 per page) and the audit log (50 per page, server max 200) page by keyset cursors on (created_at, id) and (at, id), with matching indexes. Filtering happens in SQL; pages are appended without re-rendering; stale responses are dropped by a request sequence number; the CSV export is capped at 5,000 rows and says so. The audit search runs no total COUNT.",
+   "evidence": [
+    "apps/console/src/app.ts:1963-1969 const token = ++remitView.req; const page = await api.settlements({...remitQuery(), ...cursor, limit: REMIT_PAGE_SIZE}); if (token !== remitView.req) return;",
+    "apps/core/src/remit/store.ts:200-208 where.push('(created_at < ? OR (created_at = ? AND id < ?))'); ... ORDER BY created_at DESC, id DESC LIMIT ${limit + 1}",
+    "apps/core/src/audit.ts:203-211 where.push('(at < ? OR (at = ? AND id < ?))'); ... FROM audit_log WHERE ... ORDER BY at DESC, id DESC LIMIT ${limit + 1}",
+    "apps/core/src/db.ts:700-701,704 remit_payments_org (org_id, created_at); remit_payments_org_state (org_id, state, created_at); audit_log_org_at (org_id, at, id)"
+   ],
+   "quantification": "An unfiltered page is a bounded index range read at any table size; only the ledger's COUNT and LIKE search break this (FE-02).",
+   "fix": "Extend the same pattern to the records screen (FE-03).",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-23",
+   "title": "Strength: no idle polling and no per-row fetches in the console",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "affects": "Console request rate",
+   "claim": "Apart from the tracker and the PoR anchor watch, no console screen polls: the dashboard, records, subscriptions and audit screens load once per visit. Navigation is hash-routed with no page reload, and row-level data (transaction lookup, bundle contents, tracker) is fetched only on click.",
+   "evidence": [
+    "apps/console/src/app.ts:3075-3081 if (here === 'records') renderAttestations(); ... if (here === 'remit') void loadRemit(); if (here === 'por') void initPor(resolveLinks); if (here === 'home') void loadHome();",
+    "apps/console/src/app.ts:3576-3584 b.addEventListener('click', () => { ... const v = await api.tx(txid);",
+    "No setInterval anywhere in apps/console/src (grep); the only timers are the tracker (app.ts:1868), the PoR watch (por.ts:781, ≤90 × 2 s) and 300 ms debounces"
+   ],
+   "quantification": "An idle console tab makes 0 req/s; console load scales with operators, not with transaction volume.",
+   "fix": "Keep it; replace the two polls with push or conditional GET (FE-08).",
+   "confidence": "high"
+  },
+  {
+   "id": "FE-24",
+   "title": "Strength: strict CSP and security headers, no third-party code in the apps",
+   "severity": "strength",
+   "kind": "strength",
+   "bites_at_tier": "n/a",
+   "affects": "Console, Playground, Developer Hub",
+   "claim": "Every page core serves carries a self-only CSP (no inline script or style, frame-ancestors 'none', form-action 'none') plus nosniff and no-referrer. The three apps load no remote code or fonts. The session cookie is HttpOnly and SameSite=Lax, and the console keeps no credential in browser storage. This makes a later move to a CDN low-risk.",
+   "evidence": [
+    "apps/core/src/http/static.ts:150-156 'It executes no remote code and loads no remote assets, so the policy can be this strict' + CSP, 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer'",
+    "apps/core/src/account.ts:229-231 'HttpOnly', 'SameSite=Lax', ...(secure ? ['Secure'] : [])",
+    "apps/console/src/i18n.ts:24-25 '`localStorage`, `sessionStorage` and IndexedDB are forbidden in this client — see `test/dist.test.ts`'"
+   ],
+   "quantification": "n/a",
+   "fix": "Add HSTS and the Secure cookie once TLS exists (FE-04).",
+   "confidence": "high"
+  }
+ ],
+ "hard_limits": [
+  {
+   "name": "Live tracker poll interval / max polls",
+   "value": "2,500 ms / 240 polls (10 min), per open row, no pause in hidden tabs",
+   "where": "apps/console/src/app.ts:1852-1853",
+   "configurable": "no (constant)"
+  },
+  {
+   "name": "PoR anchor watch",
+   "value": "2,000 ms × up to 90 polls (3 min)",
+   "where": "apps/console/src/por.ts:780-781",
+   "configurable": "no"
+  },
+  {
+   "name": "Settlement ledger page size",
+   "value": "client 25; server default 25, max 100; keyset cursor; COUNT(*) total on every page",
+   "where": "apps/console/src/app.ts:1365; apps/core/src/remit/routes.ts:439; apps/core/src/remit/store.ts:142,194-196",
+   "configurable": "?limit= only"
+  },
+  {
+   "name": "Settlement CSV export",
+   "value": "5,000 rows maximum, pages of 100 (≤50 sequential requests)",
+   "where": "apps/console/src/app.ts:1751,1768",
+   "configurable": "no"
+  },
+  {
+   "name": "Audit log page",
+   "value": "client 50; server max 200; keyset cursor; no total",
+   "where": "apps/console/src/app.ts:1241; apps/core/src/audit.ts:186-189",
+   "configurable": "?limit= only"
+  },
+  {
+   "name": "Attestation list (console Records and GET /v1/attestations)",
+   "value": "default 50, max 500, no cursor or search",
+   "where": "apps/core/src/http/console.ts:403; apps/core/src/http/routes.ts:296; apps/core/src/service.ts:369",
+   "configurable": "?limit= ≤500 only"
+  },
+  {
+   "name": "Search debounce",
+   "value": "300 ms (settlement and audit search)",
+   "where": "apps/console/src/app.ts:1332,2064",
+   "configurable": "no"
+  },
+  {
+   "name": "In-browser PoR ledger",
+   "value": "MAX_ACCOUNTS 100,000; MAX_TREE_SUMS 4,000,000 (~7 s on the UI thread at the cap)",
+   "where": "apps/console/src/por.ts:105-106",
+   "configurable": "no"
+  },
+  {
+   "name": "PoR snapshot history / daily manifests lists",
+   "value": "LIMIT 100 (+ N+1 status lookups) / LIMIT 30 (+ N+1)",
+   "where": "apps/core/src/por/routes.ts:455; apps/core/src/remit/routes.ts:647",
+   "configurable": "no"
+  },
+  {
+   "name": "Dashboard feeds",
+   "value": "client FEED_MAX 4; server LIMIT 5 (recent), 10 (PoR), 100 (latency pairs), ATTN_CAP 5",
+   "where": "apps/console/src/app.ts:2317; apps/core/src/http/console.ts:728,740,786,794,804,827",
+   "configurable": "no"
+  },
+  {
+   "name": "Static cache policy",
+   "value": "Cache-Control: no-cache; no ETag, Last-Modified, compression or Range",
+   "where": "apps/core/src/http/static.ts:145-157",
+   "configurable": "no (code)"
+  },
+  {
+   "name": "Static CSP",
+   "value": "default-src 'none'; script/style/img/font/connect-src 'self'; frame-ancestors 'none'",
+   "where": "apps/core/src/http/static.ts:152-154",
+   "configurable": "no"
+  },
+  {
+   "name": "Static mounts",
+   "value": "/playground, /docs, /console served by core when the *_DIR settings are non-empty (all three set on this box)",
+   "where": "apps/core/src/http/routes.ts:96-113; apps/core/src/config.ts:344-346",
+   "configurable": "PLAYGROUND_DIR / DOCS_DIR / CONSOLE_DIR"
+  },
+  {
+   "name": "JSON body cap / inscription upload cap",
+   "value": "1 MiB / inscriptionMaxBytes + 64 KiB (default 100,000 B)",
+   "where": "apps/core/src/http/server.ts:76; apps/core/src/http/routes.ts:225; apps/core/src/http/console.ts:456; apps/core/src/btc/inscription.ts:90",
+   "configurable": "INSCRIPTION_MAX_BYTES"
+  },
+  {
+   "name": "Session TTL / cookie flags",
+   "value": "14 days; HttpOnly, SameSite=Lax, Secure only if COOKIE_SECURE=1 (unset here)",
+   "where": "apps/core/src/account.ts:59,226-231; apps/core/src/config.ts:349",
+   "configurable": "COOKIE_SECURE"
+  },
+  {
+   "name": "Password hashing",
+   "value": "scryptSync N=32,768, r=8, p=1 (32 MiB), synchronous",
+   "where": "apps/core/src/account.ts:46,79,101",
+   "configurable": "no"
+  },
+  {
+   "name": "Console auth rate limit",
+   "value": "20 attempts per 900,000 ms per address",
+   "where": "apps/core/src/config.ts:352-353",
+   "configurable": "CONSOLE_AUTH_MAX / CONSOLE_AUTH_WINDOW_MS"
+  },
+  {
+   "name": "Console monthly quota",
+   "value": "1,000 attest anchors per org per month",
+   "where": "apps/core/src/config.ts:350",
+   "configurable": "CONSOLE_MONTHLY_QUOTA"
+  },
+  {
+   "name": "Free tier",
+   "value": "10/h per address, 500/h global; CORS origins '*'",
+   "where": "apps/core/src/config.ts:365,369,372",
+   "configurable": "PUBLIC_ANCHOR_MAX / PUBLIC_ANCHOR_GLOBAL_MAX / PUBLIC_ANCHOR_ORIGINS"
+  },
+  {
+   "name": "Playground / homepage free-tier poll",
+   "value": "1 s -> 5 s backoff, no maximum / 3,000 ms × 60",
+   "where": "apps/playground/src/anchor.ts:106-114; homepage/js/attest.js:180-189",
+   "configurable": "no"
+  },
+  {
+   "name": "MySQL pool (shared by console reads and the transaction path)",
+   "value": "10 connections, unbounded wait queue, no statement timeout",
+   "where": "apps/core/src/db.ts:936-944",
+   "configurable": "no (hard-coded)"
+  },
+  {
+   "name": "Core process model",
+   "value": "1 pm2 fork instance; HTTP API + static + BatchWorker + RemitWorker on one event loop",
+   "where": "attest/deploy/ecosystem.config.cjs:36-50; apps/core/src/main.ts:2,102,116,131-144",
+   "configurable": "no instances setting"
+  },
+  {
+   "name": "Demo limits",
+   "value": "demo-bank upload 10 MiB; demo exchange synthetic users 10..20,000",
+   "where": "demo-bank/server.mjs:33; demo-customers/server.mjs:427",
+   "configurable": "no"
+  }
+ ],
+ "scale_path": "T2 (~100 tx/s; one large org adds ~8.6M rows/day), in order: (1) Edge: put a TLS-terminating proxy (nginx, Caddy or a cloud LB) in front of core and the homepage, with HTTP/2, gzip/br and HSTS. Set COOKIE_SECURE=1 and TRUST_PROXY=1 and bind Node to loopback. (2) Static off core: serve /console, /playground and /docs from the proxy or a CDN on the SAME origin, routing /v1/* to core. Same-origin is required by CSP connect-src 'self', the missing console CORS and the hard-coded PoR path. Then unset PLAYGROUND_DIR, DOCS_DIR and CONSOLE_DIR. Add ETag/304, precompressed assets and modulepreload for the 27-module graph; deploy atomically into versioned folders. (3) Console read model: replace the whole-org aggregates with counters/rollups maintained on write (org × product × status × day; month usage; settlement state buckets). Delete the 13 unused dashboard statements, cache dashboard and products per org for 10-30 s, and add a client fetch timeout. (4) Ledger: search an indexed identifier table instead of LIKE '%q%' + JSON_EXTRACT; drop or cache the per-page COUNT(*); join attestation status into the page query; turn CSV export into a server-side job. (5) Records: keyset cursor, filters and exact-digest lookup on both /v1/console/attestations and /v1/attestations. (6) Polling: give the tracker a conditional GET (ETag/304) or since_seq deltas or SSE; pause hidden tabs; cap concurrent follows; stop auditing polling reads and the boot-time records fetch. (7) Isolation: give console reads a separate pool or read replica with max_execution_time; make the pool size configurable; switch scryptSync to async scrypt. (8) Public PoR and bundles: send Cache-Control public/immutable once confirmed and serve through the CDN. (9) Homepage: cache rendered HTML per (path, lang); move media to the CDN; drop Vary: Cookie. (10) Move the demo sites off the production box. T3 (~1,000 tx/s; ~86M rows/day per large org), on top of T2: (1) Split the console/reporting API into its own service that reads a reporting store (CDC from MySQL into OLAP or pre-aggregated tables), so operator screens never touch the OLTP primary. (2) Serve identifier search and audit-log search from a dedicated index (OpenSearch or similar) fed by CDC; write audit rows asynchronously in batches into partitioned storage. (3) Replace per-tab polling with server push (an SSE/WebSocket gateway fed by the settlement event stream through pub/sub) that works across multiple instances. (4) Fingerprint static assets with content hashes at build time for immutable CDN caching; publish public PoR snapshots and proof bundles as static objects in object storage at anchor time. (5) Run exports and large lists as background jobs with signed download URLs; virtualise tables only if any screen ever renders more than ~5k rows. (6) Scale core horizontally behind the LB (sessions are already DB-backed; in-memory rate limiters need a shared store; owned by the backend reader).",
+ "open_questions": [
+  "How is volume distributed across orgs (one dominant bank or exchange versus many small ones)? That decides whether the whole-org console aggregates bite at T1 or only at T2.",
+  "Will production run STONEHASH_ENV=live, where the console is disabled by code, or keep env=test as the operator console? If live, operators have no UI today.",
+  "What is the intended production topology (hostnames, CDN, TLS terminator, path vs host routing)? It exists only in comments (static.ts:7-8, console index.html:9-14); nothing in deploy/ or on the host.",
+  "What are the actual query latencies of the dashboard, products, quota and ledger search at 100k and 10M rows per org? Not measured, because this pass was read-only and could not query MySQL.",
+  "How fast is pure-JS SHA-256 in target browsers? The only figure is a code comment ('perhaps thirty times slower' than crypto.subtle); the PoR timings are also code-comment figures.",
+  "Do compliance requirements want screen polling recorded in the audit log (a 'who viewed what' trail)? Today every tracker poll writes a row, while dashboard reads are deliberately silent.",
+  "How large is a real settlement detail reply? The demo cache drops payloads and signatures, so the tracker's per-poll bytes are unknown.",
+  "Is demo-bank-java (:3500, in ecosystem.config.cjs:99-110) expected to run? It was not examined and is not in the live process list.",
+  "Is a proxy planned for the homepage (its trust proxy=true implies nginx)? Today it is exposed directly on :3100."
+ ]
+}

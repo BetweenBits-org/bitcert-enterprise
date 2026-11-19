@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Sample only. The same kind of payment as it leaves a messaging interface:
+     an envelope, a Business Application Header, namespace prefixes, free-text
+     addresses, and no identification for the debtor (it comes from the
+     customer master — see parties.sample.json). -->
+<Envelope xmlns="urn:swift:xsd:envelope">
+  <head:AppHdr xmlns:head="urn:iso:std:iso:20022:tech:xsd:head.001.001.02">
+    <head:Fr><head:FIId><head:FinInstnId><head:BICFI>DEMOVNVX</head:BICFI></head:FinInstnId></head:FIId></head:Fr>
+    <head:To><head:FIId><head:FinInstnId><head:BICFI>DEMOSGSG</head:BICFI></head:FinInstnId></head:FIId></head:To>
+    <head:BizMsgIdr>DEMOVNVX20261117000124</head:BizMsgIdr>
+    <head:MsgDefIdr>pacs.008.001.08</head:MsgDefIdr>
+    <head:BizSvc>swift.cbprplus.02</head:BizSvc>
+    <head:CreDt>2026-11-17T09:41:00+07:00</head:CreDt>
+  </head:AppHdr>
+  <pacs:Document xmlns:pacs="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+    <pacs:FIToFICstmrCdtTrf>
+      <pacs:GrpHdr>
+        <pacs:MsgId>DEMOVNVX20261117000124</pacs:MsgId>
+        <pacs:CreDtTm>2026-11-17T09:41:00+07:00</pacs:CreDtTm>
+        <pacs:NbOfTxs>1</pacs:NbOfTxs>
+        <pacs:SttlmInf><pacs:SttlmMtd>INDA</pacs:SttlmMtd></pacs:SttlmInf>
+      </pacs:GrpHdr>
+      <pacs:CdtTrfTxInf>
+        <pacs:PmtId>
+          <pacs:InstrId>OUT-2026-000124</pacs:InstrId>
+          <pacs:EndToEndId>NOTPROVIDED</pacs:EndToEndId>
+          <pacs:UETR>7c2e41d8-93ab-4f05-8e6d-51b0c9f3a7e2</pacs:UETR>
+        </pacs:PmtId>
+        <pacs:IntrBkSttlmAmt Ccy="USD">8400.5</pacs:IntrBkSttlmAmt>
+        <pacs:IntrBkSttlmDt>2026-11-17</pacs:IntrBkSttlmDt>
+        <pacs:ChrgBr>SHAR</pacs:ChrgBr>
+        <pacs:Dbtr>
+          <pacs:Nm>Saigon Machinery &amp; Parts JSC</pacs:Nm>
+          <pacs:PstlAdr>
+            <pacs:Ctry>VN</pacs:Ctry>
+            <pacs:AdrLine>88 Nguyen Hue, Ben Nghe Ward</pacs:AdrLine>
+            <pacs:AdrLine>District 1, Ho Chi Minh City</pacs:AdrLine>
+          </pacs:PstlAdr>
+        </pacs:Dbtr>
+        <pacs:DbtrAcct><pacs:Id><pacs:Othr><pacs:Id>VN-ACC-000812</pacs:Id></pacs:Othr></pacs:Id></pacs:DbtrAcct>
+        <pacs:DbtrAgt><pacs:FinInstnId><pacs:BICFI>DEMOVNVX</pacs:BICFI></pacs:FinInstnId></pacs:DbtrAgt>
+        <pacs:CdtrAgt><pacs:FinInstnId><pacs:BICFI>DEMOSGSG</pacs:BICFI></pacs:FinInstnId></pacs:CdtrAgt>
+        <pacs:Cdtr>
+          <pacs:Nm>Pacific Supply Pte Ltd</pacs:Nm>
+          <pacs:PstlAdr>
+            <pacs:Ctry>SG</pacs:Ctry>
+            <pacs:AdrLine>1 Raffles Place, Singapore 048616</pacs:AdrLine>
+          </pacs:PstlAdr>
+        </pacs:Cdtr>
+        <pacs:CdtrAcct><pacs:Id><pacs:Othr><pacs:Id>SG-ACC-000009</pacs:Id></pacs:Othr></pacs:Id></pacs:CdtrAcct>
+        <pacs:RmtInf>
+          <pacs:Ustrd><![CDATA[/INV/INV/2026/0461 spare parts, PO 7790]]></pacs:Ustrd>
+        </pacs:RmtInf>
+      </pacs:CdtTrfTxInf>
+    </pacs:FIToFICstmrCdtTrf>
+  </pacs:Document>
+</Envelope>

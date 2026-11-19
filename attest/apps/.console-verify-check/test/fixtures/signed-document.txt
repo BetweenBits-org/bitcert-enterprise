@@ -1,0 +1,2 @@
+StoneHash Attest console test document (signed anchor)
+Its issuer signs a statement of its SHA-256; the statement is what is anchored.

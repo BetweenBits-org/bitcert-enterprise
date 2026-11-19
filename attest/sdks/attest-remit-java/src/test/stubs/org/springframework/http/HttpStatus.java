@@ -1,0 +1,5 @@
+package org.springframework.http;
+
+public enum HttpStatus {
+    OK, ACCEPTED, NO_CONTENT, BAD_REQUEST, UNAUTHORIZED, CONFLICT, UNPROCESSABLE_ENTITY, BAD_GATEWAY, SERVICE_UNAVAILABLE
+}

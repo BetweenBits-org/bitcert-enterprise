@@ -1,0 +1,1729 @@
+{
+  "about": "Leaves are ordered by user_ref_hash; a level with an odd number of nodes gets one empty node; `level_hashes[0]` is the leaf level as stored (padded).",
+  "empty_node_hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+  "cases": [
+    {
+      "name": "one account: the root is the leaf",
+      "exchange_id": "KR-EX-0a1b2c",
+      "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "assets": [
+        "BTC"
+      ],
+      "rows": [
+        {
+          "user_ref": "acct-00001",
+          "balances": {}
+        }
+      ],
+      "leaf_count": 1,
+      "root": "96ad89d007b85316c9f84d75f7c715c6bd8a43faf381edfe69cdd3c1287ec42f",
+      "totals": {
+        "BTC": "0"
+      },
+      "order": [
+        "acct-00001"
+      ],
+      "level_hashes": [
+        [
+          "96ad89d007b85316c9f84d75f7c715c6bd8a43faf381edfe69cdd3c1287ec42f"
+        ]
+      ],
+      "proofs": [
+        {
+          "user_ref": "acct-00001",
+          "leaf_index": 0,
+          "proof": {
+            "leaf_index": 0,
+            "leaf": {
+              "user_ref_hash": "b95f0537680f63e713faedc98eb2502bb1e1c6f05847654e8f1f7f1cfbecf5f4",
+              "salt": "98ba164c26d49db54f0cbfec4391fa98f852a398bc4983520a8d1bca8f2724cd",
+              "balances": {
+                "BTC": "0"
+              }
+            },
+            "siblings": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "two accounts",
+      "exchange_id": "KR-EX-0a1b2c",
+      "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "assets": [
+        "BTC",
+        "ETH",
+        "USDT"
+      ],
+      "rows": [
+        {
+          "user_ref": "acct-00001",
+          "balances": {
+            "ETH": "15838",
+            "USDT": "23757"
+          }
+        },
+        {
+          "user_ref": "acct-00002",
+          "balances": {
+            "BTC": "15838000",
+            "ETH": "316760000",
+            "USDT": "4751400000"
+          }
+        }
+      ],
+      "leaf_count": 2,
+      "root": "915320f784e665a85497cbe58130be753e18cbdedc1cedab086228e0f7371fb7",
+      "totals": {
+        "BTC": "15838000",
+        "ETH": "316775838",
+        "USDT": "4751423757"
+      },
+      "order": [
+        "acct-00002",
+        "acct-00001"
+      ],
+      "level_hashes": [
+        [
+          "2f2179559d2bba38d72b2b11ad6dd5c389a4def5e7d2e367b04dd4ed58f77e15",
+          "70dc3aea2da3d74531b44bf7204d2f5b98e60c50ea4e52f51ad27f70b7935b3c"
+        ],
+        [
+          "915320f784e665a85497cbe58130be753e18cbdedc1cedab086228e0f7371fb7"
+        ]
+      ],
+      "proofs": [
+        {
+          "user_ref": "acct-00002",
+          "leaf_index": 0,
+          "proof": {
+            "leaf_index": 0,
+            "leaf": {
+              "user_ref_hash": "81fd038bca1fec73f603a92f239b43591281103aefc10bccd4cb75f332a8132b",
+              "salt": "cbf1c6c0b6e773f7425f9ec92355e02d57adef3fcedc24b5fb356607670cfdc0",
+              "balances": {
+                "BTC": "15838000",
+                "ETH": "316760000",
+                "USDT": "4751400000"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "70dc3aea2da3d74531b44bf7204d2f5b98e60c50ea4e52f51ad27f70b7935b3c",
+                "sums": {
+                  "BTC": "0",
+                  "ETH": "15838",
+                  "USDT": "23757"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00001",
+          "leaf_index": 1,
+          "proof": {
+            "leaf_index": 1,
+            "leaf": {
+              "user_ref_hash": "b95f0537680f63e713faedc98eb2502bb1e1c6f05847654e8f1f7f1cfbecf5f4",
+              "salt": "98ba164c26d49db54f0cbfec4391fa98f852a398bc4983520a8d1bca8f2724cd",
+              "balances": {
+                "BTC": "0",
+                "ETH": "15838",
+                "USDT": "23757"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "2f2179559d2bba38d72b2b11ad6dd5c389a4def5e7d2e367b04dd4ed58f77e15",
+                "sums": {
+                  "BTC": "15838000",
+                  "ETH": "316760000",
+                  "USDT": "4751400000"
+                },
+                "dir": "left"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "three accounts: one empty node pads the first level",
+      "exchange_id": "KR-EX-0a1b2c",
+      "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "assets": [
+        "BTC",
+        "ETH",
+        "USDT"
+      ],
+      "rows": [
+        {
+          "user_ref": "acct-00001",
+          "balances": {
+            "ETH": "15838",
+            "USDT": "23757"
+          }
+        },
+        {
+          "user_ref": "acct-00002",
+          "balances": {
+            "BTC": "15838000",
+            "ETH": "316760000",
+            "USDT": "4751400000"
+          }
+        },
+        {
+          "user_ref": "acct-00003",
+          "balances": {
+            "BTC": "23757000000",
+            "ETH": "4751400000000"
+          }
+        }
+      ],
+      "leaf_count": 3,
+      "root": "48fc0cdcc77922325b1c99a582389e024e8a2492c70aab4619762a773b49490c",
+      "totals": {
+        "BTC": "23772838000",
+        "ETH": "4751716775838",
+        "USDT": "4751423757"
+      },
+      "order": [
+        "acct-00003",
+        "acct-00002",
+        "acct-00001"
+      ],
+      "level_hashes": [
+        [
+          "5d11d6945608f745982bc4ba19fa18bab10a4a5a96c11747eb4114985edc7d2a",
+          "2f2179559d2bba38d72b2b11ad6dd5c389a4def5e7d2e367b04dd4ed58f77e15",
+          "70dc3aea2da3d74531b44bf7204d2f5b98e60c50ea4e52f51ad27f70b7935b3c",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "29f534668ef6eeab34c0cd9ad0c5e834fb4ff05b5e84dc9784580b3bc771d9bf",
+          "1e1b0ea8b6b9d41ee3923560d7495494874bbcb7f14b362bcf2f7e4478d8eae0"
+        ],
+        [
+          "48fc0cdcc77922325b1c99a582389e024e8a2492c70aab4619762a773b49490c"
+        ]
+      ],
+      "proofs": [
+        {
+          "user_ref": "acct-00003",
+          "leaf_index": 0,
+          "proof": {
+            "leaf_index": 0,
+            "leaf": {
+              "user_ref_hash": "303d8593f21983837373891ceb173e6522d06aa1a9546d5d7709701c40f17bcb",
+              "salt": "b698895dae2e9d3155feecd73cb27058ab0c8d30fe30ff0060f2f0cc2db3002a",
+              "balances": {
+                "BTC": "23757000000",
+                "ETH": "4751400000000",
+                "USDT": "0"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "2f2179559d2bba38d72b2b11ad6dd5c389a4def5e7d2e367b04dd4ed58f77e15",
+                "sums": {
+                  "BTC": "15838000",
+                  "ETH": "316760000",
+                  "USDT": "4751400000"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "1e1b0ea8b6b9d41ee3923560d7495494874bbcb7f14b362bcf2f7e4478d8eae0",
+                "sums": {
+                  "BTC": "0",
+                  "ETH": "15838",
+                  "USDT": "23757"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00002",
+          "leaf_index": 1,
+          "proof": {
+            "leaf_index": 1,
+            "leaf": {
+              "user_ref_hash": "81fd038bca1fec73f603a92f239b43591281103aefc10bccd4cb75f332a8132b",
+              "salt": "cbf1c6c0b6e773f7425f9ec92355e02d57adef3fcedc24b5fb356607670cfdc0",
+              "balances": {
+                "BTC": "15838000",
+                "ETH": "316760000",
+                "USDT": "4751400000"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "5d11d6945608f745982bc4ba19fa18bab10a4a5a96c11747eb4114985edc7d2a",
+                "sums": {
+                  "BTC": "23757000000",
+                  "ETH": "4751400000000",
+                  "USDT": "0"
+                },
+                "dir": "left"
+              },
+              {
+                "hash": "1e1b0ea8b6b9d41ee3923560d7495494874bbcb7f14b362bcf2f7e4478d8eae0",
+                "sums": {
+                  "BTC": "0",
+                  "ETH": "15838",
+                  "USDT": "23757"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00001",
+          "leaf_index": 2,
+          "proof": {
+            "leaf_index": 2,
+            "leaf": {
+              "user_ref_hash": "b95f0537680f63e713faedc98eb2502bb1e1c6f05847654e8f1f7f1cfbecf5f4",
+              "salt": "98ba164c26d49db54f0cbfec4391fa98f852a398bc4983520a8d1bca8f2724cd",
+              "balances": {
+                "BTC": "0",
+                "ETH": "15838",
+                "USDT": "23757"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {
+                  "BTC": "0",
+                  "ETH": "0",
+                  "USDT": "0"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "29f534668ef6eeab34c0cd9ad0c5e834fb4ff05b5e84dc9784580b3bc771d9bf",
+                "sums": {
+                  "BTC": "23772838000",
+                  "ETH": "4751716760000",
+                  "USDT": "4751400000"
+                },
+                "dir": "left"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "five accounts: padding at two levels",
+      "exchange_id": "KR-EX-0a1b2c",
+      "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "assets": [
+        "BTC",
+        "ETH",
+        "USDT"
+      ],
+      "rows": [
+        {
+          "user_ref": "acct-00001",
+          "balances": {
+            "ETH": "15838",
+            "USDT": "23757"
+          }
+        },
+        {
+          "user_ref": "acct-00002",
+          "balances": {
+            "BTC": "15838000",
+            "ETH": "316760000",
+            "USDT": "4751400000"
+          }
+        },
+        {
+          "user_ref": "acct-00003",
+          "balances": {
+            "BTC": "23757000000",
+            "ETH": "4751400000000"
+          }
+        },
+        {
+          "user_ref": "acct-00004",
+          "balances": {
+            "BTC": "31676000000000",
+            "USDT": "95028000000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00005",
+          "balances": {
+            "ETH": "791900000000000000000",
+            "USDT": "1187850"
+          }
+        }
+      ],
+      "leaf_count": 5,
+      "root": "4487ac60fad379e9c2af05e0ddc5be83878f3f76db202c59c9ee9039a38ae601",
+      "totals": {
+        "BTC": "31699772838000",
+        "ETH": "791900004751716775838",
+        "USDT": "95028000004752611607"
+      },
+      "order": [
+        "acct-00003",
+        "acct-00005",
+        "acct-00002",
+        "acct-00001",
+        "acct-00004"
+      ],
+      "level_hashes": [
+        [
+          "5d11d6945608f745982bc4ba19fa18bab10a4a5a96c11747eb4114985edc7d2a",
+          "5c88a76b18f0eb16820a08c1f56edb250e59dd4277cd89342b1aa112b2deb1e0",
+          "2f2179559d2bba38d72b2b11ad6dd5c389a4def5e7d2e367b04dd4ed58f77e15",
+          "70dc3aea2da3d74531b44bf7204d2f5b98e60c50ea4e52f51ad27f70b7935b3c",
+          "408e135f3892659e64d12d8a8d8957e0d0dbcd2cfd7f1de794f33a29fb7d6cc9",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "729a7a52471cc0d45b792c96fd89584fe5e4fee12f1204606ff7209ba4c84cf8",
+          "915320f784e665a85497cbe58130be753e18cbdedc1cedab086228e0f7371fb7",
+          "66e14a15ad0a9a867f613cd955179f85f8a813bdf49e5d46e906a63ace7bcc25",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "313b17640b545b747c0543010d2591d8938b421240e7822def4a1fe0654db73f",
+          "1bacc2a2c428e8848da06767f45f7fdfabc220ddf5639fb1316820d76bdfd7be"
+        ],
+        [
+          "4487ac60fad379e9c2af05e0ddc5be83878f3f76db202c59c9ee9039a38ae601"
+        ]
+      ],
+      "proofs": [
+        {
+          "user_ref": "acct-00003",
+          "leaf_index": 0,
+          "proof": {
+            "leaf_index": 0,
+            "leaf": {
+              "user_ref_hash": "303d8593f21983837373891ceb173e6522d06aa1a9546d5d7709701c40f17bcb",
+              "salt": "b698895dae2e9d3155feecd73cb27058ab0c8d30fe30ff0060f2f0cc2db3002a",
+              "balances": {
+                "BTC": "23757000000",
+                "ETH": "4751400000000",
+                "USDT": "0"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "5c88a76b18f0eb16820a08c1f56edb250e59dd4277cd89342b1aa112b2deb1e0",
+                "sums": {
+                  "BTC": "0",
+                  "ETH": "791900000000000000000",
+                  "USDT": "1187850"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "915320f784e665a85497cbe58130be753e18cbdedc1cedab086228e0f7371fb7",
+                "sums": {
+                  "BTC": "15838000",
+                  "ETH": "316775838",
+                  "USDT": "4751423757"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "1bacc2a2c428e8848da06767f45f7fdfabc220ddf5639fb1316820d76bdfd7be",
+                "sums": {
+                  "BTC": "31676000000000",
+                  "ETH": "0",
+                  "USDT": "95028000000000000000"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00005",
+          "leaf_index": 1,
+          "proof": {
+            "leaf_index": 1,
+            "leaf": {
+              "user_ref_hash": "37d93104074d0cd11af57b1e660a9ecd88b33dfc56fd3367c6df0f8cbffb6778",
+              "salt": "3c833052b80d176fd09859fa94c1bbd4d2ddf2500e3e9aa811c6580444fda87a",
+              "balances": {
+                "BTC": "0",
+                "ETH": "791900000000000000000",
+                "USDT": "1187850"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "5d11d6945608f745982bc4ba19fa18bab10a4a5a96c11747eb4114985edc7d2a",
+                "sums": {
+                  "BTC": "23757000000",
+                  "ETH": "4751400000000",
+                  "USDT": "0"
+                },
+                "dir": "left"
+              },
+              {
+                "hash": "915320f784e665a85497cbe58130be753e18cbdedc1cedab086228e0f7371fb7",
+                "sums": {
+                  "BTC": "15838000",
+                  "ETH": "316775838",
+                  "USDT": "4751423757"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "1bacc2a2c428e8848da06767f45f7fdfabc220ddf5639fb1316820d76bdfd7be",
+                "sums": {
+                  "BTC": "31676000000000",
+                  "ETH": "0",
+                  "USDT": "95028000000000000000"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00002",
+          "leaf_index": 2,
+          "proof": {
+            "leaf_index": 2,
+            "leaf": {
+              "user_ref_hash": "81fd038bca1fec73f603a92f239b43591281103aefc10bccd4cb75f332a8132b",
+              "salt": "cbf1c6c0b6e773f7425f9ec92355e02d57adef3fcedc24b5fb356607670cfdc0",
+              "balances": {
+                "BTC": "15838000",
+                "ETH": "316760000",
+                "USDT": "4751400000"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "70dc3aea2da3d74531b44bf7204d2f5b98e60c50ea4e52f51ad27f70b7935b3c",
+                "sums": {
+                  "BTC": "0",
+                  "ETH": "15838",
+                  "USDT": "23757"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "729a7a52471cc0d45b792c96fd89584fe5e4fee12f1204606ff7209ba4c84cf8",
+                "sums": {
+                  "BTC": "23757000000",
+                  "ETH": "791900004751400000000",
+                  "USDT": "1187850"
+                },
+                "dir": "left"
+              },
+              {
+                "hash": "1bacc2a2c428e8848da06767f45f7fdfabc220ddf5639fb1316820d76bdfd7be",
+                "sums": {
+                  "BTC": "31676000000000",
+                  "ETH": "0",
+                  "USDT": "95028000000000000000"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00004",
+          "leaf_index": 4,
+          "proof": {
+            "leaf_index": 4,
+            "leaf": {
+              "user_ref_hash": "d72f934fa7d3e009e15bccfade04916b0616058eb43f7d6b9af178e756bde6d1",
+              "salt": "a511d69ce872fc69dd57035096600e25ae9f37ed744f87321c42a14e6029374a",
+              "balances": {
+                "BTC": "31676000000000",
+                "ETH": "0",
+                "USDT": "95028000000000000000"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {
+                  "BTC": "0",
+                  "ETH": "0",
+                  "USDT": "0"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {
+                  "BTC": "0",
+                  "ETH": "0",
+                  "USDT": "0"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "313b17640b545b747c0543010d2591d8938b421240e7822def4a1fe0654db73f",
+                "sums": {
+                  "BTC": "23772838000",
+                  "ETH": "791900004751716775838",
+                  "USDT": "4752611607"
+                },
+                "dir": "left"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "thirty-three accounts, five assets",
+      "exchange_id": "KR-EX-0a1b2c",
+      "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "assets": [
+        "A1",
+        "B2",
+        "C3",
+        "D4",
+        "E5"
+      ],
+      "rows": [
+        {
+          "user_ref": "acct-00001",
+          "balances": {
+            "B2": "15838",
+            "C3": "23757",
+            "D4": "31676"
+          }
+        },
+        {
+          "user_ref": "acct-00002",
+          "balances": {
+            "A1": "15838000",
+            "B2": "316760000",
+            "C3": "4751400000",
+            "E5": "791900000000"
+          }
+        },
+        {
+          "user_ref": "acct-00003",
+          "balances": {
+            "A1": "23757000000",
+            "B2": "4751400000000",
+            "D4": "95028000000000000",
+            "E5": "11878500000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00004",
+          "balances": {
+            "A1": "31676000000000",
+            "C3": "95028000000000000000",
+            "D4": "126704000000000000000000",
+            "E5": "15838000"
+          }
+        },
+        {
+          "user_ref": "acct-00005",
+          "balances": {
+            "B2": "791900000000000000000",
+            "C3": "1187850",
+            "D4": "15838000000"
+          }
+        },
+        {
+          "user_ref": "acct-00006",
+          "balances": {
+            "A1": "47514000000000000000",
+            "B2": "950280",
+            "C3": "142542000000",
+            "E5": "2375700000000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00007",
+          "balances": {
+            "A1": "55433000000000000000000",
+            "B2": "11086600000",
+            "D4": "22173200000000000000000",
+            "E5": "2771650000"
+          }
+        },
+        {
+          "user_ref": "acct-00008",
+          "balances": {
+            "A1": "6335200",
+            "C3": "1900560000000000000000",
+            "D4": "2534080000",
+            "E5": "31676000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00009",
+          "balances": {
+            "B2": "1425420000000000000",
+            "C3": "21381300",
+            "D4": "2850840000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00010",
+          "balances": {
+            "A1": "7919000000000",
+            "B2": "15838000000000000000000",
+            "C3": "2375700000000",
+            "E5": "395950000000"
+          }
+        },
+        {
+          "user_ref": "acct-00011",
+          "balances": {
+            "A1": "8710900000000000",
+            "B2": "17421800",
+            "D4": "348436000",
+            "E5": "4355450000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00012",
+          "balances": {
+            "A1": "9502800000000000000",
+            "C3": "28508400000000000000000",
+            "D4": "380112000000000",
+            "E5": "4751400"
+          }
+        },
+        {
+          "user_ref": "acct-00013",
+          "balances": {
+            "B2": "2058940000000000",
+            "C3": "308841000",
+            "D4": "411788000000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00014",
+          "balances": {
+            "A1": "1108660",
+            "B2": "22173200000000000000",
+            "C3": "33259800000000",
+            "E5": "554330000000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00015",
+          "balances": {
+            "A1": "1187850000",
+            "B2": "237570000000000000000000",
+            "D4": "47514000000000",
+            "E5": "593925000"
+          }
+        },
+        {
+          "user_ref": "acct-00016",
+          "balances": {
+            "A1": "1267040000000",
+            "C3": "380112000000000000000000",
+            "D4": "50681600000000000000",
+            "E5": "6335200000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00017",
+          "balances": {
+            "B2": "2692460000000",
+            "C3": "4038690000",
+            "D4": "5384920"
+          }
+        },
+        {
+          "user_ref": "acct-00018",
+          "balances": {
+            "A1": "1425420000000000000",
+            "B2": "28508400000000000",
+            "C3": "427626000000000",
+            "E5": "71271000000"
+          }
+        },
+        {
+          "user_ref": "acct-00019",
+          "balances": {
+            "A1": "1504610000000000000000",
+            "B2": "300922000000000000000",
+            "D4": "6018440000000000000",
+            "E5": "752305000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00020",
+          "balances": {
+            "A1": "158380",
+            "C3": "475140",
+            "D4": "633520",
+            "E5": "791900"
+          }
+        },
+        {
+          "user_ref": "acct-00021",
+          "balances": {
+            "B2": "3325980000",
+            "C3": "49889700000",
+            "D4": "665196000000"
+          }
+        },
+        {
+          "user_ref": "acct-00022",
+          "balances": {
+            "A1": "174218000000",
+            "B2": "34843600000000",
+            "C3": "5226540000000000",
+            "E5": "87109000000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00023",
+          "balances": {
+            "A1": "182137000000000",
+            "B2": "364274000000000000",
+            "D4": "728548000000000000000000",
+            "E5": "91068500"
+          }
+        },
+        {
+          "user_ref": "acct-00024",
+          "balances": {
+            "A1": "190056000000000000",
+            "C3": "5701680",
+            "D4": "76022400000",
+            "E5": "950280000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00025",
+          "balances": {
+            "B2": "3959500",
+            "C3": "593925000000",
+            "D4": "79190000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00026",
+          "balances": {
+            "A1": "205894000000000000000000",
+            "B2": "41178800000",
+            "C3": "61768200000000000",
+            "E5": "10294700000"
+          }
+        },
+        {
+          "user_ref": "acct-00027",
+          "balances": {
+            "A1": "21381300",
+            "B2": "427626000000000",
+            "D4": "8552520000",
+            "E5": "106906500000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00028",
+          "balances": {
+            "A1": "22173200000",
+            "C3": "66519600",
+            "D4": "8869280000000000",
+            "E5": "108660000000000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00029",
+          "balances": {
+            "B2": "45930200000000000000000",
+            "C3": "6889530000000",
+            "D4": "9186040000000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00030",
+          "balances": {
+            "A1": "23757000000000000",
+            "B2": "47514000",
+            "C3": "712710000000000000",
+            "E5": "11878500000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00031",
+          "balances": {
+            "A1": "24548900000000000000",
+            "B2": "490978000000",
+            "D4": "981956000000000",
+            "E5": "12274450"
+          }
+        },
+        {
+          "user_ref": "acct-00032",
+          "balances": {
+            "A1": "25340800000000000000000",
+            "C3": "760224000",
+            "D4": "1013632000000000000000",
+            "E5": "126704000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00033",
+          "balances": {
+            "B2": "52265400000000000000",
+            "C3": "78398100000000",
+            "D4": "104530800"
+          }
+        }
+      ],
+      "leaf_count": 33,
+      "root": "efcaf781ea8e9ef91ca95adb876edeb1d391adce0f9761f038aad9ce50b421e5",
+      "totals": {
+        "A1": "288255623867120420871540",
+        "B2": "300507281331800416001418",
+        "C3": "410616768254085441144327",
+        "D4": "888093547388470602016916",
+        "E5": "111706149750956905999250"
+      },
+      "order": [
+        "acct-00022",
+        "acct-00033",
+        "acct-00015",
+        "acct-00007",
+        "acct-00003",
+        "acct-00005",
+        "acct-00026",
+        "acct-00014",
+        "acct-00013",
+        "acct-00017",
+        "acct-00023",
+        "acct-00006",
+        "acct-00009",
+        "acct-00002",
+        "acct-00012",
+        "acct-00027",
+        "acct-00021",
+        "acct-00024",
+        "acct-00025",
+        "acct-00016",
+        "acct-00031",
+        "acct-00011",
+        "acct-00001",
+        "acct-00030",
+        "acct-00032",
+        "acct-00029",
+        "acct-00019",
+        "acct-00004",
+        "acct-00028",
+        "acct-00010",
+        "acct-00018",
+        "acct-00008",
+        "acct-00020"
+      ],
+      "level_hashes": [
+        [
+          "e7eec95b48dab8c0547a6810344751d97cfabe4dfafc0ea2bca5fab758e48477",
+          "050ca519d71322c292048f6a36821707fd327e68655803a4751064e0fd7a96d0",
+          "de3b42e418f41bfb786ad95c66b5cd0d1e48188e5b5138af7145f15c5f5a700d",
+          "d14a76e64f897cb2bd241300674e38613d284bfeedec02df7182e543a4c75952",
+          "b39565997d50c21907e5bd9cc25131dfccf3f8e6512429bd14771d65202a0314",
+          "e7ed0d8ceb0744744b228b5bc18276d0f880fc5f1ec7b56e4a5110f8dafa0b10",
+          "68818e6f0285b264a9f8e1f43bc82a09e645b818f70b3adc640bfcbe8d33b1f7",
+          "b3981ca4b5898ce8737c76f9f26dcbe52f6b4455021623b5acc30912340cdc8d",
+          "e04eab0a52019a46a64ba1fe6bf142e7dcce8b9618b939e025b27e176a910d3e",
+          "81a1fe11095fcba21d7941b692e2d5174ef41db77dfb84bcf9f9fa02c9678bbf",
+          "9076aec1ee62fe8769b740a6e06e2f47b11a1044b4e496c413f6e556e129c2ea",
+          "9f7f82deea363328045bda2588c56c64791e4f01b2fb000ba3f83e3597805858",
+          "aba2059569a72cf103bf691a52bd0dc3725a95468003718ba2f9e61d391b7f80",
+          "c92ed580d43996c33a46b121c3602a120dbd1a9b1b2cd81330a3249d60ef9b8b",
+          "afc6a2101c39cb97f77ead81f7dec08bea648bcbc495fd46a7bcaeadf48f1787",
+          "4bfce4518bbe72620cf4531f8d18ed89e80429bf380ec95ab07521b915d01479",
+          "89735dfd0d6935b07e70b36df7792e3d92ade7fb5bf15cc08920fd2ae032e52c",
+          "915167eb794c9553ebeea19b1b32873d1352e8b0ead95035173269328e1c9637",
+          "85f279fd28260f8b62de1cbbd8260f382e6ece3b5a3e6b76e1754985b90dec9d",
+          "57d9fcbd53e9fdc10411c7cb9ddf6dafc30a79966e399bf2eeb8bc25c64a768d",
+          "65f8b3122720fd94e1a34ef850bfbab1a969284f88b8f2f543f4adb02c2c1a4c",
+          "6c186fe86eadff47901cd05b2b79b742fa340f2b6011042ada5990f9c47e776a",
+          "10af8a60c841c27056c54f2780ce59cfb6ea9d7b584cb322a042ede197968b5e",
+          "02faf03eac1b940e9f421c793803beea3e1e6490e926526b60c9c9c09a176f85",
+          "0bbbd65885577d7a2a08324ccf48de5a7e4fbb16ee502298cd39d9673ae25609",
+          "5474e93a53f5ffcc7c8f7224825377f6caf7d8071fc67459d82f1b740f5a86fb",
+          "35be3d82f232531e9ee2e7015da93ae5b0eb5b6d1855aed8839282c93fda976c",
+          "961fc8d9fe9a3cdbc32e4679bacee17075f519fb0d8eca25d766e0928ba14e13",
+          "55f899d16c01879c6793a7561cfb6272d279a2dd59dec58142316759d9fea4b6",
+          "28661ed39b4dc6ca3a9e27dedf9f477e3a97ceb638f2449489f5b1692fe6377a",
+          "da9312cb1a30205bc4cd5e3a687753f4923002c1c974c510ebb1466acf88edba",
+          "9ba22eeab60dbe630317ff62743d4da2c914ab93b0e6b1da63d755e4afd90d69",
+          "5280f8171cf83b0815ca9750b28ac46a28485c28c9fd35b1d32c61b66a9d53cc",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "7a09e38e1af5428b36a2d2f55a5626d1955856e29ebfd94e172ddb507695e6c7",
+          "a8c25abc388f2b73c9f71b0cb5af75dabae08c97f982932646496de5c37359ae",
+          "a8266544e4a6dec946669e5e9384564c9e32adfe34c961563fd57e25532ad048",
+          "18572376e62d5ff2712b3cae9eb83f336533d8dfa35ffd8e7e0a60d3af50dce9",
+          "fa22fe9f0499935b23519b45e1709c5ac8ce6ae5f90f790450b469cf5fad302e",
+          "820e17cf15dc5952873070f31d6abdfc4726c0290b4e21dd2953da0fd89684e3",
+          "059ccaaa3dd4cb6e12b9d1293f1ca50683bbdf198a99def3eb48175dd0d740aa",
+          "3fd6be8736d330f70235f55d2ed524a803f8d0eac8a929f660a5a9224f32f227",
+          "ce7acd13ef49ecf05a0c29bf0db91ffa51ed4f100c2349a8518e73971ed2a793",
+          "49ced1fb684e0c801ab8b3965c830551740eb51b838ab10ac009826b67030fb8",
+          "60137983c559555b131a50137a9233565dda524f4fc7232dc0774d659afda0b8",
+          "e0378eb3f841a8518607900f8816d9f474b13bdc3718adb9161162de0e9234ff",
+          "1da1f6ae840bdc8ba8d9cdb6b0ae7a12abafb270b5b326518a6e248514a2a713",
+          "0f2583fde44325aa12800a26f2505bb16e9f9e428f1a5c971b1043d7562b9450",
+          "2046a57ed4bc21b905be07fc7ef931fad0013e7b525befb9646f6d67a426bb51",
+          "30a10cb94b8e2e2462fcfd187070acbf351706185af2541b96f9b3da538657f9",
+          "28eb20a0e77d07d4389d7ee4b9e272a42d776d966d6acd477884dd117013acb7",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "2db19cd38fa4f575a30ac209d5b557cfe50df41663bd71fd7d51928643177f28",
+          "16d44963a0024c0d05d268ec750b1125939685356ccda3c94e7ee41219e1f752",
+          "0d312f32bf8261ce8dff3a0ebad99e922443c68468d1a50f9ed9123e64c9edbd",
+          "d56d59806c02e8705831e7727b2beff716bff08dea68ff1c07a6322e3afe91d9",
+          "cf038cc3db0d7084e42384a2d73850333f05eb8166e9d8926a8445eeeffd15f7",
+          "e2d14cf974a3d8ac5a61e869596e097d7c8e93c826770449fda14dee82be5216",
+          "be11f85c0888c00efec2132868ef8c4a30b8991fe3bc7bc7e7117990978d7a18",
+          "dabf1fe4672c7e20e3c06a22a64e2871b893e33e1eff497c5d6399a14a525155",
+          "281d0c601fcb9243fc22cb7caf0e8a52be136d81892a1ac81c4c38d1747ff7b3",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "4307de5e7cff3b62eb9ef34d25e2ff63643c27c3df5f6e90c98a79f2187c94f9",
+          "5ee55d847f9577bbf19a47f8b4ae6a6fe9091fd0deca80f666d999b56a05d102",
+          "ade4bd9606162c65945615fb23318f701ae75ddeadb7cbe9cf4b49901de6eda0",
+          "7293ef86ad1ecfb48e44be9ca92e4226941001fb3586c4b144d937e261216899",
+          "f577634e0fd68ddbcc560806c6fc2cd4d6d5d356e2b489beb742b30f5851a3d0",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "4aee986ba82309d00dd6b8b344392445cf857111e66cb5c6630fa629660a4ece",
+          "58f20b741aafa6e7ba103709f941daf464cd8a955f05f49c43ad95b777c172b9",
+          "68ac01d3aab172838a65c6494577870faa74feb839d27f7d76124a0863db44f8",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "a5d8ad2ffc4e7b53c02f28fb31cbb7fe27761945876d0056a5ca5a83b13e547e",
+          "879d909d599f5bf96b4756836334fe8759378269f9d7771d167c64dff7a8ba0a"
+        ],
+        [
+          "efcaf781ea8e9ef91ca95adb876edeb1d391adce0f9761f038aad9ce50b421e5"
+        ]
+      ],
+      "proofs": [
+        {
+          "user_ref": "acct-00022",
+          "leaf_index": 0,
+          "proof": {
+            "leaf_index": 0,
+            "leaf": {
+              "user_ref_hash": "0016ea6fbf3dc9b6e278f9abdec5be3aba7b85b2726cb84266e4bb35fa52c3fc",
+              "salt": "c5a15c8aadaf6e68705f5b62d5fc466ac19c346845cd7756932975f63bebcc8c",
+              "balances": {
+                "A1": "174218000000",
+                "B2": "34843600000000",
+                "C3": "5226540000000000",
+                "D4": "0",
+                "E5": "87109000000000000000"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "050ca519d71322c292048f6a36821707fd327e68655803a4751064e0fd7a96d0",
+                "sums": {
+                  "A1": "0",
+                  "B2": "52265400000000000000",
+                  "C3": "78398100000000",
+                  "D4": "104530800",
+                  "E5": "0"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "a8c25abc388f2b73c9f71b0cb5af75dabae08c97f982932646496de5c37359ae",
+                "sums": {
+                  "A1": "55433000000001187850000",
+                  "B2": "237570000000011086600000",
+                  "C3": "0",
+                  "D4": "22173200047514000000000",
+                  "E5": "3365575000"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "16d44963a0024c0d05d268ec750b1125939685356ccda3c94e7ee41219e1f752",
+                "sums": {
+                  "A1": "205894000000023758108660",
+                  "B2": "814073204792578800000",
+                  "C3": "61801459801187850",
+                  "D4": "95028015838000000",
+                  "E5": "566208500010294700000"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "5ee55d847f9577bbf19a47f8b4ae6a6fe9091fd0deca80f666d999b56a05d102",
+                "sums": {
+                  "A1": "57016982137037219300",
+                  "B2": "1792183258777710280",
+                  "C3": "28508400000151662312300",
+                  "D4": "728959791230960557904920",
+                  "E5": "2375806907291995819900"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "58f20b741aafa6e7ba103709f941daf464cd8a955f05f49c43ad95b777c172b9",
+                "sums": {
+                  "A1": "26871606884784219535200",
+                  "B2": "62069150508894372891138",
+                  "C3": "382108301147535877169037",
+                  "D4": "136960461081980100947676",
+                  "E5": "108677025343651249112450"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "879d909d599f5bf96b4756836334fe8759378269f9d7771d167c64dff7a8ba0a",
+                "sums": {
+                  "A1": "158380",
+                  "B2": "0",
+                  "C3": "475140",
+                  "D4": "633520",
+                  "E5": "791900"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00033",
+          "leaf_index": 1,
+          "proof": {
+            "leaf_index": 1,
+            "leaf": {
+              "user_ref_hash": "0313f6f238a8ec729d5cbae44601233de287bbc69087ea78a3a64780b563871f",
+              "salt": "b5c16816c744a6f8cd5e32ddf7b2a4d797de5467331ab9dd9179b71590c65fb5",
+              "balances": {
+                "A1": "0",
+                "B2": "52265400000000000000",
+                "C3": "78398100000000",
+                "D4": "104530800",
+                "E5": "0"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "e7eec95b48dab8c0547a6810344751d97cfabe4dfafc0ea2bca5fab758e48477",
+                "sums": {
+                  "A1": "174218000000",
+                  "B2": "34843600000000",
+                  "C3": "5226540000000000",
+                  "D4": "0",
+                  "E5": "87109000000000000000"
+                },
+                "dir": "left"
+              },
+              {
+                "hash": "a8c25abc388f2b73c9f71b0cb5af75dabae08c97f982932646496de5c37359ae",
+                "sums": {
+                  "A1": "55433000000001187850000",
+                  "B2": "237570000000011086600000",
+                  "C3": "0",
+                  "D4": "22173200047514000000000",
+                  "E5": "3365575000"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "16d44963a0024c0d05d268ec750b1125939685356ccda3c94e7ee41219e1f752",
+                "sums": {
+                  "A1": "205894000000023758108660",
+                  "B2": "814073204792578800000",
+                  "C3": "61801459801187850",
+                  "D4": "95028015838000000",
+                  "E5": "566208500010294700000"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "5ee55d847f9577bbf19a47f8b4ae6a6fe9091fd0deca80f666d999b56a05d102",
+                "sums": {
+                  "A1": "57016982137037219300",
+                  "B2": "1792183258777710280",
+                  "C3": "28508400000151662312300",
+                  "D4": "728959791230960557904920",
+                  "E5": "2375806907291995819900"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "58f20b741aafa6e7ba103709f941daf464cd8a955f05f49c43ad95b777c172b9",
+                "sums": {
+                  "A1": "26871606884784219535200",
+                  "B2": "62069150508894372891138",
+                  "C3": "382108301147535877169037",
+                  "D4": "136960461081980100947676",
+                  "E5": "108677025343651249112450"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "879d909d599f5bf96b4756836334fe8759378269f9d7771d167c64dff7a8ba0a",
+                "sums": {
+                  "A1": "158380",
+                  "B2": "0",
+                  "C3": "475140",
+                  "D4": "633520",
+                  "E5": "791900"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00021",
+          "leaf_index": 16,
+          "proof": {
+            "leaf_index": 16,
+            "leaf": {
+              "user_ref_hash": "96dfd7a0c1709d5e99866230903b01e9be72c6077f4b6697afda52b5c3d22098",
+              "salt": "b4aea4d208c3b3f44ca1c0f894839db520d442ac1e9fb149873196d191ca8e11",
+              "balances": {
+                "A1": "0",
+                "B2": "3325980000",
+                "C3": "49889700000",
+                "D4": "665196000000",
+                "E5": "0"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "915167eb794c9553ebeea19b1b32873d1352e8b0ead95035173269328e1c9637",
+                "sums": {
+                  "A1": "190056000000000000",
+                  "B2": "0",
+                  "C3": "5701680",
+                  "D4": "76022400000",
+                  "E5": "950280000000000"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "49ced1fb684e0c801ab8b3965c830551740eb51b838ab10ac009826b67030fb8",
+                "sums": {
+                  "A1": "1267040000000",
+                  "B2": "3959500",
+                  "C3": "380112000000593925000000",
+                  "D4": "50760790000000000000",
+                  "E5": "6335200000000000"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "e2d14cf974a3d8ac5a61e869596e097d7c8e93c826770449fda14dee82be5216",
+                "sums": {
+                  "A1": "24581367900000000000",
+                  "B2": "491042951638",
+                  "C3": "712710000000023757",
+                  "D4": "981956348467676",
+                  "E5": "16233950000012274450"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "7293ef86ad1ecfb48e44be9ca92e4226941001fb3586c4b144d937e261216899",
+                "sums": {
+                  "A1": "26846835459617179535200",
+                  "B2": "62069150508400000000000",
+                  "C3": "1995588436892056743600",
+                  "D4": "136909699309282534080000",
+                  "E5": "108660784108171236838000"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "4aee986ba82309d00dd6b8b344392445cf857111e66cb5c6630fa629660a4ece",
+                "sums": {
+                  "A1": "261384016982336201177960",
+                  "B2": "238438130822906043110280",
+                  "C3": "28508467106549563500150",
+                  "D4": "751133086306490500435720",
+                  "E5": "3029124407305656094900"
+                },
+                "dir": "left"
+              },
+              {
+                "hash": "879d909d599f5bf96b4756836334fe8759378269f9d7771d167c64dff7a8ba0a",
+                "sums": {
+                  "A1": "158380",
+                  "B2": "0",
+                  "C3": "475140",
+                  "D4": "633520",
+                  "E5": "791900"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00020",
+          "leaf_index": 32,
+          "proof": {
+            "leaf_index": 32,
+            "leaf": {
+              "user_ref_hash": "fb20db5e4f7084e9352dd0e56ff9a1f08b0c3e72782ef405bb263ff543d090f9",
+              "salt": "fce3e6b81dbd9a3e27dbca81cdc93fbd1da1246bfbf7e05adb60c7ead64f1918",
+              "balances": {
+                "A1": "158380",
+                "B2": "0",
+                "C3": "475140",
+                "D4": "633520",
+                "E5": "791900"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {
+                  "A1": "0",
+                  "B2": "0",
+                  "C3": "0",
+                  "D4": "0",
+                  "E5": "0"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {
+                  "A1": "0",
+                  "B2": "0",
+                  "C3": "0",
+                  "D4": "0",
+                  "E5": "0"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {
+                  "A1": "0",
+                  "B2": "0",
+                  "C3": "0",
+                  "D4": "0",
+                  "E5": "0"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {
+                  "A1": "0",
+                  "B2": "0",
+                  "C3": "0",
+                  "D4": "0",
+                  "E5": "0"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {
+                  "A1": "0",
+                  "B2": "0",
+                  "C3": "0",
+                  "D4": "0",
+                  "E5": "0"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "a5d8ad2ffc4e7b53c02f28fb31cbb7fe27761945876d0056a5ca5a83b13e547e",
+                "sums": {
+                  "A1": "288255623867120420713160",
+                  "B2": "300507281331800416001418",
+                  "C3": "410616768254085440669187",
+                  "D4": "888093547388470601383396",
+                  "E5": "111706149750956905207350"
+                },
+                "dir": "left"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "invalid_proofs": {
+    "against": {
+      "root": "4487ac60fad379e9c2af05e0ddc5be83878f3f76db202c59c9ee9039a38ae601",
+      "totals": {
+        "BTC": "31699772838000",
+        "ETH": "791900004751716775838",
+        "USDT": "95028000004752611607"
+      }
+    },
+    "proofs": [
+      {
+        "why": "a balance was changed",
+        "proof": {
+          "leaf_index": 1,
+          "leaf": {
+            "user_ref_hash": "37d93104074d0cd11af57b1e660a9ecd88b33dfc56fd3367c6df0f8cbffb6778",
+            "salt": "3c833052b80d176fd09859fa94c1bbd4d2ddf2500e3e9aa811c6580444fda87a",
+            "balances": {
+              "BTC": "1",
+              "ETH": "791900000000000000000",
+              "USDT": "1187850"
+            }
+          },
+          "siblings": [
+            {
+              "hash": "5d11d6945608f745982bc4ba19fa18bab10a4a5a96c11747eb4114985edc7d2a",
+              "sums": {
+                "BTC": "23757000000",
+                "ETH": "4751400000000",
+                "USDT": "0"
+              },
+              "dir": "left"
+            },
+            {
+              "hash": "915320f784e665a85497cbe58130be753e18cbdedc1cedab086228e0f7371fb7",
+              "sums": {
+                "BTC": "15838000",
+                "ETH": "316775838",
+                "USDT": "4751423757"
+              },
+              "dir": "right"
+            },
+            {
+              "hash": "1bacc2a2c428e8848da06767f45f7fdfabc220ddf5639fb1316820d76bdfd7be",
+              "sums": {
+                "BTC": "31676000000000",
+                "ETH": "0",
+                "USDT": "95028000000000000000"
+              },
+              "dir": "right"
+            }
+          ]
+        }
+      },
+      {
+        "why": "a sibling sum was changed",
+        "proof": {
+          "leaf_index": 1,
+          "leaf": {
+            "user_ref_hash": "37d93104074d0cd11af57b1e660a9ecd88b33dfc56fd3367c6df0f8cbffb6778",
+            "salt": "3c833052b80d176fd09859fa94c1bbd4d2ddf2500e3e9aa811c6580444fda87a",
+            "balances": {
+              "BTC": "0",
+              "ETH": "791900000000000000000",
+              "USDT": "1187850"
+            }
+          },
+          "siblings": [
+            {
+              "hash": "5d11d6945608f745982bc4ba19fa18bab10a4a5a96c11747eb4114985edc7d2a",
+              "sums": {
+                "BTC": "23757000000",
+                "ETH": "4751400000001",
+                "USDT": "0"
+              },
+              "dir": "left"
+            },
+            {
+              "hash": "915320f784e665a85497cbe58130be753e18cbdedc1cedab086228e0f7371fb7",
+              "sums": {
+                "BTC": "15838000",
+                "ETH": "316775838",
+                "USDT": "4751423757"
+              },
+              "dir": "right"
+            },
+            {
+              "hash": "1bacc2a2c428e8848da06767f45f7fdfabc220ddf5639fb1316820d76bdfd7be",
+              "sums": {
+                "BTC": "31676000000000",
+                "ETH": "0",
+                "USDT": "95028000000000000000"
+              },
+              "dir": "right"
+            }
+          ]
+        }
+      },
+      {
+        "why": "the index was changed",
+        "proof": {
+          "leaf_index": 0,
+          "leaf": {
+            "user_ref_hash": "37d93104074d0cd11af57b1e660a9ecd88b33dfc56fd3367c6df0f8cbffb6778",
+            "salt": "3c833052b80d176fd09859fa94c1bbd4d2ddf2500e3e9aa811c6580444fda87a",
+            "balances": {
+              "BTC": "0",
+              "ETH": "791900000000000000000",
+              "USDT": "1187850"
+            }
+          },
+          "siblings": [
+            {
+              "hash": "5d11d6945608f745982bc4ba19fa18bab10a4a5a96c11747eb4114985edc7d2a",
+              "sums": {
+                "BTC": "23757000000",
+                "ETH": "4751400000000",
+                "USDT": "0"
+              },
+              "dir": "left"
+            },
+            {
+              "hash": "915320f784e665a85497cbe58130be753e18cbdedc1cedab086228e0f7371fb7",
+              "sums": {
+                "BTC": "15838000",
+                "ETH": "316775838",
+                "USDT": "4751423757"
+              },
+              "dir": "right"
+            },
+            {
+              "hash": "1bacc2a2c428e8848da06767f45f7fdfabc220ddf5639fb1316820d76bdfd7be",
+              "sums": {
+                "BTC": "31676000000000",
+                "ETH": "0",
+                "USDT": "95028000000000000000"
+              },
+              "dir": "right"
+            }
+          ]
+        }
+      },
+      {
+        "why": "a sibling direction was flipped",
+        "proof": {
+          "leaf_index": 1,
+          "leaf": {
+            "user_ref_hash": "37d93104074d0cd11af57b1e660a9ecd88b33dfc56fd3367c6df0f8cbffb6778",
+            "salt": "3c833052b80d176fd09859fa94c1bbd4d2ddf2500e3e9aa811c6580444fda87a",
+            "balances": {
+              "BTC": "0",
+              "ETH": "791900000000000000000",
+              "USDT": "1187850"
+            }
+          },
+          "siblings": [
+            {
+              "hash": "5d11d6945608f745982bc4ba19fa18bab10a4a5a96c11747eb4114985edc7d2a",
+              "sums": {
+                "BTC": "23757000000",
+                "ETH": "4751400000000",
+                "USDT": "0"
+              },
+              "dir": "left"
+            },
+            {
+              "hash": "915320f784e665a85497cbe58130be753e18cbdedc1cedab086228e0f7371fb7",
+              "sums": {
+                "BTC": "15838000",
+                "ETH": "316775838",
+                "USDT": "4751423757"
+              },
+              "dir": "left"
+            },
+            {
+              "hash": "1bacc2a2c428e8848da06767f45f7fdfabc220ddf5639fb1316820d76bdfd7be",
+              "sums": {
+                "BTC": "31676000000000",
+                "ETH": "0",
+                "USDT": "95028000000000000000"
+              },
+              "dir": "right"
+            }
+          ]
+        }
+      },
+      {
+        "why": "a sibling hash was changed",
+        "proof": {
+          "leaf_index": 1,
+          "leaf": {
+            "user_ref_hash": "37d93104074d0cd11af57b1e660a9ecd88b33dfc56fd3367c6df0f8cbffb6778",
+            "salt": "3c833052b80d176fd09859fa94c1bbd4d2ddf2500e3e9aa811c6580444fda87a",
+            "balances": {
+              "BTC": "0",
+              "ETH": "791900000000000000000",
+              "USDT": "1187850"
+            }
+          },
+          "siblings": [
+            {
+              "hash": "fd11d6945608f745982bc4ba19fa18bab10a4a5a96c11747eb4114985edc7d2a",
+              "sums": {
+                "BTC": "23757000000",
+                "ETH": "4751400000000",
+                "USDT": "0"
+              },
+              "dir": "left"
+            },
+            {
+              "hash": "915320f784e665a85497cbe58130be753e18cbdedc1cedab086228e0f7371fb7",
+              "sums": {
+                "BTC": "15838000",
+                "ETH": "316775838",
+                "USDT": "4751423757"
+              },
+              "dir": "right"
+            },
+            {
+              "hash": "1bacc2a2c428e8848da06767f45f7fdfabc220ddf5639fb1316820d76bdfd7be",
+              "sums": {
+                "BTC": "31676000000000",
+                "ETH": "0",
+                "USDT": "95028000000000000000"
+              },
+              "dir": "right"
+            }
+          ]
+        }
+      },
+      {
+        "why": "a negative balance",
+        "proof": {
+          "leaf_index": 1,
+          "leaf": {
+            "user_ref_hash": "37d93104074d0cd11af57b1e660a9ecd88b33dfc56fd3367c6df0f8cbffb6778",
+            "salt": "3c833052b80d176fd09859fa94c1bbd4d2ddf2500e3e9aa811c6580444fda87a",
+            "balances": {
+              "BTC": "0",
+              "ETH": "791900000000000000000",
+              "USDT": "-1"
+            }
+          },
+          "siblings": [
+            {
+              "hash": "5d11d6945608f745982bc4ba19fa18bab10a4a5a96c11747eb4114985edc7d2a",
+              "sums": {
+                "BTC": "23757000000",
+                "ETH": "4751400000000",
+                "USDT": "0"
+              },
+              "dir": "left"
+            },
+            {
+              "hash": "915320f784e665a85497cbe58130be753e18cbdedc1cedab086228e0f7371fb7",
+              "sums": {
+                "BTC": "15838000",
+                "ETH": "316775838",
+                "USDT": "4751423757"
+              },
+              "dir": "right"
+            },
+            {
+              "hash": "1bacc2a2c428e8848da06767f45f7fdfabc220ddf5639fb1316820d76bdfd7be",
+              "sums": {
+                "BTC": "31676000000000",
+                "ETH": "0",
+                "USDT": "95028000000000000000"
+              },
+              "dir": "right"
+            }
+          ]
+        }
+      },
+      {
+        "why": "the salt was changed",
+        "proof": {
+          "leaf_index": 1,
+          "leaf": {
+            "user_ref_hash": "37d93104074d0cd11af57b1e660a9ecd88b33dfc56fd3367c6df0f8cbffb6778",
+            "salt": "0000000000000000000000000000000000000000000000000000000000000000",
+            "balances": {
+              "BTC": "0",
+              "ETH": "791900000000000000000",
+              "USDT": "1187850"
+            }
+          },
+          "siblings": [
+            {
+              "hash": "5d11d6945608f745982bc4ba19fa18bab10a4a5a96c11747eb4114985edc7d2a",
+              "sums": {
+                "BTC": "23757000000",
+                "ETH": "4751400000000",
+                "USDT": "0"
+              },
+              "dir": "left"
+            },
+            {
+              "hash": "915320f784e665a85497cbe58130be753e18cbdedc1cedab086228e0f7371fb7",
+              "sums": {
+                "BTC": "15838000",
+                "ETH": "316775838",
+                "USDT": "4751423757"
+              },
+              "dir": "right"
+            },
+            {
+              "hash": "1bacc2a2c428e8848da06767f45f7fdfabc220ddf5639fb1316820d76bdfd7be",
+              "sums": {
+                "BTC": "31676000000000",
+                "ETH": "0",
+                "USDT": "95028000000000000000"
+              },
+              "dir": "right"
+            }
+          ]
+        }
+      },
+      {
+        "why": "a sibling was dropped",
+        "proof": {
+          "leaf_index": 1,
+          "leaf": {
+            "user_ref_hash": "37d93104074d0cd11af57b1e660a9ecd88b33dfc56fd3367c6df0f8cbffb6778",
+            "salt": "3c833052b80d176fd09859fa94c1bbd4d2ddf2500e3e9aa811c6580444fda87a",
+            "balances": {
+              "BTC": "0",
+              "ETH": "791900000000000000000",
+              "USDT": "1187850"
+            }
+          },
+          "siblings": [
+            {
+              "hash": "5d11d6945608f745982bc4ba19fa18bab10a4a5a96c11747eb4114985edc7d2a",
+              "sums": {
+                "BTC": "23757000000",
+                "ETH": "4751400000000",
+                "USDT": "0"
+              },
+              "dir": "left"
+            },
+            {
+              "hash": "915320f784e665a85497cbe58130be753e18cbdedc1cedab086228e0f7371fb7",
+              "sums": {
+                "BTC": "15838000",
+                "ETH": "316775838",
+                "USDT": "4751423757"
+              },
+              "dir": "right"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

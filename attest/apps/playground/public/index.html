@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StoneHash Attest · Playground</title>
+<meta name="description" content="Verify a StoneHash Attest proof bundle in your browser. Nothing is uploaded and no StoneHash server is contacted.">
+<!--
+  Where the API lives. Empty means same origin, which is how the single-host
+  test deployment works; production sets it to the api host because the
+  Playground is served from a different one. Kept in markup rather than compiled
+  in so one `dist/` serves both.
+-->
+<meta name="attest-api" content="">
+<link rel="icon" href="./favicon.png">
+<link rel="stylesheet" href="./app.css">
+</head>
+<body>
+<header class="masthead">
+  <div class="wrap">
+    <a class="brand" href="./">StoneHash <b>Attest</b></a>
+  </div>
+</header>
+
+<div class="wrap main">
+
+  <!-- ─── ANCHOR (free tier, no signup) ──────────────────────────────── -->
+  <section id="panel-anchor" class="panel">
+    <h1>본인 파일을 직접 앵커링해 보십시오</h1>
+    <p class="lede">
+      가입도, API 키도 필요 없습니다. 파일은 <b>이 브라우저에서 해싱</b>되고
+      <b>32바이트 다이제스트만</b> 전송됩니다 — 받은 적 없는 파일은 우리가 유출할 수도,
+      제출을 강제당할 수도 없습니다.
+    </p>
+
+    <div class="banner" id="anchor-net"></div>
+
+    <label class="drop" id="drop-anchor">
+      <input type="file" id="file-anchor" hidden>
+      <span class="dk">앵커링할 파일</span>
+      <span class="dv" id="name-anchor">파일을 끌어다 놓거나 클릭 — 업로드되지 않습니다</span>
+    </label>
+
+    <div class="hashline" id="anchor-hashline">
+      <span class="k">SHA-256</span>
+      <code id="anchor-hash" class="mono">—</code>
+    </div>
+
+    <div class="row">
+      <button class="btn" id="btn-anchor" disabled>다이제스트 앵커링</button>
+      <button class="btn ghost" id="btn-anchor-reset">초기화</button>
+    </div>
+
+    <div id="anchor-result"></div>
+  </section>
+
+
+  <!-- ─── VERIFY ─────────────────────────────────────────────────────── -->
+  <section id="panel-verify" class="panel">
+    <h1>받은 증명을 확인합니다</h1>
+    <p class="lede">
+      위에서 내려받은 증명 번들과 <b>원본 파일</b>을 넣어 직접 확인하십시오 — 다른 곳에서 받은 증명도 같습니다. 해싱과 검증 전부가 이 브라우저 안에서 일어나고,
+      StoneHash 서버를 한 번도 호출하지 않습니다. 네트워크를 끊고 해보셔도 됩니다.
+    </p>
+
+    <div class="drops">
+      <label class="drop" id="drop-bundle">
+        <input type="file" id="file-bundle" accept=".json,application/json" hidden>
+        <span class="dk">증명 번들</span>
+        <span class="dv" id="name-bundle">bundle.json 을 끌어다 놓거나 클릭</span>
+      </label>
+      <label class="drop" id="drop-original">
+        <input type="file" id="file-original" hidden>
+        <span class="dk">원본 파일 <em>(선택)</em></span>
+        <span class="dv" id="name-original">링크 A 검증에 필요합니다</span>
+      </label>
+    </div>
+
+    <div class="row">
+      <button class="btn" id="btn-verify" disabled>검증</button>
+      <button class="btn ghost" id="btn-reset">초기화</button>
+    </div>
+
+    <div id="result" hidden></div>
+  </section>
+
+</div>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>검증은 전적으로 브라우저에서 수행됩니다 · 네트워크 요청 없음</span>
+    <span class="mono" id="buildinfo"></span>
+  </div>
+</footer>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

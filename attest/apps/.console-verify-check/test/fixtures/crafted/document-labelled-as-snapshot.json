@@ -1,0 +1,37 @@
+{
+  "schema": "bitcert-proof-bundle/v1",
+  "bitcoin_network": "regtest",
+  "generated_at": "2026-11-18T09:39:06.758Z",
+  "record": {
+    "kind": "attestation",
+    "leaf_bytes": "de6a89404058e8e3177bae386b3679f63f9c5928c0a9059a6184ef0b63e348e1",
+    "preimage": {
+      "scheme": "sha256-file",
+      "content_type": "text/plain"
+    },
+    "descriptor": {
+      "attestation_id": "f626f356-0bb1-4495-8949-fdc1678f0126",
+      "batch_id": "f7a57b4a-b0e7-483a-abb9-b779b0ac510e",
+      "kind": "por-snapshot",
+      "snapshot_id": "not-a-snapshot-0001",
+      "root": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "asof": "2026-01-01T00:00:00Z"
+    }
+  },
+  "anchor": {
+    "reveal_txid": "b6006f778ef65ef8ca58386c7b4cc4bd40cf47ac5f9fd71c14527e2a93931aea",
+    "reveal_tx_hex": "0200000000010147fde7c01ef63931f36ece3640d66496a2d81598bca27aaecb6f776b181f8b6c0000000000fdffffff010000000000000000376a354243303101ace40343cb21dad414534f677f418906df2cef07c8d38aae8f3db458898b37caf7a57b4ab0e7483aabb9b779b0ac510e024730440220518b856458e1b51dd02226f07f99be5fc038ecdc9482852ef250c2acb286a2d60220724e1b9631b265e2284df819953ab339c4c8b66e8bc89c9286ac1e978228f81c012102e381b0dd7fe093e4d605ff7616c5e574244e765ea24692c1eb3b17c69211a32600000000",
+    "op_return_payload_hex": "4243303101ace40343cb21dad414534f677f418906df2cef07c8d38aae8f3db458898b37caf7a57b4ab0e7483aabb9b779b0ac510e",
+    "confirmed": {
+      "block_height": 10269,
+      "block_hash": "1d8921270ff8105afcad4cce14f5885f71c3868212c84480f8b0b3ee21d79559",
+      "confirmations": 1
+    }
+  },
+  "merkle": {
+    "leaf_index": 0,
+    "root": "ace40343cb21dad414534f677f418906df2cef07c8d38aae8f3db458898b37ca",
+    "siblings": [],
+    "directions": []
+  }
+}

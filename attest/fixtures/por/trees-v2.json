@@ -1,0 +1,3246 @@
+{
+  "about": "The v2 tree (`merkle-sum-sha256-v2`): hashes exactly as in trees.json, but a leaf carries only the balances that are not zero, a node only the sums that are not zero, and the empty node carries none. The statement still lists a total for every declared asset. `same_root_when_listing_only` is the last case rebuilt with only the assets somebody holds declared: the root must not change.",
+  "algo": "merkle-sum-sha256-v2",
+  "empty_node": {
+    "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+    "sums": {}
+  },
+  "cases": [
+    {
+      "name": "one account: the root is the leaf",
+      "exchange_id": "KR-EX-0a1b2c",
+      "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "assets": [
+        "BTC"
+      ],
+      "rows": [
+        {
+          "user_ref": "acct-00001",
+          "balances": {}
+        }
+      ],
+      "leaf_count": 1,
+      "root": "f65d02aac6c5ddf0db4e0f6768b1178b86809e9802586fcc0bdbfdbf46feb805",
+      "totals": {
+        "BTC": "0"
+      },
+      "order": [
+        "acct-00001"
+      ],
+      "level_hashes": [
+        [
+          "f65d02aac6c5ddf0db4e0f6768b1178b86809e9802586fcc0bdbfdbf46feb805"
+        ]
+      ],
+      "proofs": [
+        {
+          "user_ref": "acct-00001",
+          "leaf_index": 0,
+          "proof": {
+            "leaf_index": 0,
+            "leaf": {
+              "user_ref_hash": "b95f0537680f63e713faedc98eb2502bb1e1c6f05847654e8f1f7f1cfbecf5f4",
+              "salt": "98ba164c26d49db54f0cbfec4391fa98f852a398bc4983520a8d1bca8f2724cd",
+              "balances": {}
+            },
+            "siblings": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "two accounts",
+      "exchange_id": "KR-EX-0a1b2c",
+      "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "assets": [
+        "BTC",
+        "ETH",
+        "USDT"
+      ],
+      "rows": [
+        {
+          "user_ref": "acct-00001",
+          "balances": {
+            "ETH": "15838",
+            "USDT": "23757"
+          }
+        },
+        {
+          "user_ref": "acct-00002",
+          "balances": {
+            "BTC": "15838000",
+            "ETH": "316760000",
+            "USDT": "4751400000"
+          }
+        }
+      ],
+      "leaf_count": 2,
+      "root": "9ebfe9796581f77beebb095d4054396d41425fa78e10a7e7086d1daa2fb65813",
+      "totals": {
+        "BTC": "15838000",
+        "ETH": "316775838",
+        "USDT": "4751423757"
+      },
+      "order": [
+        "acct-00002",
+        "acct-00001"
+      ],
+      "level_hashes": [
+        [
+          "2f2179559d2bba38d72b2b11ad6dd5c389a4def5e7d2e367b04dd4ed58f77e15",
+          "1f3b134e51a174e4536bc6a89745a11a9c425aadf70116e06d19a83984a756c4"
+        ],
+        [
+          "9ebfe9796581f77beebb095d4054396d41425fa78e10a7e7086d1daa2fb65813"
+        ]
+      ],
+      "proofs": [
+        {
+          "user_ref": "acct-00002",
+          "leaf_index": 0,
+          "proof": {
+            "leaf_index": 0,
+            "leaf": {
+              "user_ref_hash": "81fd038bca1fec73f603a92f239b43591281103aefc10bccd4cb75f332a8132b",
+              "salt": "cbf1c6c0b6e773f7425f9ec92355e02d57adef3fcedc24b5fb356607670cfdc0",
+              "balances": {
+                "BTC": "15838000",
+                "ETH": "316760000",
+                "USDT": "4751400000"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "1f3b134e51a174e4536bc6a89745a11a9c425aadf70116e06d19a83984a756c4",
+                "sums": {
+                  "ETH": "15838",
+                  "USDT": "23757"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00001",
+          "leaf_index": 1,
+          "proof": {
+            "leaf_index": 1,
+            "leaf": {
+              "user_ref_hash": "b95f0537680f63e713faedc98eb2502bb1e1c6f05847654e8f1f7f1cfbecf5f4",
+              "salt": "98ba164c26d49db54f0cbfec4391fa98f852a398bc4983520a8d1bca8f2724cd",
+              "balances": {
+                "ETH": "15838",
+                "USDT": "23757"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "2f2179559d2bba38d72b2b11ad6dd5c389a4def5e7d2e367b04dd4ed58f77e15",
+                "sums": {
+                  "BTC": "15838000",
+                  "ETH": "316760000",
+                  "USDT": "4751400000"
+                },
+                "dir": "left"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "three accounts: one empty node pads the first level",
+      "exchange_id": "KR-EX-0a1b2c",
+      "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "assets": [
+        "BTC",
+        "ETH",
+        "USDT"
+      ],
+      "rows": [
+        {
+          "user_ref": "acct-00001",
+          "balances": {
+            "ETH": "15838",
+            "USDT": "23757"
+          }
+        },
+        {
+          "user_ref": "acct-00002",
+          "balances": {
+            "BTC": "15838000",
+            "ETH": "316760000",
+            "USDT": "4751400000"
+          }
+        },
+        {
+          "user_ref": "acct-00003",
+          "balances": {
+            "BTC": "23757000000",
+            "ETH": "4751400000000"
+          }
+        }
+      ],
+      "leaf_count": 3,
+      "root": "d0fab49d4c63677a34f0f5e0ce47e3ab78ba21f53bf3860a9dabf6446b1394fa",
+      "totals": {
+        "BTC": "23772838000",
+        "ETH": "4751716775838",
+        "USDT": "4751423757"
+      },
+      "order": [
+        "acct-00003",
+        "acct-00002",
+        "acct-00001"
+      ],
+      "level_hashes": [
+        [
+          "3852e5493a52bf1ef002cae69ebb0f4697c4eaedbeb56f0d7b1204292d562598",
+          "2f2179559d2bba38d72b2b11ad6dd5c389a4def5e7d2e367b04dd4ed58f77e15",
+          "1f3b134e51a174e4536bc6a89745a11a9c425aadf70116e06d19a83984a756c4",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "e876fc4855b213a18d93d05f7dceb8ae38765ec4a55164529a8592b8b5fafef4",
+          "f0d3fbf0a5fe3501ade1a0ae7e32c6e17ac743fc6308ac9e03668640aa0df26d"
+        ],
+        [
+          "d0fab49d4c63677a34f0f5e0ce47e3ab78ba21f53bf3860a9dabf6446b1394fa"
+        ]
+      ],
+      "proofs": [
+        {
+          "user_ref": "acct-00003",
+          "leaf_index": 0,
+          "proof": {
+            "leaf_index": 0,
+            "leaf": {
+              "user_ref_hash": "303d8593f21983837373891ceb173e6522d06aa1a9546d5d7709701c40f17bcb",
+              "salt": "b698895dae2e9d3155feecd73cb27058ab0c8d30fe30ff0060f2f0cc2db3002a",
+              "balances": {
+                "BTC": "23757000000",
+                "ETH": "4751400000000"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "2f2179559d2bba38d72b2b11ad6dd5c389a4def5e7d2e367b04dd4ed58f77e15",
+                "sums": {
+                  "BTC": "15838000",
+                  "ETH": "316760000",
+                  "USDT": "4751400000"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "f0d3fbf0a5fe3501ade1a0ae7e32c6e17ac743fc6308ac9e03668640aa0df26d",
+                "sums": {
+                  "ETH": "15838",
+                  "USDT": "23757"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00002",
+          "leaf_index": 1,
+          "proof": {
+            "leaf_index": 1,
+            "leaf": {
+              "user_ref_hash": "81fd038bca1fec73f603a92f239b43591281103aefc10bccd4cb75f332a8132b",
+              "salt": "cbf1c6c0b6e773f7425f9ec92355e02d57adef3fcedc24b5fb356607670cfdc0",
+              "balances": {
+                "BTC": "15838000",
+                "ETH": "316760000",
+                "USDT": "4751400000"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "3852e5493a52bf1ef002cae69ebb0f4697c4eaedbeb56f0d7b1204292d562598",
+                "sums": {
+                  "BTC": "23757000000",
+                  "ETH": "4751400000000"
+                },
+                "dir": "left"
+              },
+              {
+                "hash": "f0d3fbf0a5fe3501ade1a0ae7e32c6e17ac743fc6308ac9e03668640aa0df26d",
+                "sums": {
+                  "ETH": "15838",
+                  "USDT": "23757"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00001",
+          "leaf_index": 2,
+          "proof": {
+            "leaf_index": 2,
+            "leaf": {
+              "user_ref_hash": "b95f0537680f63e713faedc98eb2502bb1e1c6f05847654e8f1f7f1cfbecf5f4",
+              "salt": "98ba164c26d49db54f0cbfec4391fa98f852a398bc4983520a8d1bca8f2724cd",
+              "balances": {
+                "ETH": "15838",
+                "USDT": "23757"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {},
+                "dir": "right"
+              },
+              {
+                "hash": "e876fc4855b213a18d93d05f7dceb8ae38765ec4a55164529a8592b8b5fafef4",
+                "sums": {
+                  "BTC": "23772838000",
+                  "ETH": "4751716760000",
+                  "USDT": "4751400000"
+                },
+                "dir": "left"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "five accounts: padding at two levels",
+      "exchange_id": "KR-EX-0a1b2c",
+      "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "assets": [
+        "BTC",
+        "ETH",
+        "USDT"
+      ],
+      "rows": [
+        {
+          "user_ref": "acct-00001",
+          "balances": {
+            "ETH": "15838",
+            "USDT": "23757"
+          }
+        },
+        {
+          "user_ref": "acct-00002",
+          "balances": {
+            "BTC": "15838000",
+            "ETH": "316760000",
+            "USDT": "4751400000"
+          }
+        },
+        {
+          "user_ref": "acct-00003",
+          "balances": {
+            "BTC": "23757000000",
+            "ETH": "4751400000000"
+          }
+        },
+        {
+          "user_ref": "acct-00004",
+          "balances": {
+            "BTC": "31676000000000",
+            "USDT": "95028000000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00005",
+          "balances": {
+            "ETH": "791900000000000000000",
+            "USDT": "1187850"
+          }
+        }
+      ],
+      "leaf_count": 5,
+      "root": "45a3d835dff194a0b3d4d95611c2925511c2c3a48f743d5f6689fdb5d9823912",
+      "totals": {
+        "BTC": "31699772838000",
+        "ETH": "791900004751716775838",
+        "USDT": "95028000004752611607"
+      },
+      "order": [
+        "acct-00003",
+        "acct-00005",
+        "acct-00002",
+        "acct-00001",
+        "acct-00004"
+      ],
+      "level_hashes": [
+        [
+          "3852e5493a52bf1ef002cae69ebb0f4697c4eaedbeb56f0d7b1204292d562598",
+          "eea26a97e7d316cb4e5e12b84a37f03b805e6b6a4718bac346b0e9a8450c6286",
+          "2f2179559d2bba38d72b2b11ad6dd5c389a4def5e7d2e367b04dd4ed58f77e15",
+          "1f3b134e51a174e4536bc6a89745a11a9c425aadf70116e06d19a83984a756c4",
+          "a45a5156ecfad7c983ffa797a084dcad1591e87a46a45af86906cd463de37141",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "620b6a928ab44f04e9636d36fe93c64fd96396f62a908a7a20ae19d93dfdcd61",
+          "9ebfe9796581f77beebb095d4054396d41425fa78e10a7e7086d1daa2fb65813",
+          "3ad429e5f851169ecf921afaa771828a60e1472a449f1afb35b4db7de7bed546",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "fcc4310b70e583506c503b8cdd8f7ce5cc343425ab102f8f1f941f6824778544",
+          "e0efac7856f8c0fe417c4505da8975b78976ee320c64519852829b69a1f7062a"
+        ],
+        [
+          "45a3d835dff194a0b3d4d95611c2925511c2c3a48f743d5f6689fdb5d9823912"
+        ]
+      ],
+      "proofs": [
+        {
+          "user_ref": "acct-00003",
+          "leaf_index": 0,
+          "proof": {
+            "leaf_index": 0,
+            "leaf": {
+              "user_ref_hash": "303d8593f21983837373891ceb173e6522d06aa1a9546d5d7709701c40f17bcb",
+              "salt": "b698895dae2e9d3155feecd73cb27058ab0c8d30fe30ff0060f2f0cc2db3002a",
+              "balances": {
+                "BTC": "23757000000",
+                "ETH": "4751400000000"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "eea26a97e7d316cb4e5e12b84a37f03b805e6b6a4718bac346b0e9a8450c6286",
+                "sums": {
+                  "ETH": "791900000000000000000",
+                  "USDT": "1187850"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "9ebfe9796581f77beebb095d4054396d41425fa78e10a7e7086d1daa2fb65813",
+                "sums": {
+                  "BTC": "15838000",
+                  "ETH": "316775838",
+                  "USDT": "4751423757"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "e0efac7856f8c0fe417c4505da8975b78976ee320c64519852829b69a1f7062a",
+                "sums": {
+                  "BTC": "31676000000000",
+                  "USDT": "95028000000000000000"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00005",
+          "leaf_index": 1,
+          "proof": {
+            "leaf_index": 1,
+            "leaf": {
+              "user_ref_hash": "37d93104074d0cd11af57b1e660a9ecd88b33dfc56fd3367c6df0f8cbffb6778",
+              "salt": "3c833052b80d176fd09859fa94c1bbd4d2ddf2500e3e9aa811c6580444fda87a",
+              "balances": {
+                "ETH": "791900000000000000000",
+                "USDT": "1187850"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "3852e5493a52bf1ef002cae69ebb0f4697c4eaedbeb56f0d7b1204292d562598",
+                "sums": {
+                  "BTC": "23757000000",
+                  "ETH": "4751400000000"
+                },
+                "dir": "left"
+              },
+              {
+                "hash": "9ebfe9796581f77beebb095d4054396d41425fa78e10a7e7086d1daa2fb65813",
+                "sums": {
+                  "BTC": "15838000",
+                  "ETH": "316775838",
+                  "USDT": "4751423757"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "e0efac7856f8c0fe417c4505da8975b78976ee320c64519852829b69a1f7062a",
+                "sums": {
+                  "BTC": "31676000000000",
+                  "USDT": "95028000000000000000"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00002",
+          "leaf_index": 2,
+          "proof": {
+            "leaf_index": 2,
+            "leaf": {
+              "user_ref_hash": "81fd038bca1fec73f603a92f239b43591281103aefc10bccd4cb75f332a8132b",
+              "salt": "cbf1c6c0b6e773f7425f9ec92355e02d57adef3fcedc24b5fb356607670cfdc0",
+              "balances": {
+                "BTC": "15838000",
+                "ETH": "316760000",
+                "USDT": "4751400000"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "1f3b134e51a174e4536bc6a89745a11a9c425aadf70116e06d19a83984a756c4",
+                "sums": {
+                  "ETH": "15838",
+                  "USDT": "23757"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "620b6a928ab44f04e9636d36fe93c64fd96396f62a908a7a20ae19d93dfdcd61",
+                "sums": {
+                  "BTC": "23757000000",
+                  "ETH": "791900004751400000000",
+                  "USDT": "1187850"
+                },
+                "dir": "left"
+              },
+              {
+                "hash": "e0efac7856f8c0fe417c4505da8975b78976ee320c64519852829b69a1f7062a",
+                "sums": {
+                  "BTC": "31676000000000",
+                  "USDT": "95028000000000000000"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00004",
+          "leaf_index": 4,
+          "proof": {
+            "leaf_index": 4,
+            "leaf": {
+              "user_ref_hash": "d72f934fa7d3e009e15bccfade04916b0616058eb43f7d6b9af178e756bde6d1",
+              "salt": "a511d69ce872fc69dd57035096600e25ae9f37ed744f87321c42a14e6029374a",
+              "balances": {
+                "BTC": "31676000000000",
+                "USDT": "95028000000000000000"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {},
+                "dir": "right"
+              },
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {},
+                "dir": "right"
+              },
+              {
+                "hash": "fcc4310b70e583506c503b8cdd8f7ce5cc343425ab102f8f1f941f6824778544",
+                "sums": {
+                  "BTC": "23772838000",
+                  "ETH": "791900004751716775838",
+                  "USDT": "4752611607"
+                },
+                "dir": "left"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "thirty-three accounts, five assets",
+      "exchange_id": "KR-EX-0a1b2c",
+      "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "assets": [
+        "A1",
+        "B2",
+        "C3",
+        "D4",
+        "E5"
+      ],
+      "rows": [
+        {
+          "user_ref": "acct-00001",
+          "balances": {
+            "B2": "15838",
+            "C3": "23757",
+            "D4": "31676"
+          }
+        },
+        {
+          "user_ref": "acct-00002",
+          "balances": {
+            "A1": "15838000",
+            "B2": "316760000",
+            "C3": "4751400000",
+            "E5": "791900000000"
+          }
+        },
+        {
+          "user_ref": "acct-00003",
+          "balances": {
+            "A1": "23757000000",
+            "B2": "4751400000000",
+            "D4": "95028000000000000",
+            "E5": "11878500000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00004",
+          "balances": {
+            "A1": "31676000000000",
+            "C3": "95028000000000000000",
+            "D4": "126704000000000000000000",
+            "E5": "15838000"
+          }
+        },
+        {
+          "user_ref": "acct-00005",
+          "balances": {
+            "B2": "791900000000000000000",
+            "C3": "1187850",
+            "D4": "15838000000"
+          }
+        },
+        {
+          "user_ref": "acct-00006",
+          "balances": {
+            "A1": "47514000000000000000",
+            "B2": "950280",
+            "C3": "142542000000",
+            "E5": "2375700000000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00007",
+          "balances": {
+            "A1": "55433000000000000000000",
+            "B2": "11086600000",
+            "D4": "22173200000000000000000",
+            "E5": "2771650000"
+          }
+        },
+        {
+          "user_ref": "acct-00008",
+          "balances": {
+            "A1": "6335200",
+            "C3": "1900560000000000000000",
+            "D4": "2534080000",
+            "E5": "31676000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00009",
+          "balances": {
+            "B2": "1425420000000000000",
+            "C3": "21381300",
+            "D4": "2850840000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00010",
+          "balances": {
+            "A1": "7919000000000",
+            "B2": "15838000000000000000000",
+            "C3": "2375700000000",
+            "E5": "395950000000"
+          }
+        },
+        {
+          "user_ref": "acct-00011",
+          "balances": {
+            "A1": "8710900000000000",
+            "B2": "17421800",
+            "D4": "348436000",
+            "E5": "4355450000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00012",
+          "balances": {
+            "A1": "9502800000000000000",
+            "C3": "28508400000000000000000",
+            "D4": "380112000000000",
+            "E5": "4751400"
+          }
+        },
+        {
+          "user_ref": "acct-00013",
+          "balances": {
+            "B2": "2058940000000000",
+            "C3": "308841000",
+            "D4": "411788000000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00014",
+          "balances": {
+            "A1": "1108660",
+            "B2": "22173200000000000000",
+            "C3": "33259800000000",
+            "E5": "554330000000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00015",
+          "balances": {
+            "A1": "1187850000",
+            "B2": "237570000000000000000000",
+            "D4": "47514000000000",
+            "E5": "593925000"
+          }
+        },
+        {
+          "user_ref": "acct-00016",
+          "balances": {
+            "A1": "1267040000000",
+            "C3": "380112000000000000000000",
+            "D4": "50681600000000000000",
+            "E5": "6335200000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00017",
+          "balances": {
+            "B2": "2692460000000",
+            "C3": "4038690000",
+            "D4": "5384920"
+          }
+        },
+        {
+          "user_ref": "acct-00018",
+          "balances": {
+            "A1": "1425420000000000000",
+            "B2": "28508400000000000",
+            "C3": "427626000000000",
+            "E5": "71271000000"
+          }
+        },
+        {
+          "user_ref": "acct-00019",
+          "balances": {
+            "A1": "1504610000000000000000",
+            "B2": "300922000000000000000",
+            "D4": "6018440000000000000",
+            "E5": "752305000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00020",
+          "balances": {
+            "A1": "158380",
+            "C3": "475140",
+            "D4": "633520",
+            "E5": "791900"
+          }
+        },
+        {
+          "user_ref": "acct-00021",
+          "balances": {
+            "B2": "3325980000",
+            "C3": "49889700000",
+            "D4": "665196000000"
+          }
+        },
+        {
+          "user_ref": "acct-00022",
+          "balances": {
+            "A1": "174218000000",
+            "B2": "34843600000000",
+            "C3": "5226540000000000",
+            "E5": "87109000000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00023",
+          "balances": {
+            "A1": "182137000000000",
+            "B2": "364274000000000000",
+            "D4": "728548000000000000000000",
+            "E5": "91068500"
+          }
+        },
+        {
+          "user_ref": "acct-00024",
+          "balances": {
+            "A1": "190056000000000000",
+            "C3": "5701680",
+            "D4": "76022400000",
+            "E5": "950280000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00025",
+          "balances": {
+            "B2": "3959500",
+            "C3": "593925000000",
+            "D4": "79190000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00026",
+          "balances": {
+            "A1": "205894000000000000000000",
+            "B2": "41178800000",
+            "C3": "61768200000000000",
+            "E5": "10294700000"
+          }
+        },
+        {
+          "user_ref": "acct-00027",
+          "balances": {
+            "A1": "21381300",
+            "B2": "427626000000000",
+            "D4": "8552520000",
+            "E5": "106906500000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00028",
+          "balances": {
+            "A1": "22173200000",
+            "C3": "66519600",
+            "D4": "8869280000000000",
+            "E5": "108660000000000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00029",
+          "balances": {
+            "B2": "45930200000000000000000",
+            "C3": "6889530000000",
+            "D4": "9186040000000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00030",
+          "balances": {
+            "A1": "23757000000000000",
+            "B2": "47514000",
+            "C3": "712710000000000000",
+            "E5": "11878500000000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00031",
+          "balances": {
+            "A1": "24548900000000000000",
+            "B2": "490978000000",
+            "D4": "981956000000000",
+            "E5": "12274450"
+          }
+        },
+        {
+          "user_ref": "acct-00032",
+          "balances": {
+            "A1": "25340800000000000000000",
+            "C3": "760224000",
+            "D4": "1013632000000000000000",
+            "E5": "126704000000000"
+          }
+        },
+        {
+          "user_ref": "acct-00033",
+          "balances": {
+            "B2": "52265400000000000000",
+            "C3": "78398100000000",
+            "D4": "104530800"
+          }
+        }
+      ],
+      "leaf_count": 33,
+      "root": "bec9edbc28d89a43d118ba083d446778b842110475f08ced4c860f07547c920d",
+      "totals": {
+        "A1": "288255623867120420871540",
+        "B2": "300507281331800416001418",
+        "C3": "410616768254085441144327",
+        "D4": "888093547388470602016916",
+        "E5": "111706149750956905999250"
+      },
+      "order": [
+        "acct-00022",
+        "acct-00033",
+        "acct-00015",
+        "acct-00007",
+        "acct-00003",
+        "acct-00005",
+        "acct-00026",
+        "acct-00014",
+        "acct-00013",
+        "acct-00017",
+        "acct-00023",
+        "acct-00006",
+        "acct-00009",
+        "acct-00002",
+        "acct-00012",
+        "acct-00027",
+        "acct-00021",
+        "acct-00024",
+        "acct-00025",
+        "acct-00016",
+        "acct-00031",
+        "acct-00011",
+        "acct-00001",
+        "acct-00030",
+        "acct-00032",
+        "acct-00029",
+        "acct-00019",
+        "acct-00004",
+        "acct-00028",
+        "acct-00010",
+        "acct-00018",
+        "acct-00008",
+        "acct-00020"
+      ],
+      "level_hashes": [
+        [
+          "e914d674c22ffc0957213f4274088fbeb92193032bf54bc88a8dab39e4942183",
+          "c90525ddce75ce69969e86ac7d3610226c063358a2419a978e91a182a3afdfeb",
+          "ce4f62bfa310651ad981e906b167ff8d7c4cd2e8f8531d44eeeb795a910ba0ef",
+          "aa9545ddb9d450d8b3cd7f3e8942daa005d9b94e6f648824d151cee74918f243",
+          "662fc925becfd272985e6425636051e9e4f1dbd437b0008c4cbab53e641546ac",
+          "fe5404c814b77c2e4547d95db26255fc8b81747cce7f685eeb324092b2544715",
+          "812810cf0945c920f2f567763fc4baea14839852b898230e23778b25bdc7e564",
+          "dc683c5f06e5377145e821ece8826dfb02a0a1ee0a2f3be4b8e063c7fdde7a1e",
+          "07068bfab98bcd36635c6bd083a3a3a4a305e21b73775ab00d2ea6acbb014156",
+          "407e3bc543f42bf63c8d61aba357fbdeec7cceff832358f3ac351ac40cb0dc90",
+          "58cd1c246f4820faf3cdd57dbf9a296535c1dd10ad62b2a21681394bdfb69827",
+          "523d7681e16de9123f595097894e792c87258be59d4b325c84b3b0e6585b86a8",
+          "715c2fd3b823321b3e56d477026cd31b7c86dcc6b8551fa4d9c39a1f15916fe8",
+          "0796b2763a6ad9d763ba0d131c888093eeaedd9c368123321d02c5b3d60e21f9",
+          "149569de3ce732a6de6d6bea0a2237aaa9bf6c05ced53f67fda9ea03a72b80da",
+          "5a82f45323703c125b4bb77dee36c3b5383087c81b5991a57c574bfd93352044",
+          "bd72a95d278423216f7db3dbb29949de1c30dc941ce4b7f9579ebb12b1476967",
+          "0c652c1f0b5f1be9529be5fe0f4835123b517df4622e047af4628825e398c2fe",
+          "b3eaf648a97d3ab16480564045f6c36651105519b142985fef1601ec75ca21f3",
+          "102f1ad297c3a7f986e52551295354931f8f4baabde738f7c66adaa6ee6b09a7",
+          "6166fc1838e4a8174ebd8683b8b34504f4bea0ebe2a85d4e19b783c28ccabafb",
+          "06a6a4308da0413c8402cdac90f7ee3caf22497c0e1f5575c7442234e35df6fa",
+          "b2e451f6c49a06881859b5c141d4ca30393efeb7d0ba5d70c238d5966072ce65",
+          "0f110f2ef9fb4c9cac4bf7af999baaa7e787d2748cf32a6775b16d6ec0975c01",
+          "1e23d27fef111f1d17589508c7d2b4964bc26d610af1a000e2e46c47f0ec8419",
+          "d44f7fc3190a46471f5bf232e77160865fefede0de898267e04f64b49cec6080",
+          "32dd215a829d39028dedc9de1013cecd538d6a4df70242b023d19ec285cb80d8",
+          "d7cf10165e177f108adf0039180acb1a8e6b8c87c02cb267046734613ab160ba",
+          "db92b062cbaf43ed2a1fed8c867e3e0f56a87a04185178b148c93d5a85fc6393",
+          "545bd505235f401d1ed86642146cae96257c12b0b34ce44a613037e0b1179779",
+          "2caf8532659a0b89b829f2c775dbc27a7adf2b65abf01b7f22687d7b2d32694a",
+          "b9db7a92eb4d2e904fc2f725b3bc170281cc48b89afb8b2f346d10d8f159fc6d",
+          "ea17f9b128f943c19280b12eb911ab2bea32580c896538d2601c3a192fe12b09",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "82da6661e7df8dc412c9fd77eb724da1acbf31e3b6a9964692394cf0573c40d5",
+          "65b9597cc82afe1beb322ce2a571c687be6e80cc97d85464dd9fa00280137d62",
+          "95041654b9d2f45ce0826600e2eabbc141037ccf8d8cc13e9ca6acd8f158a0f5",
+          "be23e2067cb3e60636920a3662ef2c6c54f1230d52a7645bf8108c21dd856a33",
+          "649a8ed220c34b25a3f34a6d919126fe2be26cf69031b0feca3595af9b2f2d10",
+          "c22e08e92d5729a694d435c7a43ebae46ebb1d857c6ee218b743283ed29878fc",
+          "058d4d11c065d6c04aa4aca1622fa541bfd4a8fb0f17bf0fbdb7a5da51804da1",
+          "98ad89ae5e2486d6ade4dfcdb2328ccba2b9eb211e47925cb665da27489546eb",
+          "ea07ef08fafa8ba1aadce84cff2f0e4ae1a80b223a3f3b6e1e3b7380aeabf54f",
+          "7ada5ab0c816fa81c827374af0e9430c3e936c59cd96d3b36cfc4bc546eb1e71",
+          "89cc7dab1614ba7d2389355e451cc08194013a64a0a5fd1a8e39d75ca998a8ae",
+          "d8ddb03c8e4741356d0f7be422005e9c44d2b84a8bc31eda3eeeeb7b5ce2e4fe",
+          "4df53b9e5a15485759e757c6557caa055d3cdb803920f1b396dd1e5f7d8902ff",
+          "e73812abc2ec004b6ad09286001cdc414a8bf4529da31c239e44d96fbec2f2ef",
+          "1da4d6651d517c0ec9dba69a738a6bb91cbf919d6d37c0e74c076e6862211c22",
+          "e33c8d0e7f8763d3f9b50622d98bc443f5ea6851fd67574bff73e61bcfda8504",
+          "633d70184e4d35630c117e0e7b996878abba239a6a0d1bd7a4a6a3c884554834",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "7b3727a305627cd6273027d0e5047b6cbbbb4033fa373f070a577c9b51451731",
+          "f64a598ab681d720b233a52142ecb17925cf630c245b679ff072b1dc7d62c3ec",
+          "9defe83ee9ce2df0ff87c6ef3b70d0b40b556abb3c9016287368aaa7ac39590a",
+          "fbd221e2ea4850074bd7150cc94a71cb674707beead486f52f9838bda1338e75",
+          "13d74dd1477e64b1e20a7cf7a8e286c4cb80d01e6de9b4167bfab96301f0785d",
+          "115147263fd136c804589ec7bedb209578d52f10cbbba0a0da194de946783284",
+          "f50517f2c93626822ca19e3ed0225723ec77e3b1df140d3488198fff912a1747",
+          "88181d1d6459ebf31f3b331d8854bbec6087ec2e0d2a08c5a0645887e333168f",
+          "ac958a84f321071a3d257551e4c031125a505b9d0dade2b30ad5c68174f19dfc",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "852c9c8284043156684817546791182b8b49ae9a540dc3deb5c4723c02c7b7f1",
+          "6791aded753466e71e0a7d1114ccdc6c20fc1a4e73cee4dd131acf78bb978778",
+          "477bbbdecfb16335cd8d6eef06199913ca4dbcacf660b402b5d7da7cda8be7a9",
+          "fd1aee10fb67459598d014516e140333fd81dab4f4939f5ad19cfb3685a72973",
+          "40211d9ee82ce170d8a7e3d1394c72b36a83e79338323e2998457ef878060d5a",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "809ff3fc2ba8003fabe5efdb56ab15b150d4de942aee98a7662a4aea382eb775",
+          "2ce93438c651a374a25c0a2bc862e3293c3c19d19139ecfb312c6c78855b365c",
+          "24800be4b8b4678bc35800c33782eda9dc610d5a408d79f6b80e9ac92b586865",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "38bf24f2e69bb778fd70c42042abdaea8fe9620dd6b0428fcb0c00352a510f41",
+          "28665c892b72cc73358967d890743e8e921abf4825145ba160a054ef3a572bbf"
+        ],
+        [
+          "bec9edbc28d89a43d118ba083d446778b842110475f08ced4c860f07547c920d"
+        ]
+      ],
+      "proofs": [
+        {
+          "user_ref": "acct-00022",
+          "leaf_index": 0,
+          "proof": {
+            "leaf_index": 0,
+            "leaf": {
+              "user_ref_hash": "0016ea6fbf3dc9b6e278f9abdec5be3aba7b85b2726cb84266e4bb35fa52c3fc",
+              "salt": "c5a15c8aadaf6e68705f5b62d5fc466ac19c346845cd7756932975f63bebcc8c",
+              "balances": {
+                "A1": "174218000000",
+                "B2": "34843600000000",
+                "C3": "5226540000000000",
+                "E5": "87109000000000000000"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "c90525ddce75ce69969e86ac7d3610226c063358a2419a978e91a182a3afdfeb",
+                "sums": {
+                  "B2": "52265400000000000000",
+                  "C3": "78398100000000",
+                  "D4": "104530800"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "65b9597cc82afe1beb322ce2a571c687be6e80cc97d85464dd9fa00280137d62",
+                "sums": {
+                  "A1": "55433000000001187850000",
+                  "B2": "237570000000011086600000",
+                  "D4": "22173200047514000000000",
+                  "E5": "3365575000"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "f64a598ab681d720b233a52142ecb17925cf630c245b679ff072b1dc7d62c3ec",
+                "sums": {
+                  "A1": "205894000000023758108660",
+                  "B2": "814073204792578800000",
+                  "D4": "95028015838000000",
+                  "E5": "566208500010294700000",
+                  "C3": "61801459801187850"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "6791aded753466e71e0a7d1114ccdc6c20fc1a4e73cee4dd131acf78bb978778",
+                "sums": {
+                  "B2": "1792183258777710280",
+                  "C3": "28508400000151662312300",
+                  "D4": "728959791230960557904920",
+                  "A1": "57016982137037219300",
+                  "E5": "2375806907291995819900"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "2ce93438c651a374a25c0a2bc862e3293c3c19d19139ecfb312c6c78855b365c",
+                "sums": {
+                  "B2": "62069150508894372891138",
+                  "C3": "382108301147535877169037",
+                  "D4": "136960461081980100947676",
+                  "A1": "26871606884784219535200",
+                  "E5": "108677025343651249112450"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "28665c892b72cc73358967d890743e8e921abf4825145ba160a054ef3a572bbf",
+                "sums": {
+                  "A1": "158380",
+                  "C3": "475140",
+                  "D4": "633520",
+                  "E5": "791900"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00033",
+          "leaf_index": 1,
+          "proof": {
+            "leaf_index": 1,
+            "leaf": {
+              "user_ref_hash": "0313f6f238a8ec729d5cbae44601233de287bbc69087ea78a3a64780b563871f",
+              "salt": "b5c16816c744a6f8cd5e32ddf7b2a4d797de5467331ab9dd9179b71590c65fb5",
+              "balances": {
+                "B2": "52265400000000000000",
+                "C3": "78398100000000",
+                "D4": "104530800"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "e914d674c22ffc0957213f4274088fbeb92193032bf54bc88a8dab39e4942183",
+                "sums": {
+                  "A1": "174218000000",
+                  "B2": "34843600000000",
+                  "C3": "5226540000000000",
+                  "E5": "87109000000000000000"
+                },
+                "dir": "left"
+              },
+              {
+                "hash": "65b9597cc82afe1beb322ce2a571c687be6e80cc97d85464dd9fa00280137d62",
+                "sums": {
+                  "A1": "55433000000001187850000",
+                  "B2": "237570000000011086600000",
+                  "D4": "22173200047514000000000",
+                  "E5": "3365575000"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "f64a598ab681d720b233a52142ecb17925cf630c245b679ff072b1dc7d62c3ec",
+                "sums": {
+                  "A1": "205894000000023758108660",
+                  "B2": "814073204792578800000",
+                  "D4": "95028015838000000",
+                  "E5": "566208500010294700000",
+                  "C3": "61801459801187850"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "6791aded753466e71e0a7d1114ccdc6c20fc1a4e73cee4dd131acf78bb978778",
+                "sums": {
+                  "B2": "1792183258777710280",
+                  "C3": "28508400000151662312300",
+                  "D4": "728959791230960557904920",
+                  "A1": "57016982137037219300",
+                  "E5": "2375806907291995819900"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "2ce93438c651a374a25c0a2bc862e3293c3c19d19139ecfb312c6c78855b365c",
+                "sums": {
+                  "B2": "62069150508894372891138",
+                  "C3": "382108301147535877169037",
+                  "D4": "136960461081980100947676",
+                  "A1": "26871606884784219535200",
+                  "E5": "108677025343651249112450"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "28665c892b72cc73358967d890743e8e921abf4825145ba160a054ef3a572bbf",
+                "sums": {
+                  "A1": "158380",
+                  "C3": "475140",
+                  "D4": "633520",
+                  "E5": "791900"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00021",
+          "leaf_index": 16,
+          "proof": {
+            "leaf_index": 16,
+            "leaf": {
+              "user_ref_hash": "96dfd7a0c1709d5e99866230903b01e9be72c6077f4b6697afda52b5c3d22098",
+              "salt": "b4aea4d208c3b3f44ca1c0f894839db520d442ac1e9fb149873196d191ca8e11",
+              "balances": {
+                "B2": "3325980000",
+                "C3": "49889700000",
+                "D4": "665196000000"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "0c652c1f0b5f1be9529be5fe0f4835123b517df4622e047af4628825e398c2fe",
+                "sums": {
+                  "A1": "190056000000000000",
+                  "C3": "5701680",
+                  "D4": "76022400000",
+                  "E5": "950280000000000"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "7ada5ab0c816fa81c827374af0e9430c3e936c59cd96d3b36cfc4bc546eb1e71",
+                "sums": {
+                  "B2": "3959500",
+                  "C3": "380112000000593925000000",
+                  "D4": "50760790000000000000",
+                  "A1": "1267040000000",
+                  "E5": "6335200000000000"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "115147263fd136c804589ec7bedb209578d52f10cbbba0a0da194de946783284",
+                "sums": {
+                  "A1": "24581367900000000000",
+                  "B2": "491042951638",
+                  "D4": "981956348467676",
+                  "E5": "16233950000012274450",
+                  "C3": "712710000000023757"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "fd1aee10fb67459598d014516e140333fd81dab4f4939f5ad19cfb3685a72973",
+                "sums": {
+                  "A1": "26846835459617179535200",
+                  "C3": "1995588436892056743600",
+                  "D4": "136909699309282534080000",
+                  "E5": "108660784108171236838000",
+                  "B2": "62069150508400000000000"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "809ff3fc2ba8003fabe5efdb56ab15b150d4de942aee98a7662a4aea382eb775",
+                "sums": {
+                  "A1": "261384016982336201177960",
+                  "B2": "238438130822906043110280",
+                  "C3": "28508467106549563500150",
+                  "E5": "3029124407305656094900",
+                  "D4": "751133086306490500435720"
+                },
+                "dir": "left"
+              },
+              {
+                "hash": "28665c892b72cc73358967d890743e8e921abf4825145ba160a054ef3a572bbf",
+                "sums": {
+                  "A1": "158380",
+                  "C3": "475140",
+                  "D4": "633520",
+                  "E5": "791900"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00020",
+          "leaf_index": 32,
+          "proof": {
+            "leaf_index": 32,
+            "leaf": {
+              "user_ref_hash": "fb20db5e4f7084e9352dd0e56ff9a1f08b0c3e72782ef405bb263ff543d090f9",
+              "salt": "fce3e6b81dbd9a3e27dbca81cdc93fbd1da1246bfbf7e05adb60c7ead64f1918",
+              "balances": {
+                "A1": "158380",
+                "C3": "475140",
+                "D4": "633520",
+                "E5": "791900"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {},
+                "dir": "right"
+              },
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {},
+                "dir": "right"
+              },
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {},
+                "dir": "right"
+              },
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {},
+                "dir": "right"
+              },
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {},
+                "dir": "right"
+              },
+              {
+                "hash": "38bf24f2e69bb778fd70c42042abdaea8fe9620dd6b0428fcb0c00352a510f41",
+                "sums": {
+                  "A1": "288255623867120420713160",
+                  "B2": "300507281331800416001418",
+                  "C3": "410616768254085440669187",
+                  "E5": "111706149750956905207350",
+                  "D4": "888093547388470601383396"
+                },
+                "dir": "left"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "forty-one accounts, 120 listed assets, at most three held each, some accounts empty",
+      "exchange_id": "KR-EX-0a1b2c",
+      "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "assets": [
+        "T001",
+        "T002",
+        "T003",
+        "T004",
+        "T005",
+        "T006",
+        "T007",
+        "T008",
+        "T009",
+        "T010",
+        "T011",
+        "T012",
+        "T013",
+        "T014",
+        "T015",
+        "T016",
+        "T017",
+        "T018",
+        "T019",
+        "T020",
+        "T021",
+        "T022",
+        "T023",
+        "T024",
+        "T025",
+        "T026",
+        "T027",
+        "T028",
+        "T029",
+        "T030",
+        "T031",
+        "T032",
+        "T033",
+        "T034",
+        "T035",
+        "T036",
+        "T037",
+        "T038",
+        "T039",
+        "T040",
+        "T041",
+        "T042",
+        "T043",
+        "T044",
+        "T045",
+        "T046",
+        "T047",
+        "T048",
+        "T049",
+        "T050",
+        "T051",
+        "T052",
+        "T053",
+        "T054",
+        "T055",
+        "T056",
+        "T057",
+        "T058",
+        "T059",
+        "T060",
+        "T061",
+        "T062",
+        "T063",
+        "T064",
+        "T065",
+        "T066",
+        "T067",
+        "T068",
+        "T069",
+        "T070",
+        "T071",
+        "T072",
+        "T073",
+        "T074",
+        "T075",
+        "T076",
+        "T077",
+        "T078",
+        "T079",
+        "T080",
+        "T081",
+        "T082",
+        "T083",
+        "T084",
+        "T085",
+        "T086",
+        "T087",
+        "T088",
+        "T089",
+        "T090",
+        "T091",
+        "T092",
+        "T093",
+        "T094",
+        "T095",
+        "T096",
+        "T097",
+        "T098",
+        "T099",
+        "T100",
+        "T101",
+        "T102",
+        "T103",
+        "T104",
+        "T105",
+        "T106",
+        "T107",
+        "T108",
+        "T109",
+        "T110",
+        "T111",
+        "T112",
+        "T113",
+        "T114",
+        "T115",
+        "T116",
+        "T117",
+        "T118",
+        "T119",
+        "T120"
+      ],
+      "rows": [
+        {
+          "user_ref": "acct-00001",
+          "balances": {
+            "T038": "2000006",
+            "T075": "3000009"
+          }
+        },
+        {
+          "user_ref": "acct-00002",
+          "balances": {
+            "T012": "2000006",
+            "T049": "4000012",
+            "T086": "6000018"
+          }
+        },
+        {
+          "user_ref": "acct-00003",
+          "balances": {
+            "T023": "3000009",
+            "T060": "6000018",
+            "T097": "9000027"
+          }
+        },
+        {
+          "user_ref": "acct-00004",
+          "balances": {
+            "T034": "4000012",
+            "T071": "8000024"
+          }
+        },
+        {
+          "user_ref": "acct-00005",
+          "balances": {
+            "T045": "5000015",
+            "T119": "15000045"
+          }
+        },
+        {
+          "user_ref": "acct-00006",
+          "balances": {
+            "T093": "12000036",
+            "T010": "18000054"
+          }
+        },
+        {
+          "user_ref": "acct-00007",
+          "balances": {}
+        },
+        {
+          "user_ref": "acct-00008",
+          "balances": {
+            "T078": "8000024",
+            "T115": "16000048",
+            "T032": "24000072"
+          }
+        },
+        {
+          "user_ref": "acct-00009",
+          "balances": {
+            "T089": "9000027",
+            "T006": "18000054"
+          }
+        },
+        {
+          "user_ref": "acct-00010",
+          "balances": {
+            "T100": "10000030",
+            "T054": "30000090"
+          }
+        },
+        {
+          "user_ref": "acct-00011",
+          "balances": {
+            "T028": "22000066",
+            "T065": "33000099"
+          }
+        },
+        {
+          "user_ref": "acct-00012",
+          "balances": {
+            "T002": "12000036",
+            "T039": "24000072",
+            "T076": "36000108"
+          }
+        },
+        {
+          "user_ref": "acct-00013",
+          "balances": {
+            "T013": "13000039",
+            "T050": "26000078",
+            "T087": "39000117"
+          }
+        },
+        {
+          "user_ref": "acct-00014",
+          "balances": {}
+        },
+        {
+          "user_ref": "acct-00015",
+          "balances": {
+            "T035": "15000045",
+            "T109": "45000135"
+          }
+        },
+        {
+          "user_ref": "acct-00016",
+          "balances": {
+            "T083": "32000096",
+            "T120": "48000144"
+          }
+        },
+        {
+          "user_ref": "acct-00017",
+          "balances": {
+            "T057": "17000051",
+            "T094": "34000102",
+            "T011": "51000153"
+          }
+        },
+        {
+          "user_ref": "acct-00018",
+          "balances": {
+            "T068": "18000054",
+            "T105": "36000108",
+            "T022": "54000162"
+          }
+        },
+        {
+          "user_ref": "acct-00019",
+          "balances": {
+            "T079": "19000057",
+            "T116": "38000114"
+          }
+        },
+        {
+          "user_ref": "acct-00020",
+          "balances": {
+            "T090": "20000060",
+            "T044": "60000180"
+          }
+        },
+        {
+          "user_ref": "acct-00021",
+          "balances": {}
+        },
+        {
+          "user_ref": "acct-00022",
+          "balances": {
+            "T112": "22000066",
+            "T029": "44000132",
+            "T066": "66000198"
+          }
+        },
+        {
+          "user_ref": "acct-00023",
+          "balances": {
+            "T003": "23000069",
+            "T040": "46000138",
+            "T077": "69000207"
+          }
+        },
+        {
+          "user_ref": "acct-00024",
+          "balances": {
+            "T014": "24000072",
+            "T051": "48000144"
+          }
+        },
+        {
+          "user_ref": "acct-00025",
+          "balances": {
+            "T025": "25000075",
+            "T099": "75000225"
+          }
+        },
+        {
+          "user_ref": "acct-00026",
+          "balances": {
+            "T073": "52000156",
+            "T110": "78000234"
+          }
+        },
+        {
+          "user_ref": "acct-00027",
+          "balances": {
+            "T047": "27000081",
+            "T084": "54000162",
+            "T001": "81000243"
+          }
+        },
+        {
+          "user_ref": "acct-00028",
+          "balances": {}
+        },
+        {
+          "user_ref": "acct-00029",
+          "balances": {
+            "T069": "29000087",
+            "T106": "58000174"
+          }
+        },
+        {
+          "user_ref": "acct-00030",
+          "balances": {
+            "T080": "30000090",
+            "T034": "90000270"
+          }
+        },
+        {
+          "user_ref": "acct-00031",
+          "balances": {
+            "T008": "62000186",
+            "T045": "93000279"
+          }
+        },
+        {
+          "user_ref": "acct-00032",
+          "balances": {
+            "T102": "32000096",
+            "T019": "64000192",
+            "T056": "96000288"
+          }
+        },
+        {
+          "user_ref": "acct-00033",
+          "balances": {
+            "T113": "33000099",
+            "T030": "66000198",
+            "T067": "99000297"
+          }
+        },
+        {
+          "user_ref": "acct-00034",
+          "balances": {
+            "T004": "34000102",
+            "T041": "68000204"
+          }
+        },
+        {
+          "user_ref": "acct-00035",
+          "balances": {}
+        },
+        {
+          "user_ref": "acct-00036",
+          "balances": {
+            "T063": "72000216",
+            "T100": "108000324"
+          }
+        },
+        {
+          "user_ref": "acct-00037",
+          "balances": {
+            "T037": "37000111",
+            "T074": "74000222",
+            "T111": "111000333"
+          }
+        },
+        {
+          "user_ref": "acct-00038",
+          "balances": {
+            "T048": "38000114",
+            "T085": "76000228",
+            "T002": "114000342"
+          }
+        },
+        {
+          "user_ref": "acct-00039",
+          "balances": {
+            "T059": "39000117",
+            "T096": "78000234"
+          }
+        },
+        {
+          "user_ref": "acct-00040",
+          "balances": {
+            "T070": "40000120",
+            "T024": "120000360"
+          }
+        },
+        {
+          "user_ref": "acct-00041",
+          "balances": {
+            "T118": "82000246",
+            "T035": "123000369"
+          }
+        }
+      ],
+      "leaf_count": 41,
+      "root": "3b94cf913839466b8abbbc5cd442814f4382b7ccd3d5bb8f4912d80bcd72e2be",
+      "totals": {
+        "T001": "81000243",
+        "T002": "126000378",
+        "T003": "23000069",
+        "T004": "34000102",
+        "T005": "0",
+        "T006": "18000054",
+        "T007": "0",
+        "T008": "62000186",
+        "T009": "0",
+        "T010": "18000054",
+        "T011": "51000153",
+        "T012": "2000006",
+        "T013": "13000039",
+        "T014": "24000072",
+        "T015": "0",
+        "T016": "0",
+        "T017": "0",
+        "T018": "0",
+        "T019": "64000192",
+        "T020": "0",
+        "T021": "0",
+        "T022": "54000162",
+        "T023": "3000009",
+        "T024": "120000360",
+        "T025": "25000075",
+        "T026": "0",
+        "T027": "0",
+        "T028": "22000066",
+        "T029": "44000132",
+        "T030": "66000198",
+        "T031": "0",
+        "T032": "24000072",
+        "T033": "0",
+        "T034": "94000282",
+        "T035": "138000414",
+        "T036": "0",
+        "T037": "37000111",
+        "T038": "2000006",
+        "T039": "24000072",
+        "T040": "46000138",
+        "T041": "68000204",
+        "T042": "0",
+        "T043": "0",
+        "T044": "60000180",
+        "T045": "98000294",
+        "T046": "0",
+        "T047": "27000081",
+        "T048": "38000114",
+        "T049": "4000012",
+        "T050": "26000078",
+        "T051": "48000144",
+        "T052": "0",
+        "T053": "0",
+        "T054": "30000090",
+        "T055": "0",
+        "T056": "96000288",
+        "T057": "17000051",
+        "T058": "0",
+        "T059": "39000117",
+        "T060": "6000018",
+        "T061": "0",
+        "T062": "0",
+        "T063": "72000216",
+        "T064": "0",
+        "T065": "33000099",
+        "T066": "66000198",
+        "T067": "99000297",
+        "T068": "18000054",
+        "T069": "29000087",
+        "T070": "40000120",
+        "T071": "8000024",
+        "T072": "0",
+        "T073": "52000156",
+        "T074": "74000222",
+        "T075": "3000009",
+        "T076": "36000108",
+        "T077": "69000207",
+        "T078": "8000024",
+        "T079": "19000057",
+        "T080": "30000090",
+        "T081": "0",
+        "T082": "0",
+        "T083": "32000096",
+        "T084": "54000162",
+        "T085": "76000228",
+        "T086": "6000018",
+        "T087": "39000117",
+        "T088": "0",
+        "T089": "9000027",
+        "T090": "20000060",
+        "T091": "0",
+        "T092": "0",
+        "T093": "12000036",
+        "T094": "34000102",
+        "T095": "0",
+        "T096": "78000234",
+        "T097": "9000027",
+        "T098": "0",
+        "T099": "75000225",
+        "T100": "118000354",
+        "T101": "0",
+        "T102": "32000096",
+        "T103": "0",
+        "T104": "0",
+        "T105": "36000108",
+        "T106": "58000174",
+        "T107": "0",
+        "T108": "0",
+        "T109": "45000135",
+        "T110": "78000234",
+        "T111": "111000333",
+        "T112": "22000066",
+        "T113": "33000099",
+        "T114": "0",
+        "T115": "16000048",
+        "T116": "38000114",
+        "T117": "0",
+        "T118": "82000246",
+        "T119": "15000045",
+        "T120": "48000144"
+      },
+      "order": [
+        "acct-00022",
+        "acct-00033",
+        "acct-00034",
+        "acct-00015",
+        "acct-00007",
+        "acct-00003",
+        "acct-00039",
+        "acct-00005",
+        "acct-00026",
+        "acct-00036",
+        "acct-00014",
+        "acct-00035",
+        "acct-00013",
+        "acct-00017",
+        "acct-00040",
+        "acct-00023",
+        "acct-00006",
+        "acct-00037",
+        "acct-00009",
+        "acct-00002",
+        "acct-00012",
+        "acct-00027",
+        "acct-00021",
+        "acct-00024",
+        "acct-00025",
+        "acct-00016",
+        "acct-00031",
+        "acct-00011",
+        "acct-00001",
+        "acct-00030",
+        "acct-00038",
+        "acct-00032",
+        "acct-00029",
+        "acct-00019",
+        "acct-00004",
+        "acct-00028",
+        "acct-00010",
+        "acct-00018",
+        "acct-00008",
+        "acct-00041",
+        "acct-00020"
+      ],
+      "level_hashes": [
+        [
+          "2ef52719fda0b4cdcc93727b83c875cc2fef861b4924ff1de3b729fb5fc6a4ab",
+          "1bb7aa0d7ce06928151261e2aa5ce48fc516d1f12d5d277f27f3e542aa18585e",
+          "e272c98ce20cef387c44fdb0ea24f3c617033f259230678d6c1e8c7f441b45f4",
+          "6c4e3ea2412e3c35f138dbb9e710c8cc64c3c869eec8d74a4321b815ca749875",
+          "3776eb0ab758a8680ca377bc6bb089207c10a817cb8db614f811681d59632021",
+          "051c7ada5874049c677e87de0be411ca875fefde8810cc759d1db485e8647dd9",
+          "0a5b86e54fdee0392f75a7c955ca12a668b602928e0ef31d5b3ddea0993cf100",
+          "105922f8f5b5928a233132fe7ebec414f45e6d6c88b5cb62a2457d86dc15f4e6",
+          "ec3442240ee3116eadb7cb93ac2e2cb493973602d6010ddb7be01ef15727b65d",
+          "6c657dfcbeb101e0646d02e26813386ee3c458098f9bf2522b792b797de97158",
+          "e9662dec715004a85578511ef6cd4bcf69747a17dae92370051b0493cc6ce7e5",
+          "10e564d592d575729cb9b65ec6dacce5ef198d37c13554f920bc4ff7b4fcc120",
+          "1c52d3eaac4ee7772529a7d6f60f39e8bce51abb34f49e85ff66f7e0d9d681ac",
+          "2c94c6c9a48204ac72310765be7a5e4c4085af809fedd9d343b5b95c4112e758",
+          "dcdf608199bc76382f3b7397d948e5d98dd5c3f87a74c2b12ac29129b0edca18",
+          "06c7e6b6ecf1cda4d12f2ea48c0684c074ba3a2a1416682944593dfb491b7338",
+          "0b790d911228b46b03d1454c95898afda7d614d9df02248718bf296e5a21070f",
+          "85125e61b7457eaeb670300fafc048ed761f5e0995cd769e0f595f09922f8c88",
+          "c964f30cb42d1fbed9bc57a4964140ca83f1437fe0e8f5826d7376222213106f",
+          "fe4b4453b91ceacfc548c95517b862fb99f98dc5c7b2e103428fddb7ad573e3e",
+          "34b838204914c8749d9567535d66f0511ed67028199baf4f079a8c5490803308",
+          "66fba0227ae4f8337ef6d355dff4f88ff60035f91c0db3ba1dbfc3f2ada479db",
+          "5e9e4aaa618f0519285830523c76de9f1187dd1c973d279710e5bad1d5a488de",
+          "ba192bfd860d732576d09f51c1db38ec52e183b89e9a89668b77e96628b50bad",
+          "0cc0cfa47a9755c3edf44c9989534f4dd29b9238bb72208800095b39041fe59a",
+          "7e9f12514a17c365a2d1aced88273496c67139a5d2172002303f8f72904f0f73",
+          "2319743e6cccf7145b4b6395e4183114ec8241bf27e4fdbeec3a45e0cb6c6cbe",
+          "5c1e643da27139565fa8cadd453535835d517b4a5110943a71fce5ed6c827a34",
+          "b3c2b7f606643a043d9737036bacb1cd69514448e2fb6ec7dee9a033eac9a27f",
+          "911fe1a28de506f4c0686b44ac691d2923187484ed3b9a8dc8d71567a65032a1",
+          "85019c8d7d37e01d5645a08f127a0453c17078f53509c4eada37d7007203afb3",
+          "0498746aabd1150b27bd51556424e292eca2a07f90d3f16a641240376f6dd4d4",
+          "dd303c43ee9d8f2040ba9c8d3125089af2c9281690c5865ae333ef219e38282c",
+          "f3d1cba6b329a051d05dfd75e5d1556101154fad9c028ca1ba39f73e5f3b9399",
+          "72607d5ddf33bbe3613a20630ac8e0b36a2ce148f4953e6f1aa76ac970fe85c3",
+          "0131a1dd3b1b83c62a0e37ef0b6ae4c7b7fd7a5f8775d727b640de6726a7c20f",
+          "15279cb0d45f7c042a6b684d8195f36a0c9e1a7746122804997945ff4d45d43c",
+          "1e3ef454dd05fd1b47fe1d0842c65296c32f0769127d8067a728a4d5dbb79010",
+          "1cc977bca829b4ae5ef2d48e4486b104b727fd6b24ec01c7ae0c5bf328e7d56f",
+          "5acaf519bac27d66ec7b7f7d62b607f9038fba9b698c0407fa792771ada1c24c",
+          "c7747db04dfc9808c4cc76ef65f59043e40520a09ef79dad7e685ffbb5681b7c",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "632752501892c4ff125d539ac1e6b976ff6366b694c23130f86fb78f6d45a19f",
+          "26bf5da42dfbcce4df9aff62d7c3621a8a51501b2d3038e91efbd404e4120de7",
+          "e4e1a284dbd8d930ecf2c5c643e3a85bc22417edfb60f47b6719017b3f82ae01",
+          "54797b5722a5bdba511b166da57bade1516288996c36306ef8309ba9e3fa919e",
+          "e19ef03c42db40c61b7be1a11afc1435f719e2d888a9b462157e10417c2efa35",
+          "582ff4919478d2f9078f57f8937af618b586b67a7714751a311e2474ceba1c01",
+          "5e9e578a04d0614674b34b69bd2e24b2553cbdcb70cdc8714d706def5e0d564a",
+          "bf491838dfd6f09505d1ada199fd48442801830c3db53c1d74fc1ec3f9fd3d02",
+          "432693b931c491c12758b112dfc6d06f4e0bd877044085d288aacaf1a7fd10c0",
+          "ad106047fd5531110c3f90261c5d2594198ef145a97231487582a07a75cc7046",
+          "cb22001b851ecb1d06180fcbd621af2aaa56757aff0c89caac2a4de4c2ebb914",
+          "0fe1977b9d4aba52f41cee78c869dba741ec1e03a898e419b999f94eb078ac05",
+          "dfa7ac73bf367680e7416713798be5ff0acf93be65ebb078ce787b1b87d5f1c0",
+          "bbe39e43d5fc751f8a145597f0cd98fd11d8601b3c5eec517aa4e49d733c7b0a",
+          "b16d048ce8827771c68f0286c298bebc2e7d32d96c27a3717369dc95abc28ac0",
+          "f1b2608333cb12ac743ff6539d8b42385e0fe6840388e856ebd09ab0450c8641",
+          "3f9b2c672f7f67fae6812b7e00e4e1435b4e919f7df81547d83bfeec4f1fd909",
+          "66e0397b4d2a508fea154d39587e8594c0e039b6b1f9788425cd32bc2c8a2fc5",
+          "e09cf131dddc2143e6cd7ad4ea831ae5e20154aef04b8f52b7e5bec28560b1cf",
+          "f8ed9a126b12531ba3fd28eb4f74c602195e1a6dd184d8697fb9f542c143c88c",
+          "988b9b0ae2d2aaf0a8a0b404bc5f4ca094437dc5c97ffa5b6143fb83a0342b59",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "4565bda5819869be62af2b2e86191133c48c8c07f4a28bca6ddc8003c97f80d9",
+          "49f1e4754bd07b4c44d3de398eb9febb062a290b575bcdb1953b8357e0e47f4d",
+          "dc80dc3010519bdf89c09f9d7763ac4f0a59054c51229955055e69124642704d",
+          "55128d7be744ccad239058ee4891ec14787c053c7d38c4e9ac7ba2966eeb22a2",
+          "228445c1048f970ab51cde58073772d25209a3a97f2c56de48f7e718cd338245",
+          "1f8371cd218606df571b4b53e5e5d5d94431e168766ce342afea9e4e1dfab59f",
+          "de679cea632cdfbfa454873b3653bf38ec2c7c827c935673c2f8d41fe66d2f1e",
+          "aaaf3f5d1bea230e018cbda580198dd6fd46da08fe7383edc076be1432564071",
+          "0388eb16618deec3ec2dd438cede63783a1ba6e77511ac7a5e7535ecc6aae589",
+          "51f02a9d622a3092eaf141211c49f357821d7bc53d29674ddf2a3002fac3ed5a",
+          "2f1362e2ad137f7a8132a16820e45d4fa89ea454a26fa6359045e01fbe07525f",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "dce28461c46773d1d632fb998d21b0e61e712fde9b237cec19de2835f98a6196",
+          "88c7a63bad3e1106b5134fc49176df8f763e11a5545db0205f0ee2c34379ad4f",
+          "6b2a9bf609ad67e8ff1ab4f46ac22a42de0c24e3f05eeb028bdf659d42676280",
+          "c93cdd06f2f38d969375e734f7e807520ca0b54a397c811938cb1e6be5f16525",
+          "b939f2c76562f1393fbd0f61b10ec99be228aee990f5c7f42d2b4e23fc5a1fc1",
+          "aa3fc09680be51376c24861ce1da9d12879777ec4d70412e2b9ab013ebfabab0"
+        ],
+        [
+          "aa4a4a8992c78fb4c54a407eb391f409ce1b2ba1cdab9b6656d87bee48feccb2",
+          "1e363ae70139cf815855e3b883926e6524290706a93dd2f5ff98209b8e8bd733",
+          "c9f0a5ace6b2e2613b6e2d428c7a725284994622f62fd2fdee256bcf4cc6b189",
+          "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab"
+        ],
+        [
+          "1c6ed622c85b5950c1293bc306effa7a99771e08a19c9343317cfcad2032e3e1",
+          "6a6ba3349365803373c9915ba8e765ddb8b645911e192c16bd408801c8c7bc01"
+        ],
+        [
+          "3b94cf913839466b8abbbc5cd442814f4382b7ccd3d5bb8f4912d80bcd72e2be"
+        ]
+      ],
+      "proofs": [
+        {
+          "user_ref": "acct-00022",
+          "leaf_index": 0,
+          "proof": {
+            "leaf_index": 0,
+            "leaf": {
+              "user_ref_hash": "0016ea6fbf3dc9b6e278f9abdec5be3aba7b85b2726cb84266e4bb35fa52c3fc",
+              "salt": "c5a15c8aadaf6e68705f5b62d5fc466ac19c346845cd7756932975f63bebcc8c",
+              "balances": {
+                "T112": "22000066",
+                "T029": "44000132",
+                "T066": "66000198"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "1bb7aa0d7ce06928151261e2aa5ce48fc516d1f12d5d277f27f3e542aa18585e",
+                "sums": {
+                  "T113": "33000099",
+                  "T030": "66000198",
+                  "T067": "99000297"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "26bf5da42dfbcce4df9aff62d7c3621a8a51501b2d3038e91efbd404e4120de7",
+                "sums": {
+                  "T004": "34000102",
+                  "T041": "68000204",
+                  "T035": "15000045",
+                  "T109": "45000135"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "49f1e4754bd07b4c44d3de398eb9febb062a290b575bcdb1953b8357e0e47f4d",
+                "sums": {
+                  "T023": "3000009",
+                  "T060": "6000018",
+                  "T097": "9000027",
+                  "T059": "39000117",
+                  "T096": "78000234",
+                  "T045": "5000015",
+                  "T119": "15000045"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "88c7a63bad3e1106b5134fc49176df8f763e11a5545db0205f0ee2c34379ad4f",
+                "sums": {
+                  "T073": "52000156",
+                  "T110": "78000234",
+                  "T063": "72000216",
+                  "T100": "108000324",
+                  "T013": "13000039",
+                  "T050": "26000078",
+                  "T087": "39000117",
+                  "T057": "17000051",
+                  "T094": "34000102",
+                  "T011": "51000153",
+                  "T070": "40000120",
+                  "T024": "120000360",
+                  "T003": "23000069",
+                  "T040": "46000138",
+                  "T077": "69000207"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "1e363ae70139cf815855e3b883926e6524290706a93dd2f5ff98209b8e8bd733",
+                "sums": {
+                  "T093": "12000036",
+                  "T010": "18000054",
+                  "T037": "37000111",
+                  "T074": "74000222",
+                  "T111": "111000333",
+                  "T089": "9000027",
+                  "T006": "18000054",
+                  "T012": "2000006",
+                  "T049": "4000012",
+                  "T086": "6000018",
+                  "T002": "126000378",
+                  "T039": "24000072",
+                  "T076": "36000108",
+                  "T047": "27000081",
+                  "T084": "54000162",
+                  "T001": "81000243",
+                  "T014": "24000072",
+                  "T051": "48000144",
+                  "T025": "25000075",
+                  "T099": "75000225",
+                  "T083": "32000096",
+                  "T120": "48000144",
+                  "T008": "62000186",
+                  "T045": "93000279",
+                  "T028": "22000066",
+                  "T065": "33000099",
+                  "T038": "2000006",
+                  "T075": "3000009",
+                  "T080": "30000090",
+                  "T034": "90000270",
+                  "T048": "38000114",
+                  "T085": "76000228",
+                  "T102": "32000096",
+                  "T019": "64000192",
+                  "T056": "96000288"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "6a6ba3349365803373c9915ba8e765ddb8b645911e192c16bd408801c8c7bc01",
+                "sums": {
+                  "T069": "29000087",
+                  "T106": "58000174",
+                  "T079": "19000057",
+                  "T116": "38000114",
+                  "T034": "4000012",
+                  "T071": "8000024",
+                  "T100": "10000030",
+                  "T054": "30000090",
+                  "T068": "18000054",
+                  "T105": "36000108",
+                  "T022": "54000162",
+                  "T078": "8000024",
+                  "T115": "16000048",
+                  "T032": "24000072",
+                  "T118": "82000246",
+                  "T035": "123000369",
+                  "T090": "20000060",
+                  "T044": "60000180"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00033",
+          "leaf_index": 1,
+          "proof": {
+            "leaf_index": 1,
+            "leaf": {
+              "user_ref_hash": "0313f6f238a8ec729d5cbae44601233de287bbc69087ea78a3a64780b563871f",
+              "salt": "b5c16816c744a6f8cd5e32ddf7b2a4d797de5467331ab9dd9179b71590c65fb5",
+              "balances": {
+                "T113": "33000099",
+                "T030": "66000198",
+                "T067": "99000297"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "2ef52719fda0b4cdcc93727b83c875cc2fef861b4924ff1de3b729fb5fc6a4ab",
+                "sums": {
+                  "T112": "22000066",
+                  "T029": "44000132",
+                  "T066": "66000198"
+                },
+                "dir": "left"
+              },
+              {
+                "hash": "26bf5da42dfbcce4df9aff62d7c3621a8a51501b2d3038e91efbd404e4120de7",
+                "sums": {
+                  "T004": "34000102",
+                  "T041": "68000204",
+                  "T035": "15000045",
+                  "T109": "45000135"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "49f1e4754bd07b4c44d3de398eb9febb062a290b575bcdb1953b8357e0e47f4d",
+                "sums": {
+                  "T023": "3000009",
+                  "T060": "6000018",
+                  "T097": "9000027",
+                  "T059": "39000117",
+                  "T096": "78000234",
+                  "T045": "5000015",
+                  "T119": "15000045"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "88c7a63bad3e1106b5134fc49176df8f763e11a5545db0205f0ee2c34379ad4f",
+                "sums": {
+                  "T073": "52000156",
+                  "T110": "78000234",
+                  "T063": "72000216",
+                  "T100": "108000324",
+                  "T013": "13000039",
+                  "T050": "26000078",
+                  "T087": "39000117",
+                  "T057": "17000051",
+                  "T094": "34000102",
+                  "T011": "51000153",
+                  "T070": "40000120",
+                  "T024": "120000360",
+                  "T003": "23000069",
+                  "T040": "46000138",
+                  "T077": "69000207"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "1e363ae70139cf815855e3b883926e6524290706a93dd2f5ff98209b8e8bd733",
+                "sums": {
+                  "T093": "12000036",
+                  "T010": "18000054",
+                  "T037": "37000111",
+                  "T074": "74000222",
+                  "T111": "111000333",
+                  "T089": "9000027",
+                  "T006": "18000054",
+                  "T012": "2000006",
+                  "T049": "4000012",
+                  "T086": "6000018",
+                  "T002": "126000378",
+                  "T039": "24000072",
+                  "T076": "36000108",
+                  "T047": "27000081",
+                  "T084": "54000162",
+                  "T001": "81000243",
+                  "T014": "24000072",
+                  "T051": "48000144",
+                  "T025": "25000075",
+                  "T099": "75000225",
+                  "T083": "32000096",
+                  "T120": "48000144",
+                  "T008": "62000186",
+                  "T045": "93000279",
+                  "T028": "22000066",
+                  "T065": "33000099",
+                  "T038": "2000006",
+                  "T075": "3000009",
+                  "T080": "30000090",
+                  "T034": "90000270",
+                  "T048": "38000114",
+                  "T085": "76000228",
+                  "T102": "32000096",
+                  "T019": "64000192",
+                  "T056": "96000288"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "6a6ba3349365803373c9915ba8e765ddb8b645911e192c16bd408801c8c7bc01",
+                "sums": {
+                  "T069": "29000087",
+                  "T106": "58000174",
+                  "T079": "19000057",
+                  "T116": "38000114",
+                  "T034": "4000012",
+                  "T071": "8000024",
+                  "T100": "10000030",
+                  "T054": "30000090",
+                  "T068": "18000054",
+                  "T105": "36000108",
+                  "T022": "54000162",
+                  "T078": "8000024",
+                  "T115": "16000048",
+                  "T032": "24000072",
+                  "T118": "82000246",
+                  "T035": "123000369",
+                  "T090": "20000060",
+                  "T044": "60000180"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00012",
+          "leaf_index": 20,
+          "proof": {
+            "leaf_index": 20,
+            "leaf": {
+              "user_ref_hash": "8aeb342f938e552de0231f14f3723b5dc56a0865c5d9d2816e7ba20765ca6516",
+              "salt": "79b91f802cad5136c97f358a3432a6bea59a6d84d2ef3458e50604e5693d3d8e",
+              "balances": {
+                "T002": "12000036",
+                "T039": "24000072",
+                "T076": "36000108"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "66fba0227ae4f8337ef6d355dff4f88ff60035f91c0db3ba1dbfc3f2ada479db",
+                "sums": {
+                  "T047": "27000081",
+                  "T084": "54000162",
+                  "T001": "81000243"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "0fe1977b9d4aba52f41cee78c869dba741ec1e03a898e419b999f94eb078ac05",
+                "sums": {
+                  "T014": "24000072",
+                  "T051": "48000144"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "228445c1048f970ab51cde58073772d25209a3a97f2c56de48f7e718cd338245",
+                "sums": {
+                  "T093": "12000036",
+                  "T010": "18000054",
+                  "T037": "37000111",
+                  "T074": "74000222",
+                  "T111": "111000333",
+                  "T089": "9000027",
+                  "T006": "18000054",
+                  "T012": "2000006",
+                  "T049": "4000012",
+                  "T086": "6000018"
+                },
+                "dir": "left"
+              },
+              {
+                "hash": "c93cdd06f2f38d969375e734f7e807520ca0b54a397c811938cb1e6be5f16525",
+                "sums": {
+                  "T025": "25000075",
+                  "T099": "75000225",
+                  "T083": "32000096",
+                  "T120": "48000144",
+                  "T008": "62000186",
+                  "T045": "93000279",
+                  "T028": "22000066",
+                  "T065": "33000099",
+                  "T038": "2000006",
+                  "T075": "3000009",
+                  "T080": "30000090",
+                  "T034": "90000270",
+                  "T048": "38000114",
+                  "T085": "76000228",
+                  "T002": "114000342",
+                  "T102": "32000096",
+                  "T019": "64000192",
+                  "T056": "96000288"
+                },
+                "dir": "right"
+              },
+              {
+                "hash": "aa4a4a8992c78fb4c54a407eb391f409ce1b2ba1cdab9b6656d87bee48feccb2",
+                "sums": {
+                  "T112": "22000066",
+                  "T029": "44000132",
+                  "T066": "66000198",
+                  "T113": "33000099",
+                  "T030": "66000198",
+                  "T067": "99000297",
+                  "T004": "34000102",
+                  "T041": "68000204",
+                  "T035": "15000045",
+                  "T109": "45000135",
+                  "T023": "3000009",
+                  "T060": "6000018",
+                  "T097": "9000027",
+                  "T059": "39000117",
+                  "T096": "78000234",
+                  "T045": "5000015",
+                  "T119": "15000045",
+                  "T073": "52000156",
+                  "T110": "78000234",
+                  "T063": "72000216",
+                  "T100": "108000324",
+                  "T013": "13000039",
+                  "T050": "26000078",
+                  "T087": "39000117",
+                  "T057": "17000051",
+                  "T094": "34000102",
+                  "T011": "51000153",
+                  "T070": "40000120",
+                  "T024": "120000360",
+                  "T003": "23000069",
+                  "T040": "46000138",
+                  "T077": "69000207"
+                },
+                "dir": "left"
+              },
+              {
+                "hash": "6a6ba3349365803373c9915ba8e765ddb8b645911e192c16bd408801c8c7bc01",
+                "sums": {
+                  "T069": "29000087",
+                  "T106": "58000174",
+                  "T079": "19000057",
+                  "T116": "38000114",
+                  "T034": "4000012",
+                  "T071": "8000024",
+                  "T100": "10000030",
+                  "T054": "30000090",
+                  "T068": "18000054",
+                  "T105": "36000108",
+                  "T022": "54000162",
+                  "T078": "8000024",
+                  "T115": "16000048",
+                  "T032": "24000072",
+                  "T118": "82000246",
+                  "T035": "123000369",
+                  "T090": "20000060",
+                  "T044": "60000180"
+                },
+                "dir": "right"
+              }
+            ]
+          }
+        },
+        {
+          "user_ref": "acct-00020",
+          "leaf_index": 40,
+          "proof": {
+            "leaf_index": 40,
+            "leaf": {
+              "user_ref_hash": "fb20db5e4f7084e9352dd0e56ff9a1f08b0c3e72782ef405bb263ff543d090f9",
+              "salt": "fce3e6b81dbd9a3e27dbca81cdc93fbd1da1246bfbf7e05adb60c7ead64f1918",
+              "balances": {
+                "T090": "20000060",
+                "T044": "60000180"
+              }
+            },
+            "siblings": [
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {},
+                "dir": "right"
+              },
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {},
+                "dir": "right"
+              },
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {},
+                "dir": "right"
+              },
+              {
+                "hash": "b939f2c76562f1393fbd0f61b10ec99be228aee990f5c7f42d2b4e23fc5a1fc1",
+                "sums": {
+                  "T069": "29000087",
+                  "T106": "58000174",
+                  "T079": "19000057",
+                  "T116": "38000114",
+                  "T034": "4000012",
+                  "T071": "8000024",
+                  "T100": "10000030",
+                  "T054": "30000090",
+                  "T068": "18000054",
+                  "T105": "36000108",
+                  "T022": "54000162",
+                  "T078": "8000024",
+                  "T115": "16000048",
+                  "T032": "24000072",
+                  "T118": "82000246",
+                  "T035": "123000369"
+                },
+                "dir": "left"
+              },
+              {
+                "hash": "13fc76d427344e4891117f54a18b42256f08fcf2b706cd7ea4951bf2a384d2ab",
+                "sums": {},
+                "dir": "right"
+              },
+              {
+                "hash": "1c6ed622c85b5950c1293bc306effa7a99771e08a19c9343317cfcad2032e3e1",
+                "sums": {
+                  "T112": "22000066",
+                  "T029": "44000132",
+                  "T066": "66000198",
+                  "T113": "33000099",
+                  "T030": "66000198",
+                  "T067": "99000297",
+                  "T004": "34000102",
+                  "T041": "68000204",
+                  "T035": "15000045",
+                  "T109": "45000135",
+                  "T023": "3000009",
+                  "T060": "6000018",
+                  "T097": "9000027",
+                  "T059": "39000117",
+                  "T096": "78000234",
+                  "T045": "98000294",
+                  "T119": "15000045",
+                  "T073": "52000156",
+                  "T110": "78000234",
+                  "T063": "72000216",
+                  "T100": "108000324",
+                  "T013": "13000039",
+                  "T050": "26000078",
+                  "T087": "39000117",
+                  "T057": "17000051",
+                  "T094": "34000102",
+                  "T011": "51000153",
+                  "T070": "40000120",
+                  "T024": "120000360",
+                  "T003": "23000069",
+                  "T040": "46000138",
+                  "T077": "69000207",
+                  "T093": "12000036",
+                  "T010": "18000054",
+                  "T037": "37000111",
+                  "T074": "74000222",
+                  "T111": "111000333",
+                  "T089": "9000027",
+                  "T006": "18000054",
+                  "T012": "2000006",
+                  "T049": "4000012",
+                  "T086": "6000018",
+                  "T002": "126000378",
+                  "T039": "24000072",
+                  "T076": "36000108",
+                  "T047": "27000081",
+                  "T084": "54000162",
+                  "T001": "81000243",
+                  "T014": "24000072",
+                  "T051": "48000144",
+                  "T025": "25000075",
+                  "T099": "75000225",
+                  "T083": "32000096",
+                  "T120": "48000144",
+                  "T008": "62000186",
+                  "T028": "22000066",
+                  "T065": "33000099",
+                  "T038": "2000006",
+                  "T075": "3000009",
+                  "T080": "30000090",
+                  "T034": "90000270",
+                  "T048": "38000114",
+                  "T085": "76000228",
+                  "T102": "32000096",
+                  "T019": "64000192",
+                  "T056": "96000288"
+                },
+                "dir": "left"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "same_root_when_listing_only": {
+    "assets": [
+      "T001",
+      "T002",
+      "T003",
+      "T004",
+      "T006",
+      "T008",
+      "T010",
+      "T011",
+      "T012",
+      "T013",
+      "T014",
+      "T019",
+      "T022",
+      "T023",
+      "T024",
+      "T025",
+      "T028",
+      "T029",
+      "T030",
+      "T032",
+      "T034",
+      "T035",
+      "T037",
+      "T038",
+      "T039",
+      "T040",
+      "T041",
+      "T044",
+      "T045",
+      "T047",
+      "T048",
+      "T049",
+      "T050",
+      "T051",
+      "T054",
+      "T056",
+      "T057",
+      "T059",
+      "T060",
+      "T063",
+      "T065",
+      "T066",
+      "T067",
+      "T068",
+      "T069",
+      "T070",
+      "T071",
+      "T073",
+      "T074",
+      "T075",
+      "T076",
+      "T077",
+      "T078",
+      "T079",
+      "T080",
+      "T083",
+      "T084",
+      "T085",
+      "T086",
+      "T087",
+      "T089",
+      "T090",
+      "T093",
+      "T094",
+      "T096",
+      "T097",
+      "T099",
+      "T100",
+      "T102",
+      "T105",
+      "T106",
+      "T109",
+      "T110",
+      "T111",
+      "T112",
+      "T113",
+      "T115",
+      "T116",
+      "T118",
+      "T119",
+      "T120"
+    ],
+    "root": "3b94cf913839466b8abbbc5cd442814f4382b7ccd3d5bb8f4912d80bcd72e2be"
+  },
+  "statement": {
+    "of_case": "forty-one accounts, 120 listed assets, at most three held each, some accounts empty",
+    "statement": {
+      "schema": "stonehash.por-snapshot.v1",
+      "exchange": {
+        "institution_id": "KR-EX-0a1b2c",
+        "name": "Sample Exchange"
+      },
+      "asof": "2026-11-16T00:00:00Z",
+      "assets": [
+        {
+          "symbol": "T001",
+          "decimals": 8
+        },
+        {
+          "symbol": "T002",
+          "decimals": 8
+        },
+        {
+          "symbol": "T003",
+          "decimals": 8
+        },
+        {
+          "symbol": "T004",
+          "decimals": 8
+        },
+        {
+          "symbol": "T005",
+          "decimals": 8
+        },
+        {
+          "symbol": "T006",
+          "decimals": 8
+        },
+        {
+          "symbol": "T007",
+          "decimals": 8
+        },
+        {
+          "symbol": "T008",
+          "decimals": 8
+        },
+        {
+          "symbol": "T009",
+          "decimals": 8
+        },
+        {
+          "symbol": "T010",
+          "decimals": 8
+        },
+        {
+          "symbol": "T011",
+          "decimals": 8
+        },
+        {
+          "symbol": "T012",
+          "decimals": 8
+        },
+        {
+          "symbol": "T013",
+          "decimals": 8
+        },
+        {
+          "symbol": "T014",
+          "decimals": 8
+        },
+        {
+          "symbol": "T015",
+          "decimals": 8
+        },
+        {
+          "symbol": "T016",
+          "decimals": 8
+        },
+        {
+          "symbol": "T017",
+          "decimals": 8
+        },
+        {
+          "symbol": "T018",
+          "decimals": 8
+        },
+        {
+          "symbol": "T019",
+          "decimals": 8
+        },
+        {
+          "symbol": "T020",
+          "decimals": 8
+        },
+        {
+          "symbol": "T021",
+          "decimals": 8
+        },
+        {
+          "symbol": "T022",
+          "decimals": 8
+        },
+        {
+          "symbol": "T023",
+          "decimals": 8
+        },
+        {
+          "symbol": "T024",
+          "decimals": 8
+        },
+        {
+          "symbol": "T025",
+          "decimals": 8
+        },
+        {
+          "symbol": "T026",
+          "decimals": 8
+        },
+        {
+          "symbol": "T027",
+          "decimals": 8
+        },
+        {
+          "symbol": "T028",
+          "decimals": 8
+        },
+        {
+          "symbol": "T029",
+          "decimals": 8
+        },
+        {
+          "symbol": "T030",
+          "decimals": 8
+        },
+        {
+          "symbol": "T031",
+          "decimals": 8
+        },
+        {
+          "symbol": "T032",
+          "decimals": 8
+        },
+        {
+          "symbol": "T033",
+          "decimals": 8
+        },
+        {
+          "symbol": "T034",
+          "decimals": 8
+        },
+        {
+          "symbol": "T035",
+          "decimals": 8
+        },
+        {
+          "symbol": "T036",
+          "decimals": 8
+        },
+        {
+          "symbol": "T037",
+          "decimals": 8
+        },
+        {
+          "symbol": "T038",
+          "decimals": 8
+        },
+        {
+          "symbol": "T039",
+          "decimals": 8
+        },
+        {
+          "symbol": "T040",
+          "decimals": 8
+        },
+        {
+          "symbol": "T041",
+          "decimals": 8
+        },
+        {
+          "symbol": "T042",
+          "decimals": 8
+        },
+        {
+          "symbol": "T043",
+          "decimals": 8
+        },
+        {
+          "symbol": "T044",
+          "decimals": 8
+        },
+        {
+          "symbol": "T045",
+          "decimals": 8
+        },
+        {
+          "symbol": "T046",
+          "decimals": 8
+        },
+        {
+          "symbol": "T047",
+          "decimals": 8
+        },
+        {
+          "symbol": "T048",
+          "decimals": 8
+        },
+        {
+          "symbol": "T049",
+          "decimals": 8
+        },
+        {
+          "symbol": "T050",
+          "decimals": 8
+        },
+        {
+          "symbol": "T051",
+          "decimals": 8
+        },
+        {
+          "symbol": "T052",
+          "decimals": 8
+        },
+        {
+          "symbol": "T053",
+          "decimals": 8
+        },
+        {
+          "symbol": "T054",
+          "decimals": 8
+        },
+        {
+          "symbol": "T055",
+          "decimals": 8
+        },
+        {
+          "symbol": "T056",
+          "decimals": 8
+        },
+        {
+          "symbol": "T057",
+          "decimals": 8
+        },
+        {
+          "symbol": "T058",
+          "decimals": 8
+        },
+        {
+          "symbol": "T059",
+          "decimals": 8
+        },
+        {
+          "symbol": "T060",
+          "decimals": 8
+        },
+        {
+          "symbol": "T061",
+          "decimals": 8
+        },
+        {
+          "symbol": "T062",
+          "decimals": 8
+        },
+        {
+          "symbol": "T063",
+          "decimals": 8
+        },
+        {
+          "symbol": "T064",
+          "decimals": 8
+        },
+        {
+          "symbol": "T065",
+          "decimals": 8
+        },
+        {
+          "symbol": "T066",
+          "decimals": 8
+        },
+        {
+          "symbol": "T067",
+          "decimals": 8
+        },
+        {
+          "symbol": "T068",
+          "decimals": 8
+        },
+        {
+          "symbol": "T069",
+          "decimals": 8
+        },
+        {
+          "symbol": "T070",
+          "decimals": 8
+        },
+        {
+          "symbol": "T071",
+          "decimals": 8
+        },
+        {
+          "symbol": "T072",
+          "decimals": 8
+        },
+        {
+          "symbol": "T073",
+          "decimals": 8
+        },
+        {
+          "symbol": "T074",
+          "decimals": 8
+        },
+        {
+          "symbol": "T075",
+          "decimals": 8
+        },
+        {
+          "symbol": "T076",
+          "decimals": 8
+        },
+        {
+          "symbol": "T077",
+          "decimals": 8
+        },
+        {
+          "symbol": "T078",
+          "decimals": 8
+        },
+        {
+          "symbol": "T079",
+          "decimals": 8
+        },
+        {
+          "symbol": "T080",
+          "decimals": 8
+        },
+        {
+          "symbol": "T081",
+          "decimals": 8
+        },
+        {
+          "symbol": "T082",
+          "decimals": 8
+        },
+        {
+          "symbol": "T083",
+          "decimals": 8
+        },
+        {
+          "symbol": "T084",
+          "decimals": 8
+        },
+        {
+          "symbol": "T085",
+          "decimals": 8
+        },
+        {
+          "symbol": "T086",
+          "decimals": 8
+        },
+        {
+          "symbol": "T087",
+          "decimals": 8
+        },
+        {
+          "symbol": "T088",
+          "decimals": 8
+        },
+        {
+          "symbol": "T089",
+          "decimals": 8
+        },
+        {
+          "symbol": "T090",
+          "decimals": 8
+        },
+        {
+          "symbol": "T091",
+          "decimals": 8
+        },
+        {
+          "symbol": "T092",
+          "decimals": 8
+        },
+        {
+          "symbol": "T093",
+          "decimals": 8
+        },
+        {
+          "symbol": "T094",
+          "decimals": 8
+        },
+        {
+          "symbol": "T095",
+          "decimals": 8
+        },
+        {
+          "symbol": "T096",
+          "decimals": 8
+        },
+        {
+          "symbol": "T097",
+          "decimals": 8
+        },
+        {
+          "symbol": "T098",
+          "decimals": 8
+        },
+        {
+          "symbol": "T099",
+          "decimals": 8
+        },
+        {
+          "symbol": "T100",
+          "decimals": 8
+        },
+        {
+          "symbol": "T101",
+          "decimals": 8
+        },
+        {
+          "symbol": "T102",
+          "decimals": 8
+        },
+        {
+          "symbol": "T103",
+          "decimals": 8
+        },
+        {
+          "symbol": "T104",
+          "decimals": 8
+        },
+        {
+          "symbol": "T105",
+          "decimals": 8
+        },
+        {
+          "symbol": "T106",
+          "decimals": 8
+        },
+        {
+          "symbol": "T107",
+          "decimals": 8
+        },
+        {
+          "symbol": "T108",
+          "decimals": 8
+        },
+        {
+          "symbol": "T109",
+          "decimals": 8
+        },
+        {
+          "symbol": "T110",
+          "decimals": 8
+        },
+        {
+          "symbol": "T111",
+          "decimals": 8
+        },
+        {
+          "symbol": "T112",
+          "decimals": 8
+        },
+        {
+          "symbol": "T113",
+          "decimals": 8
+        },
+        {
+          "symbol": "T114",
+          "decimals": 8
+        },
+        {
+          "symbol": "T115",
+          "decimals": 8
+        },
+        {
+          "symbol": "T116",
+          "decimals": 8
+        },
+        {
+          "symbol": "T117",
+          "decimals": 8
+        },
+        {
+          "symbol": "T118",
+          "decimals": 8
+        },
+        {
+          "symbol": "T119",
+          "decimals": 8
+        },
+        {
+          "symbol": "T120",
+          "decimals": 8
+        }
+      ],
+      "tree": {
+        "algo": "merkle-sum-sha256-v2",
+        "leaf_count": 41,
+        "root": "3b94cf913839466b8abbbc5cd442814f4382b7ccd3d5bb8f4912d80bcd72e2be",
+        "padding": "empty"
+      },
+      "totals": {
+        "T001": "81000243",
+        "T002": "126000378",
+        "T003": "23000069",
+        "T004": "34000102",
+        "T005": "0",
+        "T006": "18000054",
+        "T007": "0",
+        "T008": "62000186",
+        "T009": "0",
+        "T010": "18000054",
+        "T011": "51000153",
+        "T012": "2000006",
+        "T013": "13000039",
+        "T014": "24000072",
+        "T015": "0",
+        "T016": "0",
+        "T017": "0",
+        "T018": "0",
+        "T019": "64000192",
+        "T020": "0",
+        "T021": "0",
+        "T022": "54000162",
+        "T023": "3000009",
+        "T024": "120000360",
+        "T025": "25000075",
+        "T026": "0",
+        "T027": "0",
+        "T028": "22000066",
+        "T029": "44000132",
+        "T030": "66000198",
+        "T031": "0",
+        "T032": "24000072",
+        "T033": "0",
+        "T034": "94000282",
+        "T035": "138000414",
+        "T036": "0",
+        "T037": "37000111",
+        "T038": "2000006",
+        "T039": "24000072",
+        "T040": "46000138",
+        "T041": "68000204",
+        "T042": "0",
+        "T043": "0",
+        "T044": "60000180",
+        "T045": "98000294",
+        "T046": "0",
+        "T047": "27000081",
+        "T048": "38000114",
+        "T049": "4000012",
+        "T050": "26000078",
+        "T051": "48000144",
+        "T052": "0",
+        "T053": "0",
+        "T054": "30000090",
+        "T055": "0",
+        "T056": "96000288",
+        "T057": "17000051",
+        "T058": "0",
+        "T059": "39000117",
+        "T060": "6000018",
+        "T061": "0",
+        "T062": "0",
+        "T063": "72000216",
+        "T064": "0",
+        "T065": "33000099",
+        "T066": "66000198",
+        "T067": "99000297",
+        "T068": "18000054",
+        "T069": "29000087",
+        "T070": "40000120",
+        "T071": "8000024",
+        "T072": "0",
+        "T073": "52000156",
+        "T074": "74000222",
+        "T075": "3000009",
+        "T076": "36000108",
+        "T077": "69000207",
+        "T078": "8000024",
+        "T079": "19000057",
+        "T080": "30000090",
+        "T081": "0",
+        "T082": "0",
+        "T083": "32000096",
+        "T084": "54000162",
+        "T085": "76000228",
+        "T086": "6000018",
+        "T087": "39000117",
+        "T088": "0",
+        "T089": "9000027",
+        "T090": "20000060",
+        "T091": "0",
+        "T092": "0",
+        "T093": "12000036",
+        "T094": "34000102",
+        "T095": "0",
+        "T096": "78000234",
+        "T097": "9000027",
+        "T098": "0",
+        "T099": "75000225",
+        "T100": "118000354",
+        "T101": "0",
+        "T102": "32000096",
+        "T103": "0",
+        "T104": "0",
+        "T105": "36000108",
+        "T106": "58000174",
+        "T107": "0",
+        "T108": "0",
+        "T109": "45000135",
+        "T110": "78000234",
+        "T111": "111000333",
+        "T112": "22000066",
+        "T113": "33000099",
+        "T114": "0",
+        "T115": "16000048",
+        "T116": "38000114",
+        "T117": "0",
+        "T118": "82000246",
+        "T119": "15000045",
+        "T120": "48000144"
+      },
+      "params": {
+        "user_ref_hash": "sha256(STONEHASH-POR-USER-V1\\n + exchange_id + \\n + user_ref)",
+        "salt": "hmac-sha256(master_seed, user_ref)"
+      },
+      "generated_at": "2026-11-16T01:02:03.456Z"
+    },
+    "canonical": "{\"asof\":\"2026-11-16T00:00:00Z\",\"assets\":[{\"decimals\":8,\"symbol\":\"T001\"},{\"decimals\":8,\"symbol\":\"T002\"},{\"decimals\":8,\"symbol\":\"T003\"},{\"decimals\":8,\"symbol\":\"T004\"},{\"decimals\":8,\"symbol\":\"T005\"},{\"decimals\":8,\"symbol\":\"T006\"},{\"decimals\":8,\"symbol\":\"T007\"},{\"decimals\":8,\"symbol\":\"T008\"},{\"decimals\":8,\"symbol\":\"T009\"},{\"decimals\":8,\"symbol\":\"T010\"},{\"decimals\":8,\"symbol\":\"T011\"},{\"decimals\":8,\"symbol\":\"T012\"},{\"decimals\":8,\"symbol\":\"T013\"},{\"decimals\":8,\"symbol\":\"T014\"},{\"decimals\":8,\"symbol\":\"T015\"},{\"decimals\":8,\"symbol\":\"T016\"},{\"decimals\":8,\"symbol\":\"T017\"},{\"decimals\":8,\"symbol\":\"T018\"},{\"decimals\":8,\"symbol\":\"T019\"},{\"decimals\":8,\"symbol\":\"T020\"},{\"decimals\":8,\"symbol\":\"T021\"},{\"decimals\":8,\"symbol\":\"T022\"},{\"decimals\":8,\"symbol\":\"T023\"},{\"decimals\":8,\"symbol\":\"T024\"},{\"decimals\":8,\"symbol\":\"T025\"},{\"decimals\":8,\"symbol\":\"T026\"},{\"decimals\":8,\"symbol\":\"T027\"},{\"decimals\":8,\"symbol\":\"T028\"},{\"decimals\":8,\"symbol\":\"T029\"},{\"decimals\":8,\"symbol\":\"T030\"},{\"decimals\":8,\"symbol\":\"T031\"},{\"decimals\":8,\"symbol\":\"T032\"},{\"decimals\":8,\"symbol\":\"T033\"},{\"decimals\":8,\"symbol\":\"T034\"},{\"decimals\":8,\"symbol\":\"T035\"},{\"decimals\":8,\"symbol\":\"T036\"},{\"decimals\":8,\"symbol\":\"T037\"},{\"decimals\":8,\"symbol\":\"T038\"},{\"decimals\":8,\"symbol\":\"T039\"},{\"decimals\":8,\"symbol\":\"T040\"},{\"decimals\":8,\"symbol\":\"T041\"},{\"decimals\":8,\"symbol\":\"T042\"},{\"decimals\":8,\"symbol\":\"T043\"},{\"decimals\":8,\"symbol\":\"T044\"},{\"decimals\":8,\"symbol\":\"T045\"},{\"decimals\":8,\"symbol\":\"T046\"},{\"decimals\":8,\"symbol\":\"T047\"},{\"decimals\":8,\"symbol\":\"T048\"},{\"decimals\":8,\"symbol\":\"T049\"},{\"decimals\":8,\"symbol\":\"T050\"},{\"decimals\":8,\"symbol\":\"T051\"},{\"decimals\":8,\"symbol\":\"T052\"},{\"decimals\":8,\"symbol\":\"T053\"},{\"decimals\":8,\"symbol\":\"T054\"},{\"decimals\":8,\"symbol\":\"T055\"},{\"decimals\":8,\"symbol\":\"T056\"},{\"decimals\":8,\"symbol\":\"T057\"},{\"decimals\":8,\"symbol\":\"T058\"},{\"decimals\":8,\"symbol\":\"T059\"},{\"decimals\":8,\"symbol\":\"T060\"},{\"decimals\":8,\"symbol\":\"T061\"},{\"decimals\":8,\"symbol\":\"T062\"},{\"decimals\":8,\"symbol\":\"T063\"},{\"decimals\":8,\"symbol\":\"T064\"},{\"decimals\":8,\"symbol\":\"T065\"},{\"decimals\":8,\"symbol\":\"T066\"},{\"decimals\":8,\"symbol\":\"T067\"},{\"decimals\":8,\"symbol\":\"T068\"},{\"decimals\":8,\"symbol\":\"T069\"},{\"decimals\":8,\"symbol\":\"T070\"},{\"decimals\":8,\"symbol\":\"T071\"},{\"decimals\":8,\"symbol\":\"T072\"},{\"decimals\":8,\"symbol\":\"T073\"},{\"decimals\":8,\"symbol\":\"T074\"},{\"decimals\":8,\"symbol\":\"T075\"},{\"decimals\":8,\"symbol\":\"T076\"},{\"decimals\":8,\"symbol\":\"T077\"},{\"decimals\":8,\"symbol\":\"T078\"},{\"decimals\":8,\"symbol\":\"T079\"},{\"decimals\":8,\"symbol\":\"T080\"},{\"decimals\":8,\"symbol\":\"T081\"},{\"decimals\":8,\"symbol\":\"T082\"},{\"decimals\":8,\"symbol\":\"T083\"},{\"decimals\":8,\"symbol\":\"T084\"},{\"decimals\":8,\"symbol\":\"T085\"},{\"decimals\":8,\"symbol\":\"T086\"},{\"decimals\":8,\"symbol\":\"T087\"},{\"decimals\":8,\"symbol\":\"T088\"},{\"decimals\":8,\"symbol\":\"T089\"},{\"decimals\":8,\"symbol\":\"T090\"},{\"decimals\":8,\"symbol\":\"T091\"},{\"decimals\":8,\"symbol\":\"T092\"},{\"decimals\":8,\"symbol\":\"T093\"},{\"decimals\":8,\"symbol\":\"T094\"},{\"decimals\":8,\"symbol\":\"T095\"},{\"decimals\":8,\"symbol\":\"T096\"},{\"decimals\":8,\"symbol\":\"T097\"},{\"decimals\":8,\"symbol\":\"T098\"},{\"decimals\":8,\"symbol\":\"T099\"},{\"decimals\":8,\"symbol\":\"T100\"},{\"decimals\":8,\"symbol\":\"T101\"},{\"decimals\":8,\"symbol\":\"T102\"},{\"decimals\":8,\"symbol\":\"T103\"},{\"decimals\":8,\"symbol\":\"T104\"},{\"decimals\":8,\"symbol\":\"T105\"},{\"decimals\":8,\"symbol\":\"T106\"},{\"decimals\":8,\"symbol\":\"T107\"},{\"decimals\":8,\"symbol\":\"T108\"},{\"decimals\":8,\"symbol\":\"T109\"},{\"decimals\":8,\"symbol\":\"T110\"},{\"decimals\":8,\"symbol\":\"T111\"},{\"decimals\":8,\"symbol\":\"T112\"},{\"decimals\":8,\"symbol\":\"T113\"},{\"decimals\":8,\"symbol\":\"T114\"},{\"decimals\":8,\"symbol\":\"T115\"},{\"decimals\":8,\"symbol\":\"T116\"},{\"decimals\":8,\"symbol\":\"T117\"},{\"decimals\":8,\"symbol\":\"T118\"},{\"decimals\":8,\"symbol\":\"T119\"},{\"decimals\":8,\"symbol\":\"T120\"}],\"exchange\":{\"institution_id\":\"KR-EX-0a1b2c\",\"name\":\"Sample Exchange\"},\"generated_at\":\"2026-11-16T01:02:03.456Z\",\"params\":{\"salt\":\"hmac-sha256(master_seed, user_ref)\",\"user_ref_hash\":\"sha256(STONEHASH-POR-USER-V1\\\\n + exchange_id + \\\\n + user_ref)\"},\"schema\":\"stonehash.por-snapshot.v1\",\"totals\":{\"T001\":\"81000243\",\"T002\":\"126000378\",\"T003\":\"23000069\",\"T004\":\"34000102\",\"T005\":\"0\",\"T006\":\"18000054\",\"T007\":\"0\",\"T008\":\"62000186\",\"T009\":\"0\",\"T010\":\"18000054\",\"T011\":\"51000153\",\"T012\":\"2000006\",\"T013\":\"13000039\",\"T014\":\"24000072\",\"T015\":\"0\",\"T016\":\"0\",\"T017\":\"0\",\"T018\":\"0\",\"T019\":\"64000192\",\"T020\":\"0\",\"T021\":\"0\",\"T022\":\"54000162\",\"T023\":\"3000009\",\"T024\":\"120000360\",\"T025\":\"25000075\",\"T026\":\"0\",\"T027\":\"0\",\"T028\":\"22000066\",\"T029\":\"44000132\",\"T030\":\"66000198\",\"T031\":\"0\",\"T032\":\"24000072\",\"T033\":\"0\",\"T034\":\"94000282\",\"T035\":\"138000414\",\"T036\":\"0\",\"T037\":\"37000111\",\"T038\":\"2000006\",\"T039\":\"24000072\",\"T040\":\"46000138\",\"T041\":\"68000204\",\"T042\":\"0\",\"T043\":\"0\",\"T044\":\"60000180\",\"T045\":\"98000294\",\"T046\":\"0\",\"T047\":\"27000081\",\"T048\":\"38000114\",\"T049\":\"4000012\",\"T050\":\"26000078\",\"T051\":\"48000144\",\"T052\":\"0\",\"T053\":\"0\",\"T054\":\"30000090\",\"T055\":\"0\",\"T056\":\"96000288\",\"T057\":\"17000051\",\"T058\":\"0\",\"T059\":\"39000117\",\"T060\":\"6000018\",\"T061\":\"0\",\"T062\":\"0\",\"T063\":\"72000216\",\"T064\":\"0\",\"T065\":\"33000099\",\"T066\":\"66000198\",\"T067\":\"99000297\",\"T068\":\"18000054\",\"T069\":\"29000087\",\"T070\":\"40000120\",\"T071\":\"8000024\",\"T072\":\"0\",\"T073\":\"52000156\",\"T074\":\"74000222\",\"T075\":\"3000009\",\"T076\":\"36000108\",\"T077\":\"69000207\",\"T078\":\"8000024\",\"T079\":\"19000057\",\"T080\":\"30000090\",\"T081\":\"0\",\"T082\":\"0\",\"T083\":\"32000096\",\"T084\":\"54000162\",\"T085\":\"76000228\",\"T086\":\"6000018\",\"T087\":\"39000117\",\"T088\":\"0\",\"T089\":\"9000027\",\"T090\":\"20000060\",\"T091\":\"0\",\"T092\":\"0\",\"T093\":\"12000036\",\"T094\":\"34000102\",\"T095\":\"0\",\"T096\":\"78000234\",\"T097\":\"9000027\",\"T098\":\"0\",\"T099\":\"75000225\",\"T100\":\"118000354\",\"T101\":\"0\",\"T102\":\"32000096\",\"T103\":\"0\",\"T104\":\"0\",\"T105\":\"36000108\",\"T106\":\"58000174\",\"T107\":\"0\",\"T108\":\"0\",\"T109\":\"45000135\",\"T110\":\"78000234\",\"T111\":\"111000333\",\"T112\":\"22000066\",\"T113\":\"33000099\",\"T114\":\"0\",\"T115\":\"16000048\",\"T116\":\"38000114\",\"T117\":\"0\",\"T118\":\"82000246\",\"T119\":\"15000045\",\"T120\":\"48000144\"},\"tree\":{\"algo\":\"merkle-sum-sha256-v2\",\"leaf_count\":41,\"padding\":\"empty\",\"root\":\"3b94cf913839466b8abbbc5cd442814f4382b7ccd3d5bb8f4912d80bcd72e2be\"}}",
+    "commitment": "abbf3074bf03a159593562ecf04953fec508bd3fe7b68a020380845921507e03"
+  }
+}
