@@ -819,6 +819,17 @@ class RemitStoreIT {
                     () -> new RemitStartup(CoreConfig.load(EnvSource.of(live)), new StartMode(true), platform, registry).afterSingletonsInstantiated());
             assertTrue(refused.getMessage().startsWith("refusing to start: the platform's own institution (STONEHASH) is registered with another signing key"), refused.getMessage());
             assertEquals(otherKey, registry.institution(ProductRegistry.PLATFORM_ID).get("signing_spki"), "the live row was not touched");
+            // The store the switch was approved for is the live store too, whatever the environment is called: the mark alone
+            // (STONEHASH_CUTOVER_APPROVED=1, STONEHASH_ENV left as it is) stops the start, and the row stays as it was.
+            Map<String, String> atSwitch = new LinkedHashMap<>();
+            atSwitch.put("STONEHASH_DATA_DIR", "/srv/stonehash/data");
+            atSwitch.put("STONEHASH_CUTOVER_APPROVED", "1");
+            CoreConfig approved = CoreConfig.load(EnvSource.of(atSwitch));
+            assertEquals("test", approved.env, "the environment is not what makes this the live store");
+            assertTrue(approved.cutoverApproved && approved.remit.enabled);
+            ConfigError refusedAtSwitch = assertThrows(ConfigError.class, () -> new RemitStartup(approved, new StartMode(true), platform, registry).afterSingletonsInstantiated());
+            assertEquals(refused.getMessage(), refusedAtSwitch.getMessage(), "the same refusal as in the live environment");
+            assertEquals(otherKey, registry.institution(ProductRegistry.PLATFORM_ID).get("signing_spki"), "the row of the store the switch was approved for was not touched");
             start.afterSingletonsInstantiated();
             assertEquals(ProductRegistry.PlatformRow.CURRENT, registry.platformRow(spki), "the test store's row follows the key file");
         } finally {
