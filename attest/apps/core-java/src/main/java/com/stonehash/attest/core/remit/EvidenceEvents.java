@@ -1,5 +1,6 @@
 package com.stonehash.attest.core.remit;
 
+import com.stonehash.attest.core.json.Js;
 import com.stonehash.attest.core.json.JsValues;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -95,6 +96,34 @@ final class EvidenceEvents {
 
     static Map<String, Object> insufficientNotice(String level) {
         return map("evidence_level", level);
+    }
+
+    // ── a completion that is reconciled: what its job carries ────────────────
+
+    /**
+     * What a {@code RECONCILE} job is made with: which completion it
+     * reconciles — the number that {@code PAYOUT_COMPLETED} has among the
+     * settlement's events. A settlement can hold several completions (one
+     * stated at {@code L1} and held, then a signed one); the reconciliation
+     * reads the one that caused it and no other.
+     */
+    static Map<String, Object> reconcileInput(int completionSeq) {
+        return map("completion_seq", completionSeq);
+    }
+
+    /**
+     * The completion a {@code RECONCILE} job names.
+     *
+     * @param input the job's {@code input}, the text the store holds
+     * @return the sequence number of its {@code PAYOUT_COMPLETED}, or {@code null} when the input names none
+     */
+    static Integer completionSeq(String input) {
+        Object named = input == null ? null : JsValues.memberIfAny(Js.parse(input), "completion_seq");
+        if (!(named instanceof Number)) {
+            return null;
+        }
+        double seq = ((Number) named).doubleValue();
+        return seq >= 0 && seq == Math.rint(seq) && seq <= Integer.MAX_VALUE ? (int) seq : null;
     }
 
     // ── reconciliation ───────────────────────────────────────────────────────

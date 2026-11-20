@@ -8,6 +8,7 @@ import com.stonehash.attest.core.http.Body;
 import com.stonehash.attest.core.http.Router;
 import com.stonehash.attest.core.json.Js;
 import com.stonehash.attest.core.json.JsValues;
+import com.stonehash.attest.core.log.Log;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -236,7 +237,14 @@ public class Callbacks implements RemitRouteSet {
         if (out.reconcile != null) {
             // Reconciled and packaged on this thread, before the institution is answered. Whatever that comes to is in the
             // store; the callback was taken either way.
-            executor.runInline(out.reconcile);
+            try {
+                executor.runInline(out.reconcile);
+            } catch (RuntimeException e) {
+                // An executor does not throw. Should one do so all the same: the completion is on file and its job is in the
+                // store for whoever claims it next — the institution is not told that its report failed.
+                Log.line("remit callback: the reconciliation did not run to its end inside the request",
+                        Log.fields("payment", c.paymentId, "job", out.reconcile.id, "error", String.valueOf(e)));
+            }
         }
         return accepted();
     }
@@ -315,8 +323,10 @@ public class Callbacks implements RemitRouteSet {
                         EvidenceEvents.returnedNotice(c.payload, failed == null ? null : Js.parse((String) failed.get("payload"))));
                 return done;
             }
-            default:
+            case "PAYOUT_COMPLETED":
                 return completed(c, id, orgId, state);
+            default:
+                throw new IllegalStateException("a callback of type " + c.type + " passed the checks");
         }
     }
 
@@ -343,10 +353,9 @@ public class Callbacks implements RemitRouteSet {
             outbox.enqueue(orgId, id, heldSeq, "EVIDENCE_INSUFFICIENT", state, EvidenceEvents.insufficientNotice(c.level));
             return done;
         }
-        Map<String, Object> input = new LinkedHashMap<>();
-        input.put("completion_seq", seq);
         try {
-            done.reconcile = jobs.insertClaimed(id, orgId, RemitJobs.Kind.RECONCILE, null, input);
+            // The job says which completion it reconciles: this one, by its number among the settlement's events.
+            done.reconcile = jobs.insertClaimed(id, orgId, RemitJobs.Kind.RECONCILE, null, EvidenceEvents.reconcileInput(seq));
         } catch (DuplicateKeyException openedMeanwhile) {
             // A job of this lane was put back into the queue between the look above and here (an operator's requeue does not
             // take the settlement's lock): that one is being reconciled, and this completion is not taken.
