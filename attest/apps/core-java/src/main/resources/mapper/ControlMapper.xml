@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonehash.attest.core.remit.ControlMapper">
+
+  <!--
+    An attention job is closed already (it holds no place in its lane); this only says a person is done with it.
+    The note goes in front of the error the job stopped with, and the whole is kept well inside what the column holds.
+  -->
+  <update id="closeAttentionJob">
+    UPDATE remit_jobs
+       SET state = 'done',
+           last_error = LEFT(CONCAT(#{memo}, CASE WHEN last_error IS NULL OR last_error = '' THEN '' ELSE CONCAT(' — was: ', last_error) END), 16000),
+           updated_at = UTC_TIMESTAMP(3)
+     WHERE id = #{id} AND state = 'attention'
+  </update>
+</mapper>
