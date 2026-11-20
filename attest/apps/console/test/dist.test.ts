@@ -210,22 +210,12 @@ test('copying works where this console is actually served', { skip }, () => {
     + 'caller must go through it or it will fail silently again');
 });
 
-test('every command the console prints can actually be run', { skip }, () => {
-  /*
-   * The signing instructions named `stonehash/attest-sign`, an image on no
-   * registry, and failed with "pull access denied" for the first person who
-   * pasted them. A command shown to a customer is a promise that it works.
-   *
-   * No registry reference is the rule, not a one-off fix: pulling an image
-   * means trusting it, and this one generates private keys.
-   */
+test('document signing commands live in the hub, while the console links to both guides', { skip }, () => {
   const app = code('app.js');
-  assert.doesNotMatch(app, /docker (pull|run)[^\n]*\w+\/attest-sign/,
-    'the console must not reference a registry image; build it locally instead');
-  assert.match(app, /docker build -t attest-sign/,
-    'and must show how to produce the image it then runs');
-  assert.match(app, /node packages\/attest-sign\/src\/cli\.ts/,
-    'with a Docker-free path, since the package has no dependencies');
+  assert.doesNotMatch(app, /docker build -t attest-sign|node packages\/attest-sign\/src\/cli/);
+  assert.match(app, /data-link-hash="signing-existing"/);
+  assert.match(app, /data-link-hash="signing-tool"/);
+  assert.match(app, /signing-request\.json/);
 });
 
 test('controls inside a re-rendered panel are delegated, not bound', { skip }, () => {
@@ -642,17 +632,15 @@ test('the reserve screen keeps the balance file and the key in the page', { skip
   }
   // What it may ask of the API: reads, and the two calls of the snapshot protocol.
   const calls = [...new Set([...por.matchAll(/\bapi\.(\w+)\(/g)].map((m) => m[1]!))].sort();
-  assert.deepEqual(calls, ['porConsoleKey', 'porOpenings', 'porSnapshot', 'porSubmit', 'products']);
+  assert.deepEqual(calls, ['porConsoleKey', 'porSnapshot', 'porSubmit', 'products']);
   assert.match(por, /api\.porSubmit\(\{ statement, sig\b/,
     'a submission is the statement and its signature');
   assert.match(code('api.js'), /porSubmit:[\s\S]{0,200}?send\('POST', '\/v1\/por\/snapshots', body\)/,
     'and it goes as JSON, like every other call');
 
-  // A spot check opens leaves by their hash. The account identifier is the
-  // one field of a leaf that must not be in what is sent.
-  const opening = /provePorLeaf\(tree, i, \{([^}]*)\}\)/.exec(por);
-  assert.ok(opening, 'expected the spot-check openings to be built from the tree');
-  assert.doesNotMatch(opening[1]!, /user_ref(?!_hash)/, 'an opening must not carry the account identifier');
+  assert.match(por, /api\.porSubmit\(\{ statement, sig, spot_check: false \}\)/,
+    'the MVP console must explicitly decline spot checks');
+  assert.doesNotMatch(por, /api\.porOpenings\(/, 'the console must not disclose individual account balances');
 
   // The key it signs with is made for the session. Only the public half is
   // registered; the private half is never downloaded, shown or sent.
@@ -670,7 +658,7 @@ test('the reserve screen asks for a file and nothing else', { skip }, () => {
    * the file and says what it settled on next to the result.
    */
   const por = code('por.js');
-  for (const id of ['por-assets', 'por-amounts', 'por-asof', 'por-key', 'por-build', 'por-submit', 'por-mint']) {
+  for (const id of ['por-assets', 'por-amounts', 'por-asof', 'por-key', 'por-build', 'por-submit', 'por-mint', 'por-sample', 'por-spot']) {
     assert.doesNotMatch(por, new RegExp(`['"#]${id}['"]|id="${id}"`), `the screen still has #${id}`);
   }
   assert.match(por, /id="por-file"/, 'the balance file is the one thing asked for');
@@ -710,7 +698,7 @@ test('the reserve screen runs the SDK\'s own rules, not a copy of them', { skip 
 
 test('the example the reserve screen offers is the SDK\'s own file', { skip }, () => {
   /*
-   * The screen runs an example and hands the same file out as a download. A
+   * The screen offers an example file as a download. A
    * copy typed into the screen would drift from the file the guide points at
    * and the SDK's own tests pin a root for, so the build writes the package's
    * file into a module and this checks the module that shipped still says
@@ -731,10 +719,7 @@ test('the example the reserve screen offers is the SDK\'s own file', { skip }, (
   const por = code('por.js');
   assert.deepEqual([...por.matchAll(/data-por-sample="(\w+)"/g)].map((m) => m[1]), ['wide'], 'the screen offers exactly one example to download');
   assert.match(por, /data-link-hash="por-data"/, 'and a link to the guide, where the other shapes are');
-  assert.match(por, /s\.fileText = SAMPLE_WIDE\b/, 'the example that runs is the file that downloads');
   assert.match(por, /download\(SAMPLE_WIDE_NAME, SAMPLE_WIDE, 'text\/csv'\)/);
-  // …and it is under that file's own name that the proof file records it, or the download could not be matched to it later.
-  assert.match(por, /s\.fileText !== null \? SAMPLE_WIDE_NAME :/, 'the example is recorded as the SDK file it is');
   // An identifier alone is the proof field's placeholder; one followed by a comma would be a row.
   assert.doesNotMatch(por, /U-1000\d\d,/, 'no row of the example may be typed into the screen itself');
 });
@@ -792,7 +777,7 @@ test('the reserve screen anchors and does nothing else', { skip }, () => {
   // Signing out, or in as another account, must leave nothing of the last one behind.
   const reset = /export function resetPor\(\)[\s\S]*?\n\}/.exec(por);
   assert.ok(reset, 'expected resetPor');
-  for (const field of ['s.anchored = null', 's.kept = []', 's.key = null', 's.file = null', 's.fileText = null']) {
+  for (const field of ['s.anchored = null', 's.kept = []', 's.key = null', 's.file = null']) {
     assert.ok(reset[0].includes(field), `resetPor must clear ${field.split(' ')[0]}`);
   }
   const appJs = code('app.js');

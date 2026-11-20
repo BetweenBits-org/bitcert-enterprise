@@ -1076,7 +1076,7 @@ table.minitab td { padding: 6px 10px; }
    colour rule as the list: filled only when the completing event exists,
    caution while a leg is moving or parked, neutral when it failed. */
 .journey {
-  margin: 12px 0 14px; padding: 15px 18px 16px;
+  max-width: 780px; margin: 8px 0 10px; padding: 10px 12px 12px;
   background: var(--ground); border: 1px solid var(--rule); border-top: 3px solid var(--rule-2);
   border-radius: var(--radius);
 }
@@ -1084,11 +1084,11 @@ table.minitab td { padding: 6px 10px; }
 .journey.run, .journey.hold { border-top-color: var(--warn); }
 .journey.stop { border-top-color: var(--inert); }
 .jhead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
-.jstate { display: inline-flex; align-items: center; gap: 9px; font-size: 15px; letter-spacing: -.3px; color: var(--ink); }
+.jstate { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; letter-spacing: -.3px; color: var(--ink); }
 .jstate i { flex-shrink: 0; width: 9px; height: 9px; border-radius: 50%; background: var(--inert); }
 .journey.ok .jstate i { background: var(--brand); }
 .journey.run .jstate i, .journey.hold .jstate i { background: var(--warn); }
-.jmeta { font-size: 12.5px; color: var(--ink-3); }
+.jmeta { font-size: 11.5px; color: var(--ink-3); }
 .jlive {
   margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
   font-family: var(--mono); font-size: 10px; letter-spacing: .7px; text-transform: uppercase; color: var(--ink-3);
@@ -1096,20 +1096,20 @@ table.minitab td { padding: 6px 10px; }
 .jlive i { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); animation: jblink 1.4s ease-in-out infinite; }
 .rxbody p.jnote { margin: 6px 0 0; font-size: 13px; color: var(--ink-2); max-width: none; }
 
-.jflow { display: flex; align-items: stretch; margin: 14px 0 18px; }
+.jflow { display: flex; align-items: stretch; margin: 10px 0 12px; }
 .jstop {
-  flex: 1 1 0; min-width: 0; padding: 10px 14px;
+  flex: 1 1 0; min-width: 0; padding: 7px 10px; line-height: 1.45;
   border: 1px solid var(--rule); border-radius: var(--radius); background: var(--ground-2);
 }
 .jstop small { display: block; font-size: 11.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .jstop b {
-  display: block; margin: 2px 0; font-size: 17px; letter-spacing: -.4px; font-variant-numeric: tabular-nums;
+  display: block; margin: 2px 0; font-size: 15px; letter-spacing: -.3px; font-variant-numeric: tabular-nums;
   color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .jstop.lit { background: var(--pass-bg); border-color: var(--brand); }
 .jstop.lit b { color: var(--ink); }
 .jstop.lit small { color: var(--ink-2); }
-.jarrow { position: relative; flex: 0 0 42px; align-self: center; height: 2px; background: var(--rule-2); }
+.jarrow { position: relative; flex: 0 0 24px; align-self: center; height: 2px; background: var(--rule-2); }
 .jarrow::after {
   content: ''; position: absolute; right: -1px; top: -4px;
   border-style: solid; border-width: 5px 0 5px 7px; border-color: transparent transparent transparent var(--rule-2);
@@ -1123,14 +1123,14 @@ table.minitab td { padding: 6px 10px; }
   display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center;
 }
 /* The track from the station before this one, centre to centre. */
-.jstep::before { content: ''; position: absolute; top: 13px; right: 50%; width: 100%; height: 2px; background: var(--rule-2); }
+.jstep::before { content: ''; position: absolute; top: 11px; right: 50%; width: 100%; height: 2px; background: var(--rule-2); }
 .jstep:first-child::before { display: none; }
 .jnode {
-  position: relative; z-index: 1; width: 28px; height: 28px; border-radius: 50%;
+  position: relative; z-index: 1; width: 24px; height: 24px; border-radius: 50%;
   display: grid; place-items: center; font-family: var(--mono); font-size: 12px; font-weight: 600;
   color: var(--ink-3); background: var(--ground); border: 2px solid var(--rule-2);
 }
-.jstep b { margin-top: 5px; font-size: 12.5px; font-weight: 600; color: var(--ink-3); word-break: keep-all; line-height: 1.35; }
+.jstep b { margin-top: 3px; font-size: 12px; font-weight: 600; color: var(--ink-3); word-break: keep-all; line-height: 1.35; }
 .jstep small { font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .jstep.done::before, .jstep.active::before, .jstep.held::before { background: var(--brand); }
 .jstep.done .jnode { background: var(--brand); border-color: var(--brand); color: #fff; }
@@ -1169,8 +1169,7 @@ table.minitab td { padding: 6px 10px; }
 .porpage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
 /* Korean breaks between words here, not inside them; a file name or a hash too long for its line still wraps. */
 .porpage p, .porpage li { word-break: keep-all; overflow-wrap: break-word; }
-.porcheck { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; color: var(--ink); cursor: pointer; }
-.porcheck input { width: auto; }
+.porpage .por-actions { margin-top: 20px; }
 .porbox { margin-top: 14px; padding: 14px 16px; border: 1px solid var(--rule); border-left: 3px solid var(--brand); border-radius: var(--radius); background: var(--ground-2); }
 .porbox.bad { border-color: var(--fail); background: var(--fail-bg); }
 .porbox .statrow { margin: 0 0 8px; }
@@ -1186,12 +1185,6 @@ table.minitab td { padding: 6px 10px; }
 .porsamples .porsample { min-width: 0; color: var(--ink-3); font-size: 12.5px; }
 .porsamples .link { padding: 0 4px 0 0; font-family: var(--mono); font-size: 12.5px; }
 .porsamples a { font-size: 12.5px; }
-/* The one thing that can be changed about an anchoring, kept out of the way. */
-.poropt { margin: 10px 0 0; }
-.poropt > summary { font-size: 13px; color: var(--ink-2); cursor: pointer; }
-.poropt > summary:hover { color: var(--ink); }
-.poropt .porcheck { margin: 10px 0 4px; }
-.poropt p.hint { margin: 0; }
 /* The one file to keep: the button, and beside it why it and the balance file are enough. */
 .porkeep { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
 .porkeep .btn { flex: 0 0 auto; }
@@ -1201,3 +1194,12 @@ table.minitab td { padding: 6px 10px; }
 /* Proof files not yet taken, after their results have left the screen. */
 .card #por-left p.hint { margin: 14px 0 0; max-width: none; }
 #por-left .link { padding: 0; font-size: inherit; }
+
+/* Document signing: choices and handoff, with commands in the Developer Hub. */
+#sg-key { width: 100%; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--ground); color: var(--ink); font: inherit; }
+.sign-guides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.sign-guide { display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1px solid var(--rule); border-radius: 8px; text-decoration: none; }
+.sign-guide:hover { background: var(--ground-2); }
+.sign-guide span { color: var(--ink-2); font-size: 12px; line-height: 1.5; }
+.signsteps + .row { margin-top: 20px; }
+@media (max-width: 640px) { .sign-guides { grid-template-columns: 1fr; } }

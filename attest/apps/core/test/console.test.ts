@@ -1319,3 +1319,38 @@ test('a path with doubled slashes is filed under the product that answered it', 
     assert.deepEqual(rows.map((r) => [r.method, r.path, r.service]), [['GET', '/v1/attestations', 'attest']]);
   } finally { h.close(); }
 });
+
+test('signed console anchors require the selected active key of the current organisation', async () => {
+  const h = await start();
+  try {
+    const { buildStatement, statementSigningInput } = await import('../../../packages/attest-verify/src/index.ts');
+    const { sign } = await import('node:crypto');
+    const { cookie, body } = await signUp(h.base, 'signed-console@example.com');
+    const orgId = body['org']['id'] as string;
+    const pair = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const pub = pair.publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
+    const key = await h.svc.registerIssuerKey(orgId, pub, 'document issuer');
+    const request = buildStatement({ documentSha256: sha256hex('registered document'), keyId: key.id,
+      publicKeySpkiBase64: pub, issuedAt: '2026-11-19T00:00:00Z' });
+    const statement = { ...request, signature: sign('sha256', statementSigningInput(request),
+      { key: pair.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url') };
+    const post = (payload: unknown) => call(h.base, 'POST', '/v1/console/attestations/signed', { cookie, body: payload });
+    assert.equal((await post({ statement })).json['error'], 'missing_issuer_key');
+    const otherKey = await h.svc.registerIssuerKey(orgId, freshSpki(), 'other issuer');
+    const mismatched = await post({ statement, issuer_key_id: otherKey.id });
+    assert.equal(mismatched.status, 400); assert.equal(mismatched.json['error'], 'issuer_key_mismatch');
+    const other = await signUp(h.base, 'other-signing-org@example.com');
+    const foreign = await h.svc.registerIssuerKey(other.body['org']['id'], pub, 'foreign issuer');
+    assert.equal((await post({ statement, issuer_key_id: foreign.id })).status, 404);
+    const tampered = await post({ statement: { ...statement, issued_at: '2026-11-20T00:00:00Z' }, issuer_key_id: key.id });
+    assert.equal(tampered.status, 400);
+    const accepted = await post({ statement, issuer_key_id: key.id });
+    assert.equal(accepted.status, 201, JSON.stringify(accepted.json));
+    assert.equal(accepted.json['issuer_trust'], 'registered');
+    const count = async () => Number(((await h.db.prepare('SELECT COUNT(*) AS n FROM attestations WHERE org_id = ?').get(orgId)) as { n: number }).n);
+    const before = await count();
+    await h.svc.revokeIssuerKey(orgId, key.id);
+    assert.equal((await post({ statement, issuer_key_id: key.id })).status, 404);
+    assert.equal(await count(), before, 'a revoked-key submission writes no anchor');
+  } finally { h.close(); }
+});

@@ -21,6 +21,8 @@ import type { ApiKey, Attestation, AuditEntry, IssuerKey, Overview, Quota } from
 import { p256KeypairFromSeed } from './vendor/attest-verify/p256.ts';
 import { initPor, porUntaken, resetPor, sectionPor } from './por.ts';
 import { sectionVerify, wireVerify } from './verify.ts';
+import { documentSigningRequest, checkDocumentSignature } from './document-signing.ts';
+import type { SignedStatement, StatementCore } from './vendor/attest-verify/index.ts';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -472,7 +474,7 @@ function sectionAnchor(): string {
         <p class="lede">${t('이 배포에서는 해시 앵커링만 가능합니다.',
           'This deployment offers hash anchoring only.')}</p>
       </section>
-      ${digestModeCard()}`;
+      <div class="modes">${digestModeCard()}${signModeCard(lim)}</div>`;
   }
   return `
     <div class="modes">
@@ -538,66 +540,58 @@ function signModeCard(lim: { max_bytes: number }): string {
     <section class="card mode signed">
       <div class="mh"><span class="chip inert">${t('선택', 'Optional')}</span>
         <b>${t('발행인 서명 붙이기', 'Add an issuer signature')}</b></div>
-      <p>${t(
-        '누가 발행했는지까지 남기려면 서명을 함께 올리십시오. <b>개인키는 보내지 마십시오</b> — '
-          + '아래 도구로 직접 서명하신 결과만 붙여 넣으면 됩니다.',
-        'To record who published it, add a signature. <b>Do not send your private key</b> — '
-          + 'sign with the tool below and paste back only the result.')}</p>
-
+      <p>${t('연동 메뉴에 등록한 공개키를 선택하고, 짝이 되는 개인키로 귀사 환경에서 서명합니다. 개인키는 보내지 않습니다.',
+        'Choose a public key registered in Integrate, then sign with its matching private key in your own environment. The private key stays with you.')}</p>
       <ol class="signsteps">
         <li>
-          <b>${t('문서를 고르십시오', 'Choose the document')}</b>
+          <b>${t('문서 선택', 'Choose the document')}</b>
           <label class="drop" id="sg-drop">
             <input type="file" id="sg-file" hidden>
             <span class="dk">${t('서명할 문서', 'Document to sign')}</span>
             <span class="dv" id="sg-name">${t('브라우저에서 해시만 계산합니다', 'Hashed here; nothing is uploaded')}</span>
           </label>
           <div class="digestbox" id="sg-digestbox" hidden>
-            <span class="dlabel">${t('이 해시값에 서명하십시오', 'Sign this hash')}</span>
+            <span class="dlabel">${t('문서 해시', 'Document hash')}</span>
             <code class="digestval mono" id="sg-digest"></code>
             <span class="dmeta dim" id="sg-meta"></span>
           </div>
         </li>
-
         <li>
-          <b>${t('본인 장비에서 서명하십시오', 'Sign on your own machine')}</b>
-          <p class="hint">${t(
-            '키가 없으시면 먼저 만드십시오. 개인키는 지정하신 파일에만 쓰이고 저희에게 오지 '
-              + '않습니다.',
-            'Make a key first if you have none. The private key is written only to the path '
-              + 'you name and never reaches us.')}</p>
-          <pre class="code"><code id="sg-cmd">${t('문서를 먼저 고르십시오.', 'Choose a document first.')}</code></pre>
+          <label for="sg-key"><b>${t('발행인 공개키 선택', 'Choose the issuer public key')}</b></label>
+          <select id="sg-key" disabled><option value="">${t('등록된 키를 불러오는 중…', 'Loading registered keys…')}</option></select>
+          <p class="hint" id="sg-key-info" aria-live="polite"></p>
           <div class="row">
-            <button class="btn ghost small" id="sg-copy" disabled>${t('명령 복사', 'Copy commands')}</button>
-            <a class="btn ghost small" data-link="attest-docs" data-link-hash="signing"
-               target="_blank" rel="noopener">${t('SDK · Docker 받기', 'Get the SDK')} <span aria-hidden="true">↗</span></a>
+            <a class="link" href="#/integrate">${t('공개키 등록·관리', 'Register or manage public keys')}</a>
+            <button type="button" class="link" id="sg-refresh">${t('목록 새로고침', 'Refresh keys')}</button>
           </div>
         </li>
-
         <li>
-          <b>${t('출력된 JSON 전체를 붙여 넣으십시오', 'Paste the whole JSON it printed')}</b>
-          <p class="hint">${t(
-            '명령이 찍어 준 <code>{</code> 부터 <code>}</code> 까지 <b>통째로</b>입니다 — '
-              + '<code>signature</code> 값만 떼어내면 안 됩니다. 서명은 문서 해시·공개키·발행 '
-              + '시각을 함께 덮으므로, 그 전부가 있어야 검증됩니다.',
-            'Everything the command printed, <b>from <code>{</code> to <code>}</code></b> — not '
-              + 'just the <code>signature</code> value. The signature covers the digest, the '
-              + 'public key and the timestamp, so all of them are needed to check it.')}</p>
-          <textarea id="sg-json" class="mono" rows="7" spellcheck="false"
-            placeholder='{
-  "schema": "stonehash-attestation-statement/v1",
-  "document": { "sha256": "…" },
-  "issuer": { "key_id": "…", "algorithm": "ES256", "public_key": "…" },
-  "issued_at": "…",
-  "signature": "…"
-}'></textarea>
-          <div id="sg-check"></div>
+          <b>${t('귀사 환경에서 서명', 'Sign in your own environment')}</b>
+          <p class="hint">${t('서명 요청 파일에는 문서 해시와 선택한 공개키, 발행 시각이 담깁니다. 해당 공개키와 짝이 되는 개인키로 서명하십시오.',
+            'The request contains the document hash, selected public key and issue time. Sign it with the matching private key.')}</p>
+          <div class="row"><button type="button" class="btn ghost small" id="sg-request" disabled>${t('서명 요청 파일 다운로드', 'Download signing request')}</button></div>
+          <p class="hint" id="sg-request-info" aria-live="polite">${t('문서와 공개키를 선택하면 다운로드할 수 있습니다.', 'Choose a document and public key to download.')}</p>
+          <div class="sign-guides">
+            <a class="sign-guide" data-link="attest-docs" data-link-hash="signing-existing" target="_blank" rel="noopener">
+              <b>${t('기존 서명 도구·HSM/KMS', 'Existing signer · HSM/KMS')} ↗</b>
+              <span>${t('보유한 개인키로 서명하는 방법', 'Sign with the private key you already hold')}</span></a>
+            <a class="sign-guide" data-link="attest-docs" data-link-hash="signing-tool" target="_blank" rel="noopener">
+              <b>${t('당사 Docker·SDK', 'Our Docker · SDK')} ↗</b>
+              <span>${t('도구 설치, 키 준비와 서명 방법', 'Install the tools, prepare a key and sign')}</span></a>
+          </div>
+        </li>
+        <li>
+          <label for="sg-json"><b>${t('서명 결과 가져오기', 'Import the signed result')}</b></label>
+          <p class="hint">${t('서명 결과 JSON 파일을 선택하거나 전체 내용을 붙여 넣으십시오. 개인키 파일은 받지 않습니다.',
+            'Choose the signed JSON file or paste its entire contents. Private key files are not accepted.')}</p>
+          <div class="row"><label class="btn ghost small" for="sg-result-file">${t('서명 결과 파일 선택', 'Choose signed result file')}</label>
+            <input type="file" id="sg-result-file" accept=".json,application/json" hidden>
+            <span class="dim" id="sg-result-name"></span></div>
+          <textarea id="sg-json" class="mono" rows="5" spellcheck="false" placeholder="${esc(t('서명 결과 JSON 전체를 붙여 넣으십시오', 'Paste the complete signed JSON'))}"></textarea>
+          <div id="sg-check" aria-live="polite"></div>
         </li>
       </ol>
-
-      <div class="row">
-        <button class="btn" id="sg-go" disabled>${t('서명과 함께 앵커링', 'Anchor with the signature')}</button>
-      </div>
+      <div class="row"><button class="btn" id="sg-go" disabled>${t('서명과 함께 앵커링', 'Anchor with the signature')}</button></div>
       <div class="outcome" id="sg-result"></div>
     </section>`;
 }
@@ -976,7 +970,6 @@ function sectionIntegrate(): string {
  */
 const SAMPLE_SPKI_PEM = "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDFqjOCZQbMQRhcsnsKa/AXGH1Pio\nKRMml/4LFkYRZg1uwcILlN8MRU/VgUJG5mIj1RqZS7NBpP6WY2wKeR6tZA==\n-----END PUBLIC KEY-----";
 const SAMPLE_SPKI_B64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDFqjOCZQbMQRhcsnsKa/AXGH1PioKRMml/4LFkYRZg1uwcILlN8MRU/VgUJG5mIj1RqZS7NBpP6WY2wKeR6tZA==";
-const P256_SPKI_PREFIX = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE';
 
 /** 서명 공개키 · 기관 — the trust table, with the one destructive action it needs. */
 async function loadTrust(): Promise<void> {
@@ -1061,14 +1054,12 @@ async function loadTrust(): Promise<void> {
           <p>${esc(t('입력란의 PEM을 그대로 붙여 넣거나, 머리글 없이 base64 한 줄로 넣어도 됩니다:',
             'Paste the PEM as shown in the box, or the same key as one line of base64 without the header lines:'))}</p>
           <pre class="code"><code>${esc(SAMPLE_SPKI_B64)}</code></pre>
-          <p>${t(
-            `P-256 공개키는 항상 <code>${esc(P256_SPKI_PREFIX)}</code> 로 시작합니다. 개인키 파일만 있다면 공개키를 이렇게 뽑습니다:`,
-            `A P-256 public key always begins with <code>${esc(P256_SPKI_PREFIX)}</code>. If you only have the private key file, extract the public key like this:`)}</p>
-          <pre class="code"><code>openssl ec -in private.pem -pubout -out public.pem</code></pre>
+          <p><a data-link="attest-docs" data-link-hash="signing-existing" target="_blank" rel="noopener">${esc(t('공개키 준비·추출 가이드 ↗', 'Prepare or extract a public key ↗'))}</a></p>
           <p class="dim">${esc(t('위 값은 형식을 보여 주는 예시입니다 — 귀사 공개키로 바꿔 넣으십시오.',
             'The values above only show the format — paste your own public key.'))}</p>
         </div>
       </div>`;
+    resolveLinks(host);
     // Register: PEM or bare base64 in, SPKI base64 out. A private key is
     // refused on sight — it must never reach this service.
     host.querySelector<HTMLButtonElement>('#ik-add')?.addEventListener('click', () => {
@@ -1229,38 +1220,13 @@ const REMIT_FILTERS: { value: string; label: string }[] = [
 const isRemitFilter = (value: string): boolean =>
   value.length > 0 && value.split(',').every((k) => Object.hasOwn(REMIT_STATE, k));
 
-const REMIT_EVENT_LABEL: Record<string, string> = {
-  REQUEST_ACCEPTED: t('지급지시 접수', 'instruction accepted'),
-  BANK_EVIDENCE_SUBMITTED: t('은행 서명 증거 3건', 'three bank-signed evidence elements'),
-  BANK_AUTHORIZATION_VERIFIED: t('은행 서명·견적 검증', 'bank signature and quote verified'),
-  TRAVEL_RULE_SENT: t('트래블룰 송신(JWE)', 'travel rule sent (JWE)'),
-  TRAVEL_RULE_RECEIVED: t('수취기관 수신 확인', 'receiving institution acknowledged'),
-  TRAVEL_RULE_RFI: t('추가정보 요청(RFI)', 'request for information (RFI)'),
-  TRAVEL_RULE_RFI_RESOLVED: t('RFI 답변 수리', 'RFI answers accepted'),
-  TRAVEL_RULE_REJECTED: t('트래블룰 거절', 'travel rule rejected'),
-  PAYOUT_ACCEPTED: t('지급 사전승인(BFI 서명)', 'payout pre-approved (BFI signed)'),
-  SETTLEMENT_INSTRUCTED: t('정산주체 전송 지시', 'settlement entity instructed'),
-  USDC_TRANSFER_CONFIRMED: t('USDC 온체인 확정', 'USDC transfer confirmed on chain'),
-  USDC_RECEIVED: t('수취기관 USDC 수취', 'BFI received the USDC'),
-  PAYOUT_SUBMITTED: t('현지 지급 개시(FAST)', 'local payout submitted (FAST)'),
-  PAYOUT_COMPLETED: t('현지 입금 완료', 'local credit completed'),
-  PAYOUT_FAILED: t('현지 지급 실패', 'local payout failed'),
-  USDC_RETURNED: t('USDC 반환', 'USDC returned'),
-  SETTLEMENT_RECONCILED: t('3단 대사 + 6축 판정', 'three-leg reconciliation + six-axis verdict'),
-  EVIDENCE_COMMITTED: t('증빙 커밋 제출', 'evidence commitment issued'),
-  EVIDENCE_ANCHORED: t('비트코인 앵커 확정', 'Bitcoin anchor confirmed'),
-  EVIDENCE_INSUFFICIENT: t('증거 불충분 — 확정 보류', 'insufficient evidence — confirmation withheld'),
-  CANCEL_REQUESTED: t('은행 취소 요청', 'bank cancel request'),
-  EXCEPTION: t('예외', 'exception'),
-};
-
 /**
  * 송금 — the platform-side ledger of what this organisation instructed.
  *
  * This is the console's answer to "did my adapter's call actually land, and
  * what does the platform think happened since": the same rows the bank's own
- * screen tracks, but read from the platform's state machine, with the signed
- * event log and the evidence export one click away. Scaffold now, data on
+ * screen tracks, but read from the platform's state machine, with the evidence
+ * export one click away. Scaffold now, data on
  * arrival, like records and products.
  */
 function sectionRemit(): string {
@@ -1269,6 +1235,8 @@ function sectionRemit(): string {
   return `
     <section class="card">
       <h2>${esc(t('송금 거래', 'Settlements'))}</h2>
+      <p class="hint">${esc(t('내려받은 증빙 JSON 파일 하나로', 'Use the downloaded evidence JSON alone in'))}
+        <a href="#/verify">${esc(t('검증 메뉴', 'Verify'))}</a>${esc(t('에서 검증할 수 있습니다. 별도 원본은 필요하지 않습니다.', '. No separate original file is needed.'))}</p>
       <div class="rtools">
         <input id="remitQ" type="search" autocomplete="off"
           placeholder="${esc(t('거래 ID · UETR · 은행 참조번호 · 거래해시 검색', 'Search by payment id, UETR, bank reference or tx hash'))}">
@@ -1287,13 +1255,6 @@ function sectionRemit(): string {
       </div>
       <div id="remitList"><p class="muted">${esc(t('불러오는 중…', 'Loading…'))}</p></div>
       <div id="remitPager" class="rpager"></div>
-    </section>
-    <section class="card">
-      <h2>${esc(t('일별 마감 대사 (Manifest)', 'Daily manifests'))}</h2>
-      <p class="hint">${esc(t(
-        '은행이 서명해 제출한 그날의 목록과 플랫폼 목록의 양방향 대조 결과입니다. 제출은 은행 시스템이 SDK로 합니다.',
-        'Two-way comparison between the bank-signed daily list and the platform\'s own. The bank\'s system submits it, through the SDK.'))}</p>
-      <div id="remitManifests"><p class="muted">—</p></div>
     </section>`;
 }
 
@@ -1623,9 +1584,6 @@ function legVerdicts(d2: SettlementDetail): LegVerdict[] {
   });
 }
 
-const eventLabel = (type: string): string =>
-  Object.hasOwn(REMIT_EVENT_LABEL, type) ? REMIT_EVENT_LABEL[type]! : type;
-
 const LEG_STATUS: Record<LegStatus, { label: string; chip: string; glyph: string }> = {
   done: { label: t('완료', 'done'), chip: 'ok', glyph: '✓' },
   active: { label: t('진행중', 'in progress'), chip: 'wait', glyph: '' },
@@ -1863,36 +1821,11 @@ function csvCell(v: string): string {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-/**
- * Draw one settlement's tracker into its row: the legs first — where the
- * payment is — and the signed events they were read from beneath, closed,
- * for whoever audits the summary against its source.
- */
+/** Draw the customer-facing progress summary; signed events stay in the evidence export. */
 function paintTracker(holder: Element, id: string, d2: SettlementDetail, live: boolean): void {
-  // The log may be open while the payment moves; a repaint must not shut it.
-  const logOpen = holder.querySelector<HTMLDetailsElement>('details.rxlog')?.open ?? false;
-  // The stations arrive in order the first time, to lead the eye along the
-  // route once. A repaint while following must not replay that.
+  // Animate the route only when first opened, not on a live refresh.
   const fresh = !holder.querySelector('.journey');
-  holder.innerHTML = `
-    ${trackerHtml(d2, live, fresh)}
-    <details class="rxlog"${logOpen ? ' open' : ''}>
-      <summary>${esc(t(`서명 이벤트 로그 ${d2.events.length}건 — 위 구간은 이 이벤트들의 요약입니다`,
-        `Signed event log, ${d2.events.length} events — the legs above summarise these`))}</summary>
-      <table class="rxevents">
-        <thead><tr><th>#</th><th>${esc(t('이벤트', 'Event'))}</th><th>${esc(t('서명', 'Signature'))}</th>
-          <th>${esc(t('발행자', 'Issuer'))}</th><th>${esc(t('시각', 'At'))}</th></tr></thead>
-        <tbody>${d2.events.map((e) => `
-          <tr>
-            <td class="dim">${esc(String(e.seq))}</td>
-            <td>${esc(eventLabel(e.type))}</td>
-            <td>${e.sig ? `<span class="chip ok">${esc(t('서명', 'signed'))}</span>`
-              : e.issuer === 'STONEHASH' ? `<span class="chip inert">${esc(t('플랫폼', 'platform'))}</span>`
-                : `<span class="chip inert">${esc(t('서명 없음', 'unsigned'))}</span>`}</td>
-            <td class="mono">${esc(e.issuer)}</td>
-            <td class="dim when">${when(e.at)}</td>
-          </tr>`).join('')}</tbody></table>
-    </details>`;
+  holder.innerHTML = trackerHtml(d2, live, fresh);
   // The chain's own answer, after the legs: a slow node must not hold
   // up the tracker, and a failed ask is said where the answer would be.
   const slot = holder.querySelector<HTMLElement>('[data-chain-slot]');
@@ -2082,8 +2015,7 @@ async function fetchRemitPage(reset: boolean): Promise<void> {
 
 async function loadRemit(): Promise<void> {
   const list = document.getElementById('remitList');
-  const man = document.getElementById('remitManifests');
-  if (!list || !man) return;
+  if (!list) return;
   // One listener on the list, which this render created: rows are appended
   // by "더 보기" and the tracker renders later, so per-button binding would miss.
   list.addEventListener('click', (ev) => {
@@ -2105,7 +2037,6 @@ async function loadRemit(): Promise<void> {
     if (!prod.products.some((x) => x.product === 'remit' && x.status === 'active')) {
       list.innerHTML = `<p class="muted">${esc(t('송금 상품이 비활성입니다.', 'The settlement product is not active.'))}
         <a href="#/products">${esc(t('구독에서 활성화', 'Activate under Subscriptions'))}</a></p>`;
-      man.innerHTML = '';
       // Controls with nothing behind them are a promise the screen cannot keep.
       document.querySelector<HTMLElement>('.rtools')?.setAttribute('hidden', '');
       return;
@@ -2164,38 +2095,7 @@ async function loadRemit(): Promise<void> {
     const preset = routeQuery().get('state') ?? '';
     remitView.state = isRemitFilter(preset) ? preset : '';
     if (stSelect) stSelect.value = remitView.state;
-    const [, manifests] = await Promise.all([fetchRemitPage(true), api.manifests()]);
-
-    man.innerHTML = manifests.data.length === 0
-      ? `<p class="muted">${esc(t('제출된 Manifest가 없습니다.', 'No manifests submitted yet.'))}</p>`
-      : `<div class="tablewrap"><table>
-        <thead><tr>
-          <th>${esc(t('날짜', 'Date'))}</th>
-          <th>${esc(t('대사 결과', 'Verdict'))}</th>
-          <th class="num">${esc(t('은행/플랫폼 건수', 'Bank / platform'))}</th>
-          <th>${esc(t('불일치', 'Discrepancies'))}</th>
-          <th>${esc(t('커밋', 'Commitment'))}</th>
-          <th>${esc(t('앵커', 'Anchor'))}</th>
-        </tr></thead>
-        <tbody>${manifests.data.map((m) => {
-          const ok = m.verdict.status === 'MATCHED';
-          const diffs = [
-            ...(m.verdict.missing_in_manifest.length
-              ? [`${t('목록 누락', 'missing')}: ${m.verdict.missing_in_manifest.join(', ')}`] : []),
-            ...(m.verdict.unknown_to_platform.length
-              ? [`${t('플랫폼 미인지', 'unknown')}: ${m.verdict.unknown_to_platform.join(', ')}`] : []),
-          ];
-          return `<tr class="${ok ? 'rok' : 'rbad'}">
-            <td class="when">${esc(m.date)}</td>
-            <td><span class="chip ${ok ? 'ok' : 'inert'}">${esc(m.verdict.status)}</span></td>
-            <td class="num">${m.verdict.manifest_count} / ${m.verdict.platform_count}</td>
-            <td class="mono rid">${diffs.length ? esc(diffs.join(' · ')) : '<span class="dim">—</span>'}</td>
-            <td class="mono" title="${esc(m.commitment)}">${esc(m.commitment.slice(0, 20))}…</td>
-            <td>${m.attestation
-              ? `<span class="chip ${m.attestation.status === 'confirmed' ? 'ok' : 'wait'}">${esc(m.attestation.status)}</span>`
-              : '<span class="dim">—</span>'}</td>
-          </tr>`;
-        }).join('')}</tbody></table></div>`;
+    await fetchRemitPage(true);
   } catch (e) {
     list.innerHTML = `<p class="muted">${esc(e instanceof Error ? e.message : String(e))}</p>`;
   }
@@ -2484,13 +2384,6 @@ function billingHtml(prod: Awaited<ReturnType<typeof api.products>>): string {
 function remitOpsHtml(d2: Dash['remit']): string {
   const exceptionRate = d2.month.count > 0
     ? `${Math.round((d2.month.terminal_bad / d2.month.count) * 1000) / 10}%` : '0%';
-  // Unsubmitted is a wait only when there is something to reconcile: a day
-  // with no settlement — every new account's first day — reads neutral.
-  const manifestChip = d2.manifest_today === 'MATCHED'
-    ? `<span class="chip ok">MATCHED</span>`
-    : d2.manifest_today === 'DISCREPANT'
-      ? `<span class="chip inert">DISCREPANT</span>`
-      : `<span class="chip ${d2.today.count > 0 ? 'wait' : 'inert'}">${esc(t('오늘분 미제출', 'not submitted today'))}</span>`;
   // Webhook health is deliberately not on this row: exhausted deliveries
   // are in the queue above, and pending retries are a normal wait. The
   // windows are the UTC calendar day and month, as the API counts them, and
@@ -2509,8 +2402,7 @@ function remitOpsHtml(d2: Dash['remit']): string {
         · <span class="chip ok">${d2.buckets.completed}</span> <a href="#/remit?state=BENEFICIARY_CREDIT_CONFIRMED,EVIDENCE_ANCHORED">${esc(t('완료', 'completed'))}</a>
         · <span class="chip inert">${d2.buckets.returned_cancelled}</span> ${esc(t('반환·취소', 'returned / cancelled'))}
         · <span class="chip inert">${d2.buckets.exceptions}</span> <a href="#/remit?state=EXCEPTION">${esc(t('예외', 'exceptions'))}</a>
-      </p>
-      <p><span class="dim">${esc(t('오늘 Manifest 대사', "Today's manifest"))}:</span> ${manifestChip}</p>`;
+      </p>`;
   return opsRow({
     product: 'remit',
     title: esc(t('국경간 송금', 'Cross-border Settlement')),
@@ -3116,8 +3008,8 @@ function pageHeader(here: SectionId): string {
       'Every call made with this organisation\'s API keys and console accounts — by service, with its result.'),
     // 대시보드는 카드가 곧 설명이라 리드 문구를 두지 않는다 (사용자 결정).
     home: '',
-    remit: t('귀행이 지시한 국경간 송금 — 지급 진행과 완료 내역, 그리고 일별 마감 대사.',
-      'Cross-border remittances your bank instructed — payout progress and completions, and the daily manifests.'),
+    remit: t('귀행이 지시한 국경간 송금 — 지급 진행, 완료 내역과 증빙.',
+      'Cross-border remittances your bank instructed — payout progress, completions and evidence.'),
     por: t('잔고 파일을 선택하면 머클 루트를 계산해 플랫폼이 앵커링합니다 — 파일은 이 브라우저에 남고, 루트와 총액만 전송됩니다.',
       'Choose a balance file: its Merkle root is computed here and the platform anchors it — the file stays in this browser, only the root and the totals are sent.'),
     products: t('세 상품의 구독 상태와 활성화 — 기관 등록과 서명 공개키까지 이 화면에서.',
@@ -3501,149 +3393,152 @@ function wireSignedPath(): void {
   const input = maybe<HTMLInputElement>('sg-file');
   const json = maybe<HTMLTextAreaElement>('sg-json');
   const go = maybe<HTMLButtonElement>('sg-go');
-  if (!input || !json || !go) return;
+  const select = maybe<HTMLSelectElement>('sg-key');
+  const download = maybe<HTMLButtonElement>('sg-request');
+  const resultFile = maybe<HTMLInputElement>('sg-result-file');
+  if (!input || !json || !go || !select || !download || !resultFile) return;
+  let digest = '', contentType = '';
+  let keys: IssuerKey[] = [];
+  let statement: SignedStatement | null = null;
+  let request: StatementCore | null = null;
+  let docVersion = 0, reviewVersion = 0, resultVersion = 0, keyVersion = 0;
+  let submitting = false;
+  const selectedKey = (): IssuerKey | null => keys.find((k) => k.id === select.value) ?? null;
+  const invalidate = (): void => { reviewVersion++; statement = null; go.disabled = true; };
+  const resetRequest = (): void => {
+    request = null;
+    download.disabled = !digest || !selectedKey() || submitting;
+    $('sg-request-info').textContent = t('문서와 공개키를 선택한 뒤 요청 파일을 다운로드하십시오.', 'Download the request after choosing a document and public key.');
+    invalidate();
+  };
+  const showError = (e: unknown): void => {
+    $('sg-check').innerHTML = `<div class="note bad">${esc(e instanceof Error ? e.message : String(e))}</div>`;
+  };
+  const privateMaterial = (raw: string): boolean => /PRIVATE KEY|privateKey|private_key|privateKeyPkcs8Base64|"d"\s*:/i.test(raw);
 
-  let digest = '';
-  let statement: Record<string, unknown> | null = null;
+  async function review(): Promise<void> {
+    invalidate();
+    const version = reviewVersion;
+    const raw = json!.value.trim();
+    if (!raw) { $('sg-check').innerHTML = ''; return; }
+    if (privateMaterial(raw)) {
+      json!.value = '';
+      showError(t('개인키로 보이는 내용은 받지 않습니다. 입력을 지웠으며 서버로 보내지 않았습니다.', 'Private key material is not accepted. The input was cleared and nothing was sent.'));
+      return;
+    }
+    try {
+      const checked = await checkDocumentSignature(raw, digest, selectedKey());
+      if (version !== reviewVersion || !go!.isConnected) return;
+      const rows: [boolean, string][] = [
+        [checked.matchesDocument, t('선택한 문서와 일치', 'Matches the selected document')],
+        [checked.matchesKey, t('선택한 등록 공개키와 일치', 'Matches the selected registered public key')],
+        [checked.signatureOk, t('서명 유효성 확인', 'Signature is valid')],
+      ];
+      $('sg-check').innerHTML = `<ul class="vchecks">${rows.map(([ok, label]) =>
+        `<li><span class="chip ${ok ? 'ok' : 'bad'}">${ok ? 'pass' : 'fail'}</span>${esc(label)}</li>`).join('')}</ul>`;
+      if (!checked.signatureOk && checked.error) {
+        $('sg-check').innerHTML += `<p class="hint">${esc(checked.error)}</p>`;
+      }
+      if (checked.valid) { statement = checked.statement; go!.disabled = submitting; }
+    } catch {
+      if (version !== reviewVersion || !go!.isConnected) return;
+      showError(t('서명 결과 JSON 전체가 필요합니다. 서명 값만 붙여 넣거나 서명 전 요청 파일을 선택하지 않았는지 확인하십시오.',
+        'Provide the complete signed JSON, not just a signature or the unsigned request file.'));
+    }
+  }
 
-  /*
-   * The commands name a locally built image, never a registry.
-   *
-   * The first version said `stonehash/attest-sign`, which does not exist on
-   * any registry and failed with "pull access denied" the moment anyone
-   * pasted it. That is not an oversight to patch with a `docker push`: an
-   * image you pull is an image you are trusting, and this one generates
-   * private keys. Building it from the checksummed sources is the point.
-   */
-  const command = (d: string): string =>
-    `# ${t('처음 한 번 — 소스를 받아 이미지를 만듭니다', 'Once — fetch the sources and build the image')}\n`
-    + `tar xzf attest-sign.tar.gz\n`
-    + `docker build -t attest-sign -f packages/attest-sign/Dockerfile .\n\n`
-    + `# ${t('처음 한 번 — 키 생성 (개인키는 이 파일에만 남습니다)',
-            'Once — make a key (the private key stays in this file alone)')}\n`
-    + `docker run --rm --network=none -v "$PWD:/work" \\\n`
-    + `  attest-sign keygen --out /work/issuer.key.json\n\n`
-    + `# ${t('이 해시값에 서명', 'Sign this hash')}\n`
-    + `docker run --rm --network=none -v "$PWD:/work" \\\n`
-    + `  attest-sign sign --key /work/issuer.key.json \\\n`
-    + `    --digest ${d}\n\n`
-    + `# ${t('Docker 없이 — 받은 소스를 그대로 실행해도 됩니다',
-            'Without Docker — the downloaded sources run as they are')}\n`
-    + `node packages/attest-sign/src/cli.ts sign \\\n`
-    + `  --key issuer.key.json --digest ${d}`;
-
+  async function loadKeys(): Promise<void> {
+    const version = ++keyVersion;
+    const previous = select!.value;
+    keys = []; select!.disabled = true; resetRequest();
+    $('sg-key-info').textContent = t('등록된 키를 불러오는 중…', 'Loading registered keys…');
+    try {
+      const [result, { sha256 }] = await Promise.all([api.issuerKeys(), import('./vendor/sha256.ts')]);
+      if (version !== keyVersion || !select!.isConnected) return;
+      keys = result.data.filter((k) => (k.algorithm === 'ES256' || k.algorithm === 'RS256') && keyShape(k.public_key) === 'spki');
+      select!.innerHTML = `<option value="">${esc(t('발행인 공개키를 선택하십시오', 'Choose an issuer public key'))}</option>` + keys.map((k) => {
+        const fingerprint = [...sha256(Uint8Array.from(atob(k.public_key), (c) => c.charCodeAt(0)))].map((b) => b.toString(16).padStart(2, '0')).join('');
+        return `<option value="${esc(k.id)}">${esc(k.label)} · ${esc(k.algorithm)} · ${esc(short(fingerprint, 8))}</option>`;
+      }).join('');
+      select!.disabled = submitting || keys.length === 0;
+      select!.value = keys.some((k) => k.id === previous) ? previous : keys.length === 1 ? keys[0]!.id : '';
+      $('sg-key-info').textContent = keys.length
+        ? t('연동 메뉴의 등록 키입니다. 라벨과 공개키 지문을 확인하십시오.', 'Registered in Integrate. Check the label and public key fingerprint.')
+        : t('사용할 수 있는 등록 키가 없습니다. 연동 메뉴에서 공개키를 먼저 등록하십시오.', 'No usable registered key. Register a public key in Integrate first.');
+      resetRequest(); void review();
+    } catch (e) {
+      if (version !== keyVersion || !select!.isConnected) return;
+      select!.innerHTML = `<option value="">${esc(t('키 목록을 불러오지 못했습니다', 'Could not load keys'))}</option>`;
+      $('sg-key-info').textContent = e instanceof Error ? e.message : String(e);
+    }
+  }
+  void loadKeys();
+  $('sg-refresh').addEventListener('click', () => { if (!submitting) void loadKeys(); });
+  select.addEventListener('change', () => { resetRequest(); void review(); });
   input.addEventListener('change', () => {
+    const version = ++docVersion;
     const file = input.files?.[0];
+    digest = ''; contentType = ''; resetRequest();
+    $('sg-digestbox').hidden = true;
     if (!file) return;
     $('sg-name').textContent = `${file.name} — ${t('해시 계산 중…', 'hashing…')}`;
     void digestFile(file).then((hex) => {
-      digest = hex;
+      if (version !== docVersion || !input.isConnected) return;
+      digest = hex; contentType = file.type;
       $('sg-name').textContent = file.name;
       $('sg-digestbox').hidden = false;
       $('sg-digest').textContent = hex;
-      $('sg-meta').textContent = `${file.name} · ${fmtBytes(file.size)} · ${t('문서는 전송되지 않습니다', 'the document is not sent')}`;
-      $('sg-cmd').textContent = command(hex);
-      const copy = maybe<HTMLButtonElement>('sg-copy');
-      if (copy) copy.disabled = false;
-      void review();
-    });
+      $('sg-meta').textContent = `${fmtBytes(file.size)} · ${t('문서는 전송되지 않습니다', 'The document is not sent')}`;
+      resetRequest(); void review();
+    }).catch((e: unknown) => { if (version === docVersion && input.isConnected) showError(e); });
   });
-
-  maybe('sg-copy')?.addEventListener('click', () => {
-    copyText($('sg-cmd'), $('sg-copy'));
+  download.addEventListener('click', () => {
+    const key = selectedKey();
+    if (!digest || !key || submitting) return;
+    request ??= documentSigningRequest(digest, key, contentType);
+    const url = URL.createObjectURL(new Blob([JSON.stringify(request, null, 2) + '\n'], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'signing-request.json'; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    $('sg-request-info').textContent = t('요청 파일을 다운로드했습니다. 아래 가이드에 따라 서명한 결과를 가져오십시오.', 'Request downloaded. Follow a guide below and import the signed result.');
   });
-
-  json.addEventListener('input', () => { void review(); });
-
-  /** Check the pasted statement here, before it can reach the service. */
-  async function review(): Promise<void> {
-    const out = $('sg-check');
-    statement = null;
-    go!.disabled = true;
-    const raw = json!.value.trim();
-    if (!raw) { out.innerHTML = ''; return; }
-
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      /*
-       * The likely mistake has a name, so say it rather than "not JSON".
-       * A base64url blob on its own is the signature field pasted alone —
-       * which is the first thing someone reaches for, and the thing the
-       * command's output makes easiest to grab.
-       */
-      const looksLikeJustTheSignature = /^[A-Za-z0-9_-]{80,}$/.test(raw);
-      out.innerHTML = `<div class="note bad">${looksLikeJustTheSignature
-        ? t('서명 값만 붙여 넣으신 것 같습니다. 명령이 출력한 <b>JSON 전체</b>를 '
-              + '<code>{</code> 부터 <code>}</code> 까지 붙여 넣으십시오.',
-            'That looks like just the signature value. Paste the <b>whole JSON</b> the command '
-              + 'printed, from <code>{</code> to <code>}</code>.')
-        : t('JSON으로 읽히지 않습니다. 명령이 출력한 내용을 그대로 붙여 넣으셨는지 확인해 주십시오.',
-            'That does not parse as JSON. Check you pasted exactly what the command printed.')}</div>`;
-      return;
+  json.addEventListener('input', () => { resultVersion++; $('sg-result-name').textContent = ''; void review(); });
+  resultFile.addEventListener('change', () => {
+    const version = ++resultVersion;
+    invalidate(); json.value = '';
+    const file = resultFile.files?.[0];
+    resultFile.value = '';
+    if (!file) { void review(); return; }
+    if (file.size > 1_000_000) {
+      showError(t('서명 결과 파일은 1MB 이하여야 합니다.', 'The signed result file must be at most 1 MB.')); return;
     }
-
-    const { statementLeaf, verifyStatement } = await import('./vendor/attest-verify/index.js');
-    let leaf: string;
-    try {
-      leaf = statementLeaf(parsed as never);
-    } catch (e) {
-      out.innerHTML = `<div class="note bad">${esc(e instanceof Error ? e.message : String(e))}</div>`;
-      return;
-    }
-
-    const v = await verifyStatement(parsed as never, leaf);
-    const declared = String(
-      (parsed['document'] as Record<string, unknown> | undefined)?.['sha256'] ?? '').toLowerCase();
-    const matchesDoc = digest !== '' && declared === digest;
-
-    const rows: [boolean, string][] = [
-      [v.signatureOk, t('서명이 이 statement를 덮습니다', 'The signature covers this statement')],
-      [matchesDoc, digest
-        ? t('고른 문서의 해시와 일치합니다', 'It matches the document you chose')
-        : t('문서를 먼저 고르십시오', 'Choose a document first')],
-    ];
-    out.innerHTML = `<ul class="vchecks">${rows.map(([ok, label]) =>
-      `<li><span class="chip ${ok ? 'ok' : 'bad'}">${ok ? 'pass' : 'fail'}</span>${esc(label)}</li>`)
-      .join('')}</ul>
-      <p class="hint">${t(
-        `검증은 이 브라우저에서, 보내기 전에 끝납니다. 체인에 올라갈 값은 <code class="mono">${esc(short(leaf, 10))}</code> 입니다.`,
-        `Checked here, before anything is sent. The value that reaches the chain is <code class="mono">${esc(short(leaf, 10))}</code>.`)}</p>`;
-
-    if (v.signatureOk && matchesDoc) { statement = parsed; go!.disabled = false; }
-  }
-
+    void file.text().then((text) => {
+      if (version !== resultVersion || !json.isConnected) return;
+      $('sg-result-name').textContent = file.name;
+      json.value = text; void review();
+    }).catch((e: unknown) => { if (version === resultVersion && json.isConnected) showError(e); });
+  });
   go.addEventListener('click', () => {
-    if (!statement) return;
+    const key = selectedKey(), signed = statement;
+    if (!signed || !key || submitting) return;
+    submitting = true; invalidate();
+    input.disabled = true; select.disabled = true; json.disabled = true; resultFile.disabled = true; download.disabled = true;
+    go.textContent = t('앵커링 중…', 'Anchoring…');
     void (async () => {
-      go.disabled = true;
-      go.textContent = t('앵커링 중…', 'Anchoring…');
       try {
-        const att = await api.anchorSigned(statement);
-        const registered = att.issuer_trust === 'registered';
-        $('sg-result').innerHTML = `<div class="note">
-          <b>${t('서명과 함께 접수되었습니다', 'Accepted, with its signature')}</b> — <code>${esc(att.id)}</code><br>
-          ${t('출처', 'Provenance')}: ${registered
-            ? t('<b>등록된 키</b> — 이 조직이 미리 등록한 키의 서명입니다.',
-                '<b>Registered key</b> — signed by a key this organisation registered beforehand.')
-            : t('<b>미등록 키</b> — 서명은 수학적으로 유효하지만, 그 키가 누구 것인지는 '
-              + '증명하지 않습니다. ',
-                '<b>Unregistered key</b> — the signature is sound, but says nothing about '
-                  + 'whose key it is. ')
-              + `<button class="link" data-register-key="${
-                  esc(String((statement['issuer'] as Record<string, unknown>)?.['public_key'] ?? ''))
-                }" data-register-alg="${
-                  esc(String((statement['issuer'] as Record<string, unknown>)?.['algorithm'] ?? 'ES256'))
-                }">${t('이 키 등록하기', 'Register this key')}</button>`}
-          </div>`;
+        const att = await api.anchorSigned(signed, key.id);
+        $('sg-result').innerHTML = `<div class="note"><b>${t('등록된 발행인 서명과 함께 접수되었습니다', 'Accepted with the registered issuer signature')}</b> — <code>${esc(att.id)}</code><br>${esc(key.label)}</div>`;
         await afterAnchor('sg-result');
       } catch (e) {
-        $('sg-result').innerHTML = `<div class="note bad">${esc(
-          e instanceof ApiError ? e.message : String(e))}</div>`;
+        if (go.isConnected) $('sg-result').innerHTML = `<div class="note bad">${esc(e instanceof Error ? e.message : String(e))}</div>`;
       } finally {
-        go.textContent = t('서명과 함께 앵커링', 'Anchor with the signature');
-        go.disabled = false;
+        submitting = false;
+        if (go.isConnected) {
+          input.disabled = false; select.disabled = keys.length === 0; json.disabled = false; resultFile.disabled = false;
+          download.disabled = !digest || !selectedKey();
+          go.textContent = t('서명과 함께 앵커링', 'Anchor with the signature');
+          void review();
+        }
       }
     })();
   });

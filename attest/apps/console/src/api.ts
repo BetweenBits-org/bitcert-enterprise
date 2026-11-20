@@ -337,8 +337,8 @@ export const api = {
       file.type || 'application/octet-stream'),
 
   /** Anchor a statement the customer signed on their own machine. */
-  anchorSigned: (statement: unknown): Promise<Attestation> =>
-    send('POST', '/v1/console/attestations/signed', { statement }),
+  anchorSigned: (statement: unknown, issuerKeyId: string): Promise<Attestation> =>
+    send('POST', '/v1/console/attestations/signed', { statement, issuer_key_id: issuerKeyId }),
 
   issuerKeys: (): Promise<{ data: IssuerKey[] }> => send('GET', '/v1/console/issuer-keys'),
 
