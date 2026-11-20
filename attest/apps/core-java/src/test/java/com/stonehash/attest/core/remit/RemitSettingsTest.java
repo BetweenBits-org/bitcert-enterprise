@@ -81,6 +81,26 @@ class RemitSettingsTest {
         Files.copy(made, absent);
         assertEquals(first.keyId, PlatformKey.prepareAtStart(live).keyId);
 
+        // The store the switch was approved for is the live store too, whatever the environment is called: that mark alone
+        // (STONEHASH_CUTOVER_APPROVED=1, STONEHASH_ENV left as it is) stops the start, and nothing is made.
+        Path atSwitch = dir.resolve("switch/platform-remit-key.pem");
+        CoreConfig approved = load("STONEHASH_CUTOVER_APPROVED", "1", "REMIT_PLATFORM_KEY_PATH", atSwitch.toString());
+        assertEquals("test", approved.env, "the environment is not what makes this the live store");
+        assertTrue(approved.cutoverApproved);
+        ConfigError refusedAtSwitch = assertThrows(ConfigError.class, () -> PlatformKey.prepareAtStart(approved));
+        assertEquals(refused.getMessage(), refusedAtSwitch.getMessage(), "the same refusal as in the live environment");
+        assertFalse(Files.exists(atSwitch), "no key was made at the switch");
+        assertFalse(Files.exists(atSwitch.getParent()), "nor its folder");
+        Files.createDirectories(atSwitch.getParent());
+        Files.copy(made, atSwitch);
+        assertEquals(first.keyId, PlatformKey.prepareAtStart(approved).keyId, "with the file in place the approved start reads it");
+        // Any other value of the mark is no approval: a test store, where the file is made.
+        Path notApproved = dir.resolve("not-approved/platform-remit-key.pem");
+        CoreConfig zero = load("STONEHASH_CUTOVER_APPROVED", "0", "REMIT_PLATFORM_KEY_PATH", notApproved.toString());
+        assertFalse(zero.cutoverApproved);
+        PlatformKey.prepareAtStart(zero);
+        assertTrue(Files.exists(notApproved));
+
         // A file that is not a key stops any start, and its content is in no message.
         Path wrong = dir.resolve("wrong.pem");
         Files.writeString(wrong, "-----BEGIN PRIVATE KEY-----\nbm90IGEga2V5\n-----END PRIVATE KEY-----\n");
