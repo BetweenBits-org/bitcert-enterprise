@@ -65,14 +65,13 @@
  */
 import { api, ApiError } from './api.ts';
 import { t } from './i18n.ts';
-import { sha256, bytesToHex, utf8 } from './vendor/attest-verify/index.ts';
-import type { PorInclusionProof } from './vendor/attest-verify/index.ts';
+import { sha256, bytesToHex } from './vendor/attest-verify/index.ts';
 import { fromBaseUnits } from './vendor/attest-por/amounts.ts';
 import { CsvError, CsvParser } from './vendor/attest-por/csv.ts';
 import type { CsvRecord } from './vendor/attest-por/csv.ts';
 import { parseAssetSpecs } from './vendor/attest-por/ledger.ts';
 import type { LedgerReport } from './vendor/attest-por/ledger.ts';
-import { buildPorTree, provePorLeaf } from './vendor/attest-por/sumtree.ts';
+import { buildPorTree } from './vendor/attest-por/sumtree.ts';
 import type { PorTree } from './vendor/attest-por/sumtree.ts';
 import { buildSnapshotStatement } from './vendor/attest-por/snapshot.ts';
 import type { PorAssetSpec } from './vendor/attest-por/snapshot.ts';
@@ -147,8 +146,6 @@ interface Anchored {
   /** The one file the visitor keeps beside the balance file. */
   proof: PorSnapshotProof;
   status: string;
-  spotCheck: boolean;
-  sampled: number;
   anchor: string;
 }
 
@@ -158,9 +155,7 @@ const s: {
   active: boolean | null;
   exchange: Exchange | null;
   file: File | null;
-  fileText: string | null;
   fileLabel: string;
-  spotCheck: boolean;
   busy: string;
   /** `items` are markup, escaped where they were built. */
   failure: { title: string; items: string[] } | null;
@@ -185,7 +180,7 @@ const s: {
   account: number;
 } = {
   network: '', active: null, exchange: null,
-  file: null, fileText: null, fileLabel: '', spotCheck: false,
+  file: null, fileLabel: '',
   busy: '', failure: null, anchored: null, kept: [], key: null,
   run: 0,
   account: 0,
@@ -223,9 +218,7 @@ export function resetPor(): void {
   s.active = null;
   s.exchange = null;
   s.file = null;
-  s.fileText = null;
   s.fileLabel = '';
-  s.spotCheck = false;
   s.busy = '';
   s.failure = null;
   s.anchored = null;
@@ -302,22 +295,13 @@ function anchorCardHtml(): string {
         <span class="dk">${esc(t('잔고 파일 (CSV · JSON)', 'Balance file (CSV · JSON)'))}</span>
         <span class="dv" id="por-filename">${esc(s.fileLabel || t('파일을 선택하십시오 — 이 브라우저에서만 읽고 서버로 올리지 않습니다', 'Choose a file — it is read in this browser only and is not uploaded'))}</span>
       </label>
-      <div class="row">
-        <button class="btn" id="por-go" ${idle && (s.file || s.fileText !== null) ? '' : 'disabled'}>${esc(t('앵커링', 'Anchor'))}</button>
-        <button class="btn ghost" id="por-sample" type="button" ${idle ? '' : 'disabled'}>${esc(t('예시 파일로 앵커링', 'Anchor the example file'))}</button>
+      <div class="row por-actions">
+        <button class="btn" id="por-go" ${idle && s.file ? '' : 'disabled'}>${esc(t('앵커링', 'Anchor'))}</button>
         ${s.busy ? `<span class="dim">${esc(s.busy)}</span>` : ''}
       </div>
       <p class="hint porsamples"><span>${esc(t('예시 파일 내려받기', 'Download the example'))}</span>
         <span class="porsample"><button class="link" type="button" data-por-sample="wide">${esc(SAMPLE_WIDE_NAME)}</button>${esc(t('계정당 한 줄, 자산마다 열 하나', 'one row per account, one column per asset'))}</span>
         <a data-link="attest-docs" data-link-hash="por-data" target="_blank" rel="noopener">${esc(t('형식 안내 ↗', 'Format guide ↗'))}</a></p>
-      <details class="poropt">
-        <summary>${esc(t('옵션', 'Options'))}</summary>
-        <label class="porcheck"><input type="checkbox" id="por-spot" ${s.spotCheck ? 'checked' : ''}>
-          <span>${esc(t('표본 확인도 받기', 'Also ask for a spot check'))}</span></label>
-        <p class="hint">${esc(t(
-          '기본은 루트와 총액만 보냅니다. 표본 확인을 켜면 플랫폼이 무작위로 고른 계정 8개의 해시된 식별자·잔고와 바로 옆 계정의 잔고가 함께 전송됩니다(계정 식별자 자체는 보내지 않습니다).',
-          'By default only the root and the totals are sent. With a spot check, the hashed identifier and balances of eight accounts the platform picks at random go too, with the balances of the account next to each (the account identifier itself is never sent).'))}</p>
-      </details>
       ${s.failure ? failureHtml(s.failure) : ''}
       ${s.anchored ? anchoredHtml(s.anchored) : ''}
       ${leftHtml()}
@@ -383,9 +367,7 @@ function anchoredHtml(a: Anchored): string {
       <p class="hint" id="por-settled">${esc(t(
         `총액을 귀사 원장과 대조하십시오. 읽은 형식은 ${shapeName(a.shape)}입니다. 자산은 파일에 적힌 ${a.assets.length}개(${named(a.assets)})를 그대로 읽었고, 금액은 적힌 숫자 그대로 합산했습니다. 기준 시각은 제출 시각입니다.`,
         `Compare the totals with your ledger. The file was read as ${shapeName(a.shape)}. The ${a.assets.length} asset${a.assets.length === 1 ? '' : 's'} named in it (${named(a.assets)}) were read as they are, and amounts were summed exactly as written. The as-of time is the time of submission.`))}
-        ${esc(a.spotCheck
-          ? t(`표본 확인 통과 — 계정 ${a.sampled}개를 플랫폼에 열어 보였습니다.`, `Spot check passed — ${a.sampled} accounts were opened to the platform.`)
-          : t('플랫폼으로 간 것은 루트와 총액을 담은 선언문과 서명뿐입니다.', 'What went to the platform is the signed statement of the root and the totals, and nothing else.'))}</p>
+        ${esc(t('플랫폼으로 간 것은 루트와 총액을 담은 선언문과 서명뿐입니다.', 'What went to the platform is the signed statement of the root and the totals, and nothing else.'))}</p>
       <div class="porkeep">
         <button class="btn" id="por-proof-dl" type="button">${esc(t('증명 파일 내려받기', 'Download the proof file'))}</button>
         <p class="hint"><b>${esc(t('이 증명 파일과 원본 잔고 파일, 두 가지만 보관하십시오.', 'Keep this proof file and the original balance file — those two, and nothing else.'))}</b>
@@ -535,7 +517,6 @@ function download(name: string, text: string, type = 'application/json'): void {
 
 /** The whole errand: read, build, sign, submit. Stops, with the reason, at the first thing that is not right. */
 async function anchor(): Promise<void> {
-  s.spotCheck = el<HTMLInputElement>('por-spot')?.checked ?? s.spotCheck;
   s.failure = null;
   s.anchored = null;
   const ex = s.exchange;
@@ -546,13 +527,13 @@ async function anchor(): Promise<void> {
   const fail = (title: string, items: string[] = []): void => { if (gone()) return; s.failure = { title, items }; s.busy = ''; paint(); };
   const step = async (label: string): Promise<void> => { if (gone()) return; s.busy = label; paint(); await breathe(); };
   if (!ex) return;
-  if (!s.file && s.fileText === null) return fail(t('잔고 파일을 선택하십시오.', 'Choose a balance file.'));
+  if (!s.file) return fail(t('잔고 파일을 선택하십시오.', 'Choose a balance file.'));
 
   await step(t('파일을 읽는 중…', 'Reading the file…'));
   let bytes: Uint8Array;
   let text: string;
   try {
-    bytes = s.fileText !== null ? utf8(s.fileText) : new Uint8Array(await s.file!.arrayBuffer());
+    bytes = new Uint8Array(await s.file!.arrayBuffer());
   } catch {
     return fail(t('파일을 읽을 수 없습니다.', 'The file could not be read.'));
   }
@@ -596,11 +577,9 @@ async function anchor(): Promise<void> {
   } catch (e) {
     return fail(e instanceof Error ? e.message : String(e));
   }
-  const leaves = [...unordered].sort((a, b) => (a.user_ref_hash < b.user_ref_hash ? -1 : 1));
   const asof = `${new Date().toISOString().slice(0, 19)}Z`;
   const statement = buildSnapshotStatement({ institutionId: ex.id, name: ex.name, asof, assets: spec.assets }, tree);
-  // The balance file under its own name: the example is the SDK's file, whatever the label beside it says.
-  const fileName = s.fileText !== null ? SAMPLE_WIDE_NAME : (s.file?.name ?? 'balances.csv');
+  const fileName = s.file?.name ?? 'balances.csv';
   const source = { file: fileName, bytes: bytes.length, sha256: bytesToHex(sha256(bytes)), layout: shape as PorSnapshotProof['source']['layout'], amounts: 'decimal' as const };
 
   if (gone()) return;
@@ -617,28 +596,18 @@ async function anchor(): Promise<void> {
     // Made before anything is sent, with the id still to come: a statement
     // must never be accepted and then turn out to have no proof file.
     const draft = buildSnapshotProof({ snapshotId: null, platform: location.origin, statement, sig, seed, source });
-    const sent = await api.porSubmit({ statement, sig, ...(s.spotCheck ? { spot_check: true } : {}) });
+    const sent = await api.porSubmit({ statement, sig, spot_check: false });
     // The platform has the statement. If the account changed while its answer was on the way, the answer is
     // dropped here — with the proof file, which must not be handed to whoever signed in next.
     if (gone()) return;
-    let status = sent.status;
-    let sampled = 0;
     if (sent.challenge) {
-      const openings: PorInclusionProof[] = sent.challenge.indices.map((i) => {
-        const leaf = leaves[i];
-        if (!leaf) throw new Error(`challenged index ${i} is not in the tree`);
-        // Pseudonymous by construction: the hash and the balances, never the identifier.
-        return provePorLeaf(tree, i, { user_ref_hash: leaf.user_ref_hash, salt: leaf.salt, balances: leaf.balances });
-      });
-      const verified = await api.porOpenings(sent.snapshot_id, openings);
-      if (gone()) return;
-      status = verified.status;
-      sampled = verified.sampled_leaves;
+      throw new Error(t('표본 확인 없이 요청했으나 서버가 표본 확인을 요구했습니다. 계정별 잔고는 전송하지 않았습니다.',
+        'The server requested a spot check although it was disabled. No account balances were sent.'));
     }
     const proof: PorSnapshotProof = { ...draft, snapshot_id: sent.snapshot_id };
     s.anchored = {
       fileName: s.fileLabel || fileName, assets: spec.assets, report, shape, proof,
-      status, spotCheck: Boolean(sent.challenge), sampled, anchor: 'accepted',
+      status: sent.status, anchor: 'accepted',
     };
     s.kept.push(proof);
     s.busy = '';
@@ -674,9 +643,7 @@ function wire(): void {
   file?.addEventListener('change', () => {
     const f = file.files?.[0];
     if (!f) return;
-    s.spotCheck = el<HTMLInputElement>('por-spot')?.checked ?? s.spotCheck;
     s.file = f;
-    s.fileText = null;
     s.fileLabel = f.name;
     s.anchored = null;
     s.failure = null;
@@ -689,13 +656,7 @@ function wire(): void {
     file?.click();
   });
   el('por-go')?.addEventListener('click', () => { void anchor(); });
-  el('por-sample')?.addEventListener('click', () => {
-    s.file = null;
-    s.fileText = SAMPLE_WIDE;
-    s.fileLabel = t(`${SAMPLE_WIDE_NAME} (예시)`, `${SAMPLE_WIDE_NAME} (example)`);
-    void anchor();
-  });
-  // One example, the one the button beside it anchors: a file to open, copy and fill in.
+  // A format example to download, inspect and fill in.
   document.querySelector<HTMLButtonElement>('#por-root button[data-por-sample]')
     ?.addEventListener('click', () => { download(SAMPLE_WIDE_NAME, SAMPLE_WIDE, 'text/csv'); });
   el('por-proof-dl')?.addEventListener('click', () => {

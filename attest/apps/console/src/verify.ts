@@ -93,11 +93,14 @@ export function sectionVerify(products: ReadonlySet<string> | null): string {
         </label>
         <label class="drop" id="v-orig-drop" tabindex="0">
           <input type="file" id="v-orig" hidden>
-          <span class="dk">${t('원본 — 있을 때', 'Original — if there is one')}</span>
+          <span class="dk">${t('원본 — 문서·잔고 파일용', 'Original — document or balance file')}</span>
           <span class="dv" id="v-orig-name">${esc(SECOND_EMPTY())}</span>
         </label>
       </div>
 
+      ${has('remit') ? `<p class="hint">${esc(t(
+        '송금 증빙은 내려받은 JSON 파일 하나로 검증합니다. 별도 원본 파일은 필요하지 않습니다.',
+        'Check a settlement using its downloaded evidence JSON alone. No separate original file is needed.'))}</p>` : ''}
       <div class="row"><button class="btn" id="v-run" disabled>${t('검증 실행', 'Run the check')}</button></div>
       <div id="v-result" aria-live="polite"></div>
     </section>`;

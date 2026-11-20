@@ -7,6 +7,15 @@ closes that gap, and this page is how.
 Signing is **optional**. `POST /v1/attestations` is unchanged and remains the
 default; nothing below is required to anchor a document.
 
+## Start in the console
+
+Choose a registered public key, download the signing request, sign in your environment, then import the signed JSON. Commands live in these two guides:
+
+- [Existing signer · HSM/KMS](#signing-existing): sign with a private key you already hold.
+- [Our Docker · SDK](#signing-tool): install the tools, create and register a key if needed, and sign the request.
+
+The console path requires an active key registered to your organisation. The direct digest examples below are for API integration; for the console, follow a guide to sign the downloaded request file.
+
 ## The one rule
 
 **Your private key never reaches us.** There is no endpoint that accepts one

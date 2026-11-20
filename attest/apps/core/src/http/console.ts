@@ -521,6 +521,14 @@ export function consoleRoutes(d: ConsoleDeps): Record<string, (ctx: Ctx) => Prom
       if (!statement || typeof statement !== 'object') {
         throw new HttpError(400, 'missing_statement', 'provide a signed statement');
       }
+      const keyId = str(body, 'issuer_key_id');
+      if (!keyId) throw new HttpError(400, 'missing_issuer_key', 'select a registered issuer key');
+      const key = (await d.svc.listIssuerKeys(account.org_id)).find((k) => k.id === keyId);
+      if (!key) throw new HttpError(404, 'issuer_key_not_found', 'the selected key is not active in your organisation; refresh the key list');
+      const issuer = (statement as Record<string, unknown>)['issuer'] as Record<string, unknown> | undefined;
+      if (!issuer || issuer['public_key'] !== key.public_key || issuer['algorithm'] !== key.algorithm) {
+        throw new HttpError(400, 'issuer_key_mismatch', 'the statement must be signed with the private key matching the selected registered public key');
+      }
       const att = await d.svc.issueSigned(account.org_id, statement as never);
       return new HttpResult(201, { ...att, quota: await quota(account.org_id) });
     },
