@@ -12,19 +12,24 @@
 #   --flows      after the cases, run the scripted flows against each core and compare the two ledgers
 #   --no-cases   skip parity/run.mjs (with --flows: the flows alone)
 #
-# Its own ports and schemas, never the comparison pair's: reference cores :8794 (.env.rref-a, stonehash_test_remit_a)
-# and :8795 (.env.rref-b, stonehash_test_remit_b), stand-in chain node :8796, partner listeners :3311 and :3312,
-# seed file parity/seed.rref.json. It refuses to start when one of the ports is taken, stops only what it started,
-# by process id, and says at the end whether the ports are free. In the comparison's words the first core is "the
-# reference" and the second stands where the Java server will.
+# Its own ports and schemas, never the comparison pair's: the ports are the ones the two settings files give
+# (tools/test-ports.mjs on .env.rref-a and .env.rref-b) — here reference cores :8794 (stonehash_test_remit_a) and
+# :8795 (stonehash_test_remit_b), stand-in chain node :8796, partner listeners :3311 and :3312; another working copy
+# of the repository has settings files, ports and schemas of its own. Seed file parity/seed.rref.json. It refuses
+# to start when one of the ports is taken, stops only what it started, by process id, and says at the end whether
+# the ports are free. In the comparison's words the first core is "the reference" and the second stands where the
+# Java server will.
 #
 # Exit status: 0 when nothing differed and nothing is left running.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ATTEST="$(cd "$HERE/../../.." && pwd)"
 J=apps/core-java
-PORTS="8794 8795 8796 3311 3312"
-A=http://127.0.0.1:8794; B=http://127.0.0.1:8795; PA=http://127.0.0.1:3311; PB=http://127.0.0.1:3312
+ports="$(cd "$ATTEST" && node $J/tools/test-ports.mjs $J/.env.rref-a $J/.env.rref-b)" || exit 2
+eval "$ports"   # REF_PORT: the first core, JAVA_PORT: the second, NODE_PORT, PARTNER_REF_PORT, PARTNER_JAVA_PORT
+PORTS="$REF_PORT $JAVA_PORT $NODE_PORT $PARTNER_REF_PORT $PARTNER_JAVA_PORT"
+A=http://127.0.0.1:$REF_PORT; B=http://127.0.0.1:$JAVA_PORT; PA=http://127.0.0.1:$PARTNER_REF_PORT; PB=http://127.0.0.1:$PARTNER_JAVA_PORT
+NODE=http://127.0.0.1:$NODE_PORT
 
 LOG="${1:?usage: run-remit-reference-pair.sh <log dir> [--no-seed] [--flows] [--no-cases] [-- run.mjs arguments]}"; shift
 SEED=1; FLOWS=0; CASES=1; RUN_ARGS=()
@@ -67,10 +72,10 @@ if [ $SEED -eq 1 ]; then
   tail -2 "$LOG/seed.log" | cut -c1-500
 fi
 
-step "stand-in chain node (:8796), partner stand-in (:3311 for the first core, :3312 for the second), two reference cores (:8794, :8795)"
-node $J/tools/stand-in-eth-rpc.mjs --port 8796 > "$LOG/chain.log" 2>&1 &
+step "stand-in chain node (:$NODE_PORT), partner stand-in (:$PARTNER_REF_PORT for the first core, :$PARTNER_JAVA_PORT for the second), two reference cores (:$REF_PORT, :$JAVA_PORT)"
+node $J/tools/stand-in-eth-rpc.mjs --port "$NODE_PORT" > "$LOG/chain.log" 2>&1 &
 PIDS+=($!)
-node $J/tools/stand-in-partner.mjs --listen 3311=$A --listen 3312=$B --seed $J/parity/seed.rref.json > "$LOG/partner.log" 2>&1 &
+node $J/tools/stand-in-partner.mjs --listen "$PARTNER_REF_PORT=$A" --listen "$PARTNER_JAVA_PORT=$B" --seed $J/parity/seed.rref.json > "$LOG/partner.log" 2>&1 &
 PIDS+=($!)
 nice node $J/tools/run-reference-core.mjs $J/.env.rref-a > "$LOG/core-a.log" 2>&1 &
 PIDS+=($!)
@@ -78,7 +83,7 @@ nice node $J/tools/run-reference-core.mjs $J/.env.rref-b > "$LOG/core-b.log" 2>&
 PIDS+=($!)
 ready=0
 for _ in $(seq 1 120); do
-  if curl -fsS -m 2 $A/healthz >/dev/null 2>&1 && curl -fsS -m 2 $B/healthz >/dev/null 2>&1 && curl -fsS -m 2 http://127.0.0.1:8796/log/summary >/dev/null 2>&1 \
+  if curl -fsS -m 2 $A/healthz >/dev/null 2>&1 && curl -fsS -m 2 $B/healthz >/dev/null 2>&1 && curl -fsS -m 2 $NODE/log/summary >/dev/null 2>&1 \
      && curl -fsS -m 2 $PA/healthz >/dev/null 2>&1 && curl -fsS -m 2 $PB/healthz >/dev/null 2>&1; then ready=1; break; fi
   sleep 0.5
 done
@@ -93,9 +98,9 @@ if [ $CASES -eq 1 ]; then
   tail -3 "$LOG/run.log" | cut -c1-400; echo "exit $rc"; [ $rc -eq 0 ] || status=1
 
   step "what the stand-ins were asked"
-  curl -sS -m 5 http://127.0.0.1:8796/log/summary > "$LOG/chain-summary.json" 2>&1
+  curl -sS -m 5 $NODE/log/summary > "$LOG/chain-summary.json" 2>&1
   head -c 300 "$LOG/chain-summary.json"; echo
-  curl -sS -m 10 "$PA/log/compare?with=3312" > "$LOG/partner-compare.json" 2>&1
+  curl -sS -m 10 "$PA/log/compare?with=$PARTNER_JAVA_PORT" > "$LOG/partner-compare.json" 2>&1
   tr -d '\n' < "$LOG/partner-compare.json" | head -c 900; echo
   curl -sS -m 10 $PA/log/summary > "$LOG/partner-a.json" 2>&1
   curl -sS -m 10 $PB/log/summary > "$LOG/partner-b.json" 2>&1
