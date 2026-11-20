@@ -13,9 +13,10 @@
 #   --no-cases   skip parity/run.mjs (with --flows: the flows alone)
 #
 # Its own ports and schemas, never the comparison pair's: the ports are the ones the two settings files give
-# (tools/test-ports.mjs on .env.rref-a and .env.rref-b) — here reference cores :8794 (stonehash_test_remit_a) and
-# :8795 (stonehash_test_remit_b), stand-in chain node :8796, partner listeners :3311 and :3312; another working copy
-# of the repository has settings files, ports and schemas of its own. Seed file parity/seed.rref.json. It refuses
+# (tools/test-ports.mjs on .env.rref-a and .env.rref-b) — in the main working copy reference cores :8794
+# (stonehash_test_remit_a) and :8795 (stonehash_test_remit_b), stand-in chain node :8796, partner listeners :3311
+# and :3312; another working copy of the repository has settings files, ports and schemas of its own (the script
+# prints the ones it uses). Seed file parity/seed.rref.json. It refuses
 # to start when one of the ports is taken, stops only what it started, by process id, and says at the end whether
 # the ports are free. In the comparison's words the first core is "the reference" and the second stands where the
 # Java server will.
@@ -66,7 +67,11 @@ status=0
 step() { echo; echo "== $*"; }
 
 if [ $SEED -eq 1 ]; then
-  step "seed both schemas (stonehash_test_remit_a, copied to stonehash_test_remit_b; seed file parity/seed.rref.json)"
+  step "seed both schemas (the first through the reference's code, copied to the second; seed file parity/seed.rref.json)"
+  # The copy needs the second schema's tables. In a new working copy nobody has made them: the reference's own, once.
+  node $J/tools/reference-tables.mjs $J/.env.rref-b > "$LOG/tables.log" 2>&1 \
+    || { echo "the second schema could not be given the reference's tables:"; tail -5 "$LOG/tables.log"; exit 1; }
+  tail -1 "$LOG/tables.log"
   PARITY_SEED_OUT=$J/parity/seed.rref.json nice node $J/tools/seed-reference.mjs $J/.env.rref-a $J/.env.rref-b > "$LOG/seed.log" 2>&1 \
     || { echo "seeding failed:"; tail -20 "$LOG/seed.log"; exit 1; }
   tail -2 "$LOG/seed.log" | cut -c1-500
